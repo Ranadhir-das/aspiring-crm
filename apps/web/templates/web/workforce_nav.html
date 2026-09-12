@@ -1,0 +1,12 @@
+<div class="nav-label">EMPLOYEE WORKSPACE</div>
+<a {% if section == 'employee-home' %}aria-current="page"{% endif %} href="{% url 'web:employee-home' %}"><span class="nav-icon">◈</span>My workspace</a>
+<a {% if section == 'attendance' %}aria-current="page"{% endif %} href="{% url 'web:attendance' %}"><span class="nav-icon">◷</span>Attendance</a>
+<a {% if section == 'leaves' %}aria-current="page"{% endif %} href="{% url 'web:leaves' %}"><span class="nav-icon">☷</span>Leave requests</a>
+<a {% if section == 'holidays' %}aria-current="page"{% endif %} href="{% url 'web:holidays' %}"><span class="nav-icon">◇</span>Holiday calendar</a>
+<a {% if section == 'projects' %}aria-current="page"{% endif %} href="{% url 'web:projects' %}"><span class="nav-icon">▣</span>Projects</a>
+<a {% if section == 'reports' %}aria-current="page"{% endif %} href="{% url 'web:reports' %}"><span class="nav-icon">≡</span>Work reports</a>
+<a {% if section == 'feedback' %}aria-current="page"{% endif %} href="{% url 'web:feedback' %}"><span class="nav-icon">▥</span>Feedback statistics</a>
+<a {% if section == 'payroll' %}aria-current="page"{% endif %} href="{% url 'web:payroll' %}"><span class="nav-icon">₹</span>Salary records</a>
+{% if can_manage %}<div class="nav-label">PEOPLE</div><a href="{% url 'web:people-overview' %}"><span class="nav-icon">?</span>People overview</a><a {% if section == 'employees' %}aria-current="page"{% endif %} href="{% url 'web:employees' %}"><span class="nav-icon">♧</span>All employees</a><a {% if section == 'consultations' %}aria-current="page"{% endif %} href="{% url 'web:consultations' %}"><span class="nav-icon">◎</span>Lead consultations</a>{% endif %}
+{% if can_finance %}<div class="nav-label">FINANCE RECORDS</div><a href="{% url 'web:finance-overview' %}"><span class="nav-icon">?</span>Finance overview</a><a {% if section == 'expenses' %}aria-current="page"{% endif %} href="{% url 'web:expenses' %}"><span class="nav-icon">₹</span>Expenses</a><a {% if section == 'customers' %}aria-current="page"{% endif %} href="{% url 'web:customers' %}"><span class="nav-icon">◎</span>Customers</a><a {% if section == 'invoices' %}aria-current="page"{% endif %} href="{% url 'web:invoices' %}"><span class="nav-icon">▤</span>Invoices & revenue</a>{% endif %}
+{% if can_manage_employees %}<a {% if section == 'audit' %}aria-current="page"{% endif %} href="{% url 'web:activity-log' %}"><span class="nav-icon">≋</span>Activity log</a>{% endif %}

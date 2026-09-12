@@ -1,0 +1,5 @@
+name,phone,email,location,college,neet_status,pcb_percentage,preferred_intake,source,campaign,notes
+Rahul Sharma,9876543210,rahul@example.com,Kolkata,ABC Medical College,Qualified,85.50,2027,Facebook,MBBS Campaign,Interested in Russia
+Amit Das,98765 43211,amit@example.com,Howrah,XYZ College,Qualified,78.25,2027,Instagram,MBBS Campaign,Needs callback
+Priya Roy,,priya@example.com,Kolkata,ABC College,Qualified,82.00,2027,Website,Organic,Phone missing
+Sourav Sen,+91-9876543212,sourav@example.com,Durgapur,DEF College,Appearing,75.00,2027,Facebook,MBBS Campaign,Asked about fees

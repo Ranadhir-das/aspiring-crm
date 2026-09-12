@@ -1,0 +1,49 @@
+.theme-toggle{font-size:11px;min-height:36px}.auth-theme{position:absolute;right:24px;top:22px;z-index:5}
+:root[data-theme=light]{color-scheme:light;--bg:#f5f6fb;--panel:#fff;--border:#dce1ec;--text:#20283b;--muted:#5d6880;--accent:#6751b9;--mint:#168368}
+[data-theme=light] .sidebar,[data-theme=light] .topbar{background:#fff}
+[data-theme=light] input,[data-theme=light] select,[data-theme=light] textarea,[data-theme=light] .search-field{background:#fff;color:var(--text);border-color:#cdd4e2}
+[data-theme=light] input::placeholder{color:#69758a}
+[data-theme=light] label,[data-theme=light] .breadcrumbs strong,[data-theme=light] .person strong,[data-theme=light] .source-row strong,[data-theme=light] .empty strong{color:#303b51}
+[data-theme=light] .brand-sub,[data-theme=light] .workspace-label,[data-theme=light] .nav-label,[data-theme=light] nav>a,[data-theme=light] .connection,[data-theme=light] .metric-top,[data-theme=light] .metric-bottom,[data-theme=light] .legend>a,[data-theme=light] .source-row small,[data-theme=light] .person small,[data-theme=light] .topbar-right,[data-theme=light] .breadcrumbs,[data-theme=light] .eyebrow,[data-theme=light] .footer,[data-theme=light] .icon-button{color:var(--muted)}
+[data-theme=light] nav>a:hover{background:#f0edf9;color:#59449e}
+[data-theme=light] nav>a[aria-current=page]{background:#eee8fc;color:#59449e;border-color:#d5c8f2;box-shadow:inset 3px 0 #8d6fce}
+[data-theme=light] .metric{background:linear-gradient(120deg,#fff,#f7f7fd)}
+[data-theme=light] .button{background:#fff;color:#36405a;border-color:#cdd3e1}
+[data-theme=light] .button:hover{background:#f0ebfb;border-color:#9e8bc8;color:#49327e}
+[data-theme=light] .button.primary{background:#7153bb;color:#fff;border-color:#7153bb}
+[data-theme=light] .button.primary:hover{background:#6144a8}
+[data-theme=light] .avatar{background:#eee8fb;color:#604797;border-color:#d7c9ee}
+[data-theme=light] .avatar.subtle{background:#eff2f8;border-color:#dce1ec;color:#596580}
+[data-theme=light] .hero-strip{background:linear-gradient(105deg,#eee7fd,#eef1fd);border-color:#d8cff0}
+[data-theme=light] .hero-strip strong{color:#3e335b}
+[data-theme=light] .hero-strip p{color:#675d80}
+[data-theme=light] .hero-strip>a,[data-theme=light] .text-link,[data-theme=light] .source-row span{color:#6650a4}
+[data-theme=light] .hero-symbol{background:#e3d7f9;color:#6f4cb3;border-color:#d1bdee}
+[data-theme=light] th{background:#f2f4f9;color:#5c6880}
+[data-theme=light] td{color:#49566e;border-color:var(--border)}
+[data-theme=light] td:first-child,[data-theme=light] .legend strong{color:#28334a}
+[data-theme=light] tbody tr:hover{background:#f7f8fc}
+[data-theme=light] .assignment-bar{background:#f1eef9}
+[data-theme=light] .badge,[data-theme=light] .violet{background:#ede7f8;color:#664991}
+[data-theme=light] .badge.interested,[data-theme=light] .badge.completed,[data-theme=light] .mint{background:#def3ea;color:#206c54}
+[data-theme=light] .badge.call_back,[data-theme=light] .badge.called,[data-theme=light] .blue{background:#e0f0f8;color:#246c8d}
+[data-theme=light] .badge.busy,[data-theme=light] .badge.no_answer,[data-theme=light] .amber{background:#fff0d5;color:#886017}
+[data-theme=light] .badge.not_interested,[data-theme=light] .badge.cancelled{background:#f8e3ec;color:#964662}
+[data-theme=light] .date-tile,[data-theme=light] .calendar-day{background:#f3f5fb;border-color:#d6ddec}
+[data-theme=light] .date-tile span{color:#626f86}
+[data-theme=light] .calendar-day.today{border-color:var(--accent)}
+[data-theme=light] .progress,[data-theme=light] .donut{background:#e5e8f1}
+[data-theme=light] .activity-mark{background:#def1e9;color:#397960}
+[data-theme=light] .notice{background:#e5f4ed;color:#276752;border-color:#b8dccb}
+[data-theme=light] .notice.error,[data-theme=light] .errorlist{background:#fff0f1;color:#a22e47;border-color:#eabfc8}
+[data-theme=light] code{background:#ede8f7;color:#624591}
+[data-theme=light] .activity-chart svg text{fill:#59667e}
+[data-theme=light] .activity-chart svg line{stroke:#dce1ec}
+[data-theme=light] .activity-chart svg polyline{stroke:#7753ba}
+[data-theme=light] .activity-chart svg circle{fill:#7753ba;stroke:#fff}
+[data-theme=light] .login-story{background:radial-gradient(ellipse at 40% 60%,#e1d5f780,transparent 65%),#f0edf9;border-color:#dcd5ec}
+[data-theme=light] .story-copy h1 em{color:#7654b7}
+[data-theme=light] .story-copy>p,[data-theme=light] .login-help,[data-theme=light] .login-foot{color:var(--muted)}
+[data-theme=light] .orbit-label{background:#fff;color:#695087;border-color:#d7c9e8;box-shadow:0 6px 20px #6c538512}
+[data-theme=light] .orbit-ring{border-color:#c6b4e0}
+@media(max-width:760px){.auth-theme{top:20px;right:18px}.login-story .brand{max-width:calc(100% - 120px)}.topbar-right{gap:10px}.theme-toggle{padding:7px 9px;font-size:10px}}

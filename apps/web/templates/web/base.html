@@ -1,0 +1,25 @@
+{% load static %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block title %}Workspace{% endblock %} · Aspiring CRM</title><script src="{% static 'web/theme.js' %}"></script><link rel="stylesheet" href="{% static 'web/crm.css' %}"><link rel="stylesheet" href="{% static 'web/theme.css' %}"><script src="{% static 'web/crm.js' %}" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a>
+<aside class="sidebar" id="navigation">
+  <a href="{% url 'web:dashboard' %}" class="brand"><span class="brand-icon">A<span>↗</span></span><span>aspiring<span class="brand-sub">CRM WORKSPACE</span></span></a>
+  <div class="workspace-label"><span class="online-dot"></span> Admissions workspace <span>⌄</span></div>
+  <div class="nav-label">WORKSPACE</div>
+  <nav aria-label="Main navigation">
+    {% if can_call %}
+    <a {% if section == 'dashboard' %}aria-current="page"{% endif %} href="{% url 'web:dashboard' %}"><span class="nav-icon">▦</span>Overview</a>
+    <a {% if section == 'leads' %}aria-current="page"{% endif %} href="{% url 'web:leads' %}"><span class="nav-icon">◎</span>Lead directory</a>
+    <a {% if section == 'calls' %}aria-current="page"{% endif %} href="{% url 'web:calls' %}"><span class="nav-icon">↗</span>Call activity</a>
+    <a {% if section == 'followups' %}aria-current="page"{% endif %} href="{% url 'web:followups' %}"><span class="nav-icon">◷</span>Follow-ups</a>
+    {% if can_manage %}<div class="nav-label">MANAGEMENT</div>
+    <a {% if section == 'team' %}aria-current="page"{% endif %} href="{% url 'web:team' %}"><span class="nav-icon">♧</span>Caller team</a>
+    <a {% if section == 'import' %}aria-current="page"{% endif %} href="{% url 'web:lead-import' %}"><span class="nav-icon">⇧</span>Import leads</a>{% endif %}
+    {% endif %}
+    {% include 'web/workforce_nav.html' %}
+    {% if request.user.is_staff %}<a href="{% url 'admin:index' %}"><span class="nav-icon">⚙</span>Administration <small>↗</small></a>{% endif %}
+  </nav>
+  <div class="sidebar-bottom"><div class="connection"><span class="online-dot"></span> One connected workspace<p>Calls and leads from your caller app, together.</p></div><div class="account"><span class="avatar">{{ display_name|first|upper }}</span><div><strong>{{ display_name }}</strong><small>{{ request.user.get_role_display }}</small></div><form action="{% url 'web:logout' %}" method="post">{% csrf_token %}<button class="icon-button" title="Sign out" aria-label="Sign out">↪</button></form></div></div>
+</aside>
+<div class="shell"><header class="topbar"><div class="breadcrumbs"><button class="icon-button menu-toggle" aria-controls="navigation" aria-expanded="false" aria-label="Toggle navigation">☰</button><span>Workspace</span><span>/</span><strong>{% block breadcrumb %}Overview{% endblock %}</strong></div><div class="topbar-right">{% include 'web/theme_toggle.html' %}<span class="date-label">{{ current_time|date:'D, d M Y' }}</span><span class="avatar small">{{ display_name|first|upper }}</span></div></header>
+<main id="main">{% for message in messages %}<div class="notice {{ message.tags }}" role="status">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}<footer class="footer"><span>ASPIRING <span class="muted">/ A little more possibility.</span></span><span>Workspace time: {{ workspace_timezone }}</span></footer></main></div>
+</body></html>
