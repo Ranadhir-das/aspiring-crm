@@ -38,7 +38,8 @@ def normalize_column_name(column):
     if column is None:
         return ""
 
-    return str(column).strip().lower().replace(" ", "_")
+    key = str(column).strip().lower().replace(" ", "_")
+    return {"mobile": "phone", "mobile_number": "phone", "phone_number": "phone", "full_name": "name"}.get(key, key)
 
 
 def read_csv_file(file):
@@ -371,7 +372,7 @@ def preview_import(file):
     }
 
 
-def commit_import(file, imported_by):
+def commit_import(file, imported_by, assigned_caller=None):
     """
     Import valid, non-duplicate leads into the database.
 
@@ -388,6 +389,7 @@ def commit_import(file, imported_by):
             f"{', '.join(column_result['missing_columns'])}"
         )
 
+    created_ids = []
     created_count = 0
     duplicate_count = 0
     warning_count = 0
@@ -442,6 +444,7 @@ def commit_import(file, imported_by):
             )
 
             lead = Lead.objects.create(
+                import_batch=batch,
                 name=str(
                     row.get("name", "")
                 ).strip(),
@@ -485,12 +488,17 @@ def commit_import(file, imported_by):
                 ).strip(),
             )
 
+            created_ids.append(lead.pk)
             created_count += 1
 
             # Add the newly created lead to the map.
             # This prevents duplicate creation later in the
             # same import operation.
             existing_phone_map[normalized_phone] = lead
+
+        if assigned_caller and created_ids:
+            bulk_assign_leads(created_ids, assigned_caller, imported_by,
+                              reason=f'Assigned during import {batch.pk}')
 
         batch.created_count = created_count
         batch.duplicate_count = duplicate_count
@@ -537,7 +545,7 @@ def bulk_assign_leads(
 
     User = get_user_model()
 
-    if new_caller.role != User.Role.CALLER:
+    if new_caller.role != User.Role.CALLER or not new_caller.is_active:
         raise ValueError(
             "Selected user is not a caller."
         )

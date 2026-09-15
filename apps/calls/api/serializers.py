@@ -4,6 +4,8 @@ from apps.calls.models import Call
 
 
 class CallSerializer(serializers.ModelSerializer):
+    lead_name = serializers.CharField(source="lead.name", read_only=True)
+    lead_phone = serializers.CharField(source="lead.phone", read_only=True)
     caller_name = serializers.SerializerMethodField()
 
     outcome_display = serializers.CharField(
@@ -23,6 +25,8 @@ class CallSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "lead",
+            "lead_name",
+            "lead_phone",
             "caller",
             "caller_name",
             "started_at",

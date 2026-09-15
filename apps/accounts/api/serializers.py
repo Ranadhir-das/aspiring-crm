@@ -19,20 +19,24 @@ class MobileLoginSerializer(serializers.Serializer):
             username=username,
             password=password,
         )
+        if not user:
+            pending = User.objects.filter(username=username, registration_pending=True).first()
+            if pending and pending.check_password(password):
+                user = pending
 
         if not user:
             raise serializers.ValidationError(
                 "Invalid username or password."
             )
 
-        if not user.is_active:
+        if not user.is_active and not user.registration_pending:
             raise serializers.ValidationError(
                 "This account is inactive."
             )
 
-        if user.role != User.Role.CALLER:
+        if user.role not in User.Role.values:
             raise serializers.ValidationError(
-                "Only caller accounts can use the mobile app."
+                "This account does not have mobile access."
             )
 
         attrs["user"] = user

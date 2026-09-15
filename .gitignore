@@ -8,3 +8,4 @@ db.sqlite3
 .idea/
 staticfiles/
 media/
+face_models/

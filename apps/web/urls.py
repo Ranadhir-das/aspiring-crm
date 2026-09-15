@@ -1,3 +1,4 @@
+from . import photo_views
 from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 from . import views
@@ -6,6 +7,11 @@ from .forms import LoginForm
 
 app_name = 'web'
 urlpatterns = [
+    path('attendance/photos/', photo_views.queue, name='photo-attendance'),
+    path('attendance/photos/<int:pk>/image/', photo_views.photo, name='attendance-photo-image'),
+    path('attendance/photos/<int:pk>/review/', photo_views.review, name='attendance-photo-review'),
+    path('caller-sessions/', views.caller_sessions, name='caller-sessions'),
+    path('leads/quick-entry/', views.quick_leads, name='lead-quick-entry'),
     path('register/', workforce.register, name='register'),
     path('employee/', workforce.employee_home, name='employee-home'),
     path('employees/', workforce.employees, name='employees'),

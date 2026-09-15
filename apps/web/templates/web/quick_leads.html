@@ -1,0 +1,8 @@
+{% extends 'web/base.html' %}{% block title %}Quick lead entry{% endblock %}{% block breadcrumb %}Quick lead entry{% endblock %}{% block content %}
+<div class="page-heading"><div><h1>Quick lead entry.</h1><p>Enter names and phone numbers. Download a CSV or import directly, then choose how many leads each caller receives.</p></div></div>
+<section class="panel form-panel"><form method="post">{% csrf_token %}{{ formset.management_form }}{{ formset.non_form_errors }}
+<div id="lead-rows">{% for form in formset %}<div class="filters">{{ form.as_p }}</div>{% endfor %}</div>
+<template id="empty-lead-row"><div class="filters">{{ formset.empty_form.as_p }}</div></template>
+<div class="form-actions"><button class="button" type="button" id="add-lead-row">Add another row</button><button class="button" name="action" value="download">Download CSV</button><button class="button primary" name="action" value="import">Import and assign</button></div></form></section>
+<script>document.getElementById('add-lead-row').addEventListener('click', function () { const count = document.getElementById('id_form-TOTAL_FORMS'); const n = Number(count.value); if (n >= 1000) return; document.getElementById('lead-rows').insertAdjacentHTML('beforeend', document.getElementById('empty-lead-row').innerHTML.replaceAll('__prefix__', String(n))); count.value = n + 1; });</script>
+{% endblock %}

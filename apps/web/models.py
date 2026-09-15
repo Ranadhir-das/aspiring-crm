@@ -178,3 +178,25 @@ class Payment(models.Model):
     mode = models.CharField(max_length=16, choices=[('CASH', 'Cash'), ('ONLINE', 'Online'), ('BANK', 'Bank transfer')])
     reference = models.CharField(max_length=150, blank=True)
     recorded_by = models.ForeignKey(USER, null=True, on_delete=models.SET_NULL)
+
+
+class AttendancePhotoChallenge(models.Model):
+    import uuid
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    employee = models.ForeignKey(USER, on_delete=models.CASCADE)
+    action = models.CharField(max_length=8, choices=[('ENROLL', 'Enrollment'), ('IN', 'Check-in'), ('OUT', 'Check-out')])
+    created_at = models.DateTimeField(auto_now_add=True)
+    used = models.BooleanField(default=False)
+
+
+class AttendancePhotoRequest(models.Model):
+    employee = models.ForeignKey(USER, on_delete=models.PROTECT)
+    action = models.CharField(max_length=8)
+    photo = models.BinaryField()
+    reference = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, default='PENDING')
+    reviewer = models.ForeignKey(USER, null=True, on_delete=models.SET_NULL, related_name='reviewed_attendance_photos')
+    reviewed_at = models.DateTimeField(null=True)
+    review_note = models.CharField(max_length=1000, blank=True)
+    match_score = models.FloatField(null=True, blank=True)

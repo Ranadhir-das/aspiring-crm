@@ -1,4 +1,4 @@
-from rest_framework.authentication import TokenAuthentication
+from apps.accounts.api.authentication import VerifiedSessionAuthentication
 from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 
@@ -15,7 +15,7 @@ class MobileLeadListView(ListAPIView):
     serializer_class = MobileLeadSerializer
 
     authentication_classes = [
-        TokenAuthentication,
+        VerifiedSessionAuthentication,
     ]
 
     permission_classes = [
@@ -30,12 +30,12 @@ class MobileLeadListView(ListAPIView):
 
         return (
             Lead.objects
-            .filter(assigned_caller=user)
+            .select_related("import_batch").filter(assigned_caller=user)
             .order_by("-created_at")
         )
 
 
-from rest_framework.authentication import TokenAuthentication
+from apps.accounts.api.authentication import VerifiedSessionAuthentication
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 
@@ -49,7 +49,7 @@ class MobileLeadListView(ListAPIView):
     serializer_class = MobileLeadSerializer
 
     authentication_classes = [
-        TokenAuthentication,
+        VerifiedSessionAuthentication,
     ]
 
     permission_classes = [
@@ -64,7 +64,7 @@ class MobileLeadListView(ListAPIView):
 
         return (
             Lead.objects
-            .filter(assigned_caller=user)
+            .select_related("import_batch").filter(assigned_caller=user)
             .order_by("-created_at")
         )
 
@@ -73,7 +73,7 @@ class MobileLeadDetailView(RetrieveAPIView):
     serializer_class = MobileLeadSerializer
 
     authentication_classes = [
-        TokenAuthentication,
+        VerifiedSessionAuthentication,
     ]
 
     permission_classes = [
@@ -97,7 +97,7 @@ class MobileLeadUpdateView(UpdateAPIView):
     serializer_class = MobileLeadUpdateSerializer
 
     authentication_classes = [
-        TokenAuthentication,
+        VerifiedSessionAuthentication,
     ]
 
     permission_classes = [

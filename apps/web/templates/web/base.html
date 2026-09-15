@@ -13,6 +13,8 @@
     <a {% if section == 'followups' %}aria-current="page"{% endif %} href="{% url 'web:followups' %}"><span class="nav-icon">◷</span>Follow-ups</a>
     {% if can_manage %}<div class="nav-label">MANAGEMENT</div>
     <a {% if section == 'team' %}aria-current="page"{% endif %} href="{% url 'web:team' %}"><span class="nav-icon">♧</span>Caller team</a>
+    <a href="{% url 'web:caller-sessions' %}">Employee sessions</a>
+    <a href="{% url 'web:photo-attendance' %}">Attendance photo review</a>
     <a {% if section == 'import' %}aria-current="page"{% endif %} href="{% url 'web:lead-import' %}"><span class="nav-icon">⇧</span>Import leads</a>{% endif %}
     {% endif %}
     {% include 'web/workforce_nav.html' %}

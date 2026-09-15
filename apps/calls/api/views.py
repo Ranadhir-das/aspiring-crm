@@ -122,7 +122,7 @@ class LeadCallHistoryView(ListAPIView):
         # Caller can only see calls for their own leads
         if user.role == User.Role.CALLER:
             return queryset.filter(
-                lead__assigned_caller=user
+                lead__assigned_caller=user, caller=user
             )
 
         # Management can see all call history
@@ -134,3 +134,14 @@ class LeadCallHistoryView(ListAPIView):
             return queryset
 
         return Call.objects.none()
+
+class MyCallHistoryView(ListAPIView):
+    """Personal history is scoped to the author, even after lead reassignment."""
+    serializer_class = CallSerializer
+    permission_classes = (CanCreateCall,)
+    pagination_class = None
+
+    def get_queryset(self):
+        return Call.objects.select_related('lead', 'caller').filter(
+            caller=self.request.user
+        ).order_by('-started_at', '-pk')

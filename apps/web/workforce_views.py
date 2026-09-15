@@ -118,6 +118,8 @@ def employee_home(request):
 @workspace(management=True)
 def employees(request):
     query = User.objects.all().order_by('is_active', 'first_name', 'username')
+    if request.GET.get('status') == 'inactive':
+        query = query.filter(is_active=False)
     if request.GET.get('q'):
         q = request.GET['q']
         query = query.filter(Q(username__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q))
@@ -598,40 +600,60 @@ def invoice_detail(request, pk):
 
 @workspace(management=True)
 def distribute(request):
-    form = DistributionForm(request.POST or None)
+    form = DistributionForm(request.POST or None, initial={key: request.GET.get(key) for key in ('batch', 'source', 'start_date', 'end_date')})
     preview = None
-    if request.method == 'POST' and form.is_valid():
+    valid = form.is_valid() if request.method == 'POST' else False
+    # Counts use the same filters as allocation, even before quantities are entered.
+    query = Lead.objects.all()
+    for name, lookup in [('batch', 'import_batch'), ('source', 'source'),
+                         ('start_date', 'created_at__date__gte'), ('end_date', 'created_at__date__lte')]:
+        try:
+            value = form.fields[name].clean(form[name].value())
+        except forms.ValidationError:
+            query = query.none()
+            continue
+        if value:
+            query = query.filter(**{lookup: value})
+    total_leads = query.count()
+    unassigned = query.filter(assigned_caller__isnull=True).count()
+    assigned = total_leads - unassigned
+    reassign = form['reassign'].value() in (True, 'on', 'True')
+    available = total_leads if reassign else unassigned
+    if request.method == 'POST' and valid:
         with transaction.atomic():
-            query = Lead.objects.select_for_update().order_by('created_at', 'pk')
-            data = form.cleaned_data
-            if data['source']:
-                query = query.filter(source=data['source'])
-            if data['start_date']:
-                query = query.filter(created_at__date__gte=data['start_date'])
-            if data['end_date']:
-                query = query.filter(created_at__date__lte=data['end_date'])
-            if not data['reassign']:
-                query = query.filter(assigned_caller__isnull=True)
-            total = sum(data[f'caller_{c.pk}'] for c in form.callers)
-            selected = list(query[:total])
+            eligible = query if form.cleaned_data['reassign'] else query.filter(assigned_caller__isnull=True)
+            total = sum(form.cleaned_data[f'caller_{c.pk}'] for c in form.callers)
+            selected = list(eligible.select_for_update().order_by('created_at', 'pk')[:total])
             if len(selected) < total:
                 form.add_error(None, f'Only {len(selected)} matching leads are available; you requested {total}. No assignments were changed.')
             else:
-                preview = [{'name': employee_name(c), 'count': data[f'caller_{c.pk}']} for c in form.callers if data[f'caller_{c.pk}']]
+                preview = [{'name': employee_name(c), 'count': form.cleaned_data[f'caller_{c.pk}']} for c in form.callers if form.cleaned_data[f'caller_{c.pk}']]
                 if request.POST.get('action') == 'assign':
                     offset = changed = skipped = 0
                     for caller in form.callers:
-                        count = data[f'caller_{caller.pk}']
+                        count = form.cleaned_data[f'caller_{caller.pk}']
                         if count:
                             result = bulk_assign_leads([lead.pk for lead in selected[offset:offset+count]], caller, request.user,
-                                                       reassign=data['reassign'], reason='Source/date allocation')
+                                                       reassign=form.cleaned_data['reassign'], reason='Batch quantity allocation')
                             changed += result['assigned_count'] + result['reassigned_count']
                             skipped += result['skipped_count']
                             offset += count
                     audit(request, 'ASSIGNMENT', f'Distributed {changed} leads; skipped {skipped}')
-                    messages.success(request, f'{changed} leads assigned; {skipped} already with the selected caller were skipped.')
-                    return redirect('web:leads')
-    return page(request, 'distribution', 'leads', form=form, preview=preview)
+                    remaining = query.filter(assigned_caller__isnull=True).count()
+                    messages.success(request, f'{changed} leads assigned. {remaining} leads remain unassigned in this selection. {skipped} already assigned to the same caller were skipped.')
+                    from urllib.parse import urlencode
+                    filters = {key: str(form.cleaned_data[key].pk) if key == 'batch' else str(form.cleaned_data[key])
+                               for key in ('batch', 'source', 'start_date', 'end_date') if form.cleaned_data.get(key)}
+                    return redirect(reverse('web:lead-distribute') + '?' + urlencode(filters))
+    from apps.leads.models import LeadImportBatch
+    batches = LeadImportBatch.objects.annotate(
+        current_total=Count('leads'),
+        remaining=Count('leads', filter=Q(leads__assigned_caller__isnull=True)),
+        allocated=Count('leads', filter=Q(leads__assigned_caller__isnull=False)),
+    ).order_by('-created_at')[:30]
+    return page(request, 'distribution', 'leads', form=form, preview=preview,
+                total_leads=total_leads, assigned=assigned, unassigned=unassigned, available=available, batches=batches)
+
 
 
 @workspace(management=True)

@@ -136,6 +136,9 @@ class QualificationForm(forms.ModelForm):
 
 
 class DistributionForm(forms.Form):
+    from apps.leads.models import LeadImportBatch
+    batch = forms.ModelChoiceField(queryset=LeadImportBatch.objects.order_by('-created_at'),
+                                   required=False, empty_label='All import batches', label='Import batch')
     source = forms.CharField(required=False, help_text='Leave empty for all sources; otherwise use the exact source name.')
     start_date = forms.DateField(required=False, widget=DATE)
     end_date = forms.DateField(required=False, widget=DATE)

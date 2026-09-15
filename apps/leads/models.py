@@ -18,6 +18,9 @@ class Lead(models.Model):
     # Basic Information
     # -------------------------
 
+    import_batch = models.ForeignKey("LeadImportBatch", null=True, blank=True,
+                                     on_delete=models.SET_NULL, related_name="leads")
+
     name = models.CharField(
         max_length=200,
     )

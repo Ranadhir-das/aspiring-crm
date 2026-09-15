@@ -85,7 +85,14 @@ def dashboard(request):
     sources = list(lead_query.values('source').annotate(count=Count('id')).order_by('-count')[:5])
     for source in sources:
         source['percent'] = round(source['count'] / total * 100) if total else 0
+    account_requests = User.objects.none()
+    if request.user.role in {'SUPER_ADMIN', 'ADMIN'}:
+        account_requests = User.objects.filter(is_active=False).exclude(pk=request.user.pk)
+        if request.user.role != 'SUPER_ADMIN':
+            account_requests = account_requests.exclude(role__in=['SUPER_ADMIN', 'ADMIN'])
+        account_requests = account_requests.order_by('-date_joined', '-pk')
     return page(request, 'dashboard', 'dashboard', total=total, interested=interested,
+                account_request_count=account_requests.count(), account_requests=account_requests[:5],
                 interest_rate=round(interested / total * 100, 1) if total else 0,
                 today_calls=call_query.filter(started_at__date=now.date()).count(),
                 pending=lead_query.filter(status=Lead.Status.PENDING).count(),
@@ -191,14 +198,17 @@ def lead_import(request):
         try:
             upload = form.cleaned_data['file']
             if request.POST.get('action') == 'import':
-                result = commit_import(upload, request.user)
+                result = commit_import(upload, request.user, assigned_caller=form.cleaned_data['caller'])
+                if form.cleaned_data['caller']:
+                    messages.success(request, f"Assigned {result['created_count']} new leads to {form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username}.")
                 messages.success(request, f"Imported {result['created_count']} leads; {result['duplicate_count']} duplicates and {result['skipped_count']} invalid rows skipped.")
-                return redirect('web:leads')
+                from django.urls import reverse
+                return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
             preview = preview_import(upload)
         except (ValueError, UnicodeError, BadZipFile):
             form.add_error('file', 'This file could not be read. Check its format and required name/phone columns.')
     return page(request, 'import', 'import', form=form, preview=preview,
-                batches=LeadImportBatch.objects.select_related('imported_by').order_by('-created_at')[:10])
+                batches=LeadImportBatch.objects.select_related('imported_by').annotate(remaining=Count('leads', filter=Q(leads__assigned_caller__isnull=True)), allocated=Count('leads', filter=Q(leads__assigned_caller__isnull=False))).order_by('-created_at')[:10])
 
 
 @workspace()
@@ -240,3 +250,45 @@ def team(request):
         call_count=Count('calls_made', distinct=True),
     ).order_by('-call_count', 'username')
     return page(request, 'team', 'team', records=paginate(request, callers))
+
+
+@workspace(management=True)
+def quick_leads(request):
+    import csv
+    import io
+    from django.core.files.base import ContentFile
+    from django.http import HttpResponse
+    from .forms import QuickLeadFormSet
+    formset = QuickLeadFormSet(request.POST or None)
+    if request.method == 'POST' and formset.is_valid():
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['name', 'phone'])
+        for row in formset.cleaned_data:
+            if row:
+                writer.writerow([row['name'], row['phone']])
+        if request.POST.get('action') == 'download':
+            # Escape spreadsheet formulas in downloadable cells, preserving phone zeros.
+            safe = io.StringIO()
+            safe_writer = csv.writer(safe)
+            for row in csv.reader(io.StringIO(output.getvalue())):
+                safe_writer.writerow(["'" + cell if cell.lstrip().startswith(('=', '+', '-', '@')) else cell for cell in row])
+            response = HttpResponse(safe.getvalue(), content_type='text/csv; charset=utf-8')
+            response['Content-Disposition'] = 'attachment; filename="quick-leads.csv"'
+            return response
+        result = commit_import(ContentFile(output.getvalue().encode('utf-8'), name='quick-leads.csv'), request.user)
+        messages.success(request, f"Imported {result['created_count']} leads; {result['duplicate_count']} duplicates skipped. Choose caller quantities below.")
+        from django.urls import reverse
+        return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
+    return page(request, 'quick_leads', 'leads', formset=formset)
+
+
+@workspace(management=True)
+def caller_sessions(request):
+    from apps.accounts.models import CallerSession
+    query = CallerSession.objects.select_related('caller').order_by('-logged_in_at')
+    caller = request.GET.get('caller', '')
+    if caller.isdigit():
+        query = query.filter(caller_id=caller)
+    return page(request, 'caller_sessions', 'team', records=paginate(request, query),
+                callers=User.objects.filter(is_active=True), selected_caller=caller)

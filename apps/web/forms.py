@@ -49,6 +49,12 @@ class FollowUpForm(forms.Form):
 
 
 class ImportForm(forms.Form):
+    caller = forms.ModelChoiceField(
+        queryset=User.objects.filter(role=User.Role.CALLER, is_active=True),
+        required=False, label='Assign imported leads to',
+        empty_label='Leave unassigned',
+        help_text='Only newly imported leads are assigned. Existing duplicates keep their current caller.',
+    )
     file = forms.FileField(widget=forms.ClearableFileInput(attrs={'accept': '.csv,.xlsx'}))
 
     def clean_file(self):
@@ -58,3 +64,18 @@ class ImportForm(forms.Form):
         if value.size > 5 * 1024 * 1024:
             raise forms.ValidationError('Choose a file smaller than 5 MB.')
         return value
+
+
+class QuickLeadForm(forms.Form):
+    name = forms.CharField(max_length=200, widget=forms.TextInput(attrs={'placeholder': 'Full name'}))
+    phone = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'placeholder': 'Phone number', 'inputmode': 'tel'}))
+
+    def clean_phone(self):
+        from apps.leads.utils import normalize_phone
+        value = self.cleaned_data['phone']
+        normalized = normalize_phone(value)
+        if not normalized or len(normalized) < 7:
+            raise forms.ValidationError('Enter a valid phone number with at least 7 digits.')
+        return value
+
+QuickLeadFormSet = forms.formset_factory(QuickLeadForm, extra=10, max_num=1000, validate_max=True, min_num=1, validate_min=True)

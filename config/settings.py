@@ -21,14 +21,23 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
     "localhost",
     "127.0.0.1",
     "testserver",
-    "10.58.15.62"
+    "10.58.15.93"
 ])
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[
     "http://localhost:8081",
     "http://127.0.0.1:8081",
-    "http://10.58.15.62:8081",
+    "http://10.58.15.93:8081",
 ])
+
+if not DEBUG:
+    # Nginx terminates TLS and proxies plain HTTP to Gunicorn; without this,
+    # Django thinks every request is insecure and rejects/loops on HTTPS checks.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=True)
+    CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 AUTH_USER_MODEL = "accounts.User"
 # Application definition
@@ -55,7 +64,7 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
+        "apps.accounts.api.authentication.VerifiedSessionAuthentication",
     ],
 }
 
@@ -154,3 +163,9 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+# Attendance JSON carries a bounded base64 camera image.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5_000_000
+
+FACE_MODEL_DIR = Path(env('FACE_MODEL_DIR', default=str(BASE_DIR / 'face_models')))
+FACE_MATCH_THRESHOLD = env.float('FACE_MATCH_THRESHOLD', default=0.363)
