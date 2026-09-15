@@ -1,4 +1,6 @@
 from . import photo_views
+from . import chat_views
+from . import notice_views
 from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 from . import views
@@ -7,6 +9,13 @@ from .forms import LoginForm
 
 app_name = 'web'
 urlpatterns = [
+    path('notices/', notice_views.notices, name='notices'),
+    path('notices/new/', notice_views.notice_new, name='notice-new'),
+    path('notices/<int:pk>/delete/', notice_views.notice_delete, name='notice-delete'),
+    path('chat/', chat_views.chat_home, name='chat-home'),
+    path('chat/channels/new/', chat_views.chat_channel_new, name='chat-channel-new'),
+    path('chat/<int:channel_id>/', chat_views.chat_channel, name='chat-channel'),
+    path('chat/<int:channel_id>/send/', chat_views.chat_send, name='chat-send'),
     path('attendance/photos/', photo_views.queue, name='photo-attendance'),
     path('attendance/photos/<int:pk>/image/', photo_views.photo, name='attendance-photo-image'),
     path('attendance/photos/<int:pk>/review/', photo_views.review, name='attendance-photo-review'),

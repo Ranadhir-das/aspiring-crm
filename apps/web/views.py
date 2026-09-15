@@ -2,6 +2,7 @@ from datetime import timedelta
 from functools import wraps
 from zipfile import BadZipFile
 
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -85,14 +86,7 @@ def dashboard(request):
     sources = list(lead_query.values('source').annotate(count=Count('id')).order_by('-count')[:5])
     for source in sources:
         source['percent'] = round(source['count'] / total * 100) if total else 0
-    account_requests = User.objects.none()
-    if request.user.role in {'SUPER_ADMIN', 'ADMIN'}:
-        account_requests = User.objects.filter(is_active=False).exclude(pk=request.user.pk)
-        if request.user.role != 'SUPER_ADMIN':
-            account_requests = account_requests.exclude(role__in=['SUPER_ADMIN', 'ADMIN'])
-        account_requests = account_requests.order_by('-date_joined', '-pk')
     return page(request, 'dashboard', 'dashboard', total=total, interested=interested,
-                account_request_count=account_requests.count(), account_requests=account_requests[:5],
                 interest_rate=round(interested / total * 100, 1) if total else 0,
                 today_calls=call_query.filter(started_at__date=now.date()).count(),
                 pending=lead_query.filter(status=Lead.Status.PENDING).count(),
@@ -283,12 +277,22 @@ def quick_leads(request):
     return page(request, 'quick_leads', 'leads', formset=formset)
 
 
+class SessionFilterForm(forms.Form):
+    start_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    end_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    caller = forms.ModelChoiceField(queryset=User.objects.filter(is_active=True), required=False, label='Employee')
+
+
 @workspace(management=True)
 def caller_sessions(request):
     from apps.accounts.models import CallerSession
+    form = SessionFilterForm(request.GET or None)
     query = CallerSession.objects.select_related('caller').order_by('-logged_in_at')
-    caller = request.GET.get('caller', '')
-    if caller.isdigit():
-        query = query.filter(caller_id=caller)
-    return page(request, 'caller_sessions', 'team', records=paginate(request, query),
-                callers=User.objects.filter(is_active=True), selected_caller=caller)
+    if form.is_valid():
+        if form.cleaned_data.get('start_date'):
+            query = query.filter(logged_in_at__date__gte=form.cleaned_data['start_date'])
+        if form.cleaned_data.get('end_date'):
+            query = query.filter(logged_in_at__date__lte=form.cleaned_data['end_date'])
+        if form.cleaned_data.get('caller'):
+            query = query.filter(caller=form.cleaned_data['caller'])
+    return page(request, 'caller_sessions', 'team', records=paginate(request, query), filters=form)

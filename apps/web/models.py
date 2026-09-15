@@ -200,3 +200,30 @@ class AttendancePhotoRequest(models.Model):
     reviewed_at = models.DateTimeField(null=True)
     review_note = models.CharField(max_length=1000, blank=True)
     match_score = models.FloatField(null=True, blank=True)
+
+
+class Notice(models.Model):
+    title = models.CharField(max_length=200)
+    body = models.TextField(max_length=4000)
+    # Empty list means "all employees" — a role-scoped announcement board, not a
+    # conversation, so there's no per-recipient row to maintain as staff join/leave.
+    roles = models.JSONField(default=list, blank=True)
+    created_by = models.ForeignKey(USER, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.title
+
+    def is_visible_to(self, user):
+        return not self.roles or user.role in self.roles
+
+    @property
+    def audience_label(self):
+        if not self.roles:
+            return 'All employees'
+        from apps.accounts.models import User
+        labels = dict(User.Role.choices)
+        return ', '.join(labels.get(role, role) for role in self.roles)

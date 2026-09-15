@@ -4,10 +4,27 @@ menu?.addEventListener('click', () => {
   const open = document.querySelector('.sidebar').classList.toggle('open');
   menu.setAttribute('aria-expanded', String(open));
 });
+const notifToggle = document.getElementById('notif-toggle');
+const notifPanel = document.getElementById('notif-panel');
+function closeNotifications() {
+  if (!notifPanel || notifPanel.hidden) return;
+  notifPanel.hidden = true;
+  notifToggle.setAttribute('aria-expanded', 'false');
+}
+notifToggle?.addEventListener('click', event => {
+  event.stopPropagation();
+  const open = notifPanel.hidden;
+  notifPanel.hidden = !open;
+  notifToggle.setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('click', event => {
+  if (notifPanel && !notifPanel.hidden && !notifPanel.contains(event.target) && event.target !== notifToggle) closeNotifications();
+});
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') {
     document.querySelector('.sidebar')?.classList.remove('open');
     menu?.setAttribute('aria-expanded', 'false');
+    closeNotifications();
   }
 });
 document.querySelectorAll('[data-auto-submit]').forEach(select => select.addEventListener('change', () => select.form.requestSubmit()));
@@ -90,3 +107,63 @@ document.getElementById('add-invoice-item')?.addEventListener('click', () => {
   container.append(clone);
   total.value = String(index + 1);
 });
+
+// Team chat: live delivery over WebSocket, sending over a normal authenticated POST.
+const chatThread = document.getElementById('chat-thread');
+if (chatThread) {
+  const channelId = chatThread.dataset.channel;
+  const myId = chatThread.dataset.user;
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const socket = new WebSocket(`${proto}://${window.location.host}/ws/chat/${channelId}/`);
+
+  const appendMessage = message => {
+    if (chatThread.querySelector(`[data-message-id="${message.id}"]`)) return; // already rendered (own optimistic send)
+    chatThread.querySelector('.empty')?.remove();
+    const mine = String(message.sender_id) === myId;
+    const row = document.createElement('div');
+    row.className = 'chat-msg' + (mine ? ' mine' : '');
+    row.dataset.messageId = message.id;
+    const avatar = document.createElement('span');
+    avatar.className = 'chat-avatar';
+    avatar.textContent = message.sender_name.charAt(0).toUpperCase();
+    const bodyWrap = document.createElement('div');
+    bodyWrap.className = 'chat-msg-body';
+    if (!mine) {
+      const name = document.createElement('strong');
+      name.textContent = message.sender_name;
+      bodyWrap.append(name);
+    }
+    const body = document.createElement('p');
+    body.textContent = message.text;
+    const time = document.createElement('time');
+    time.textContent = new Date(message.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    bodyWrap.append(body, time);
+    row.append(avatar, bodyWrap);
+    chatThread.append(row);
+    chatThread.scrollTop = chatThread.scrollHeight;
+  };
+
+  socket.addEventListener('message', event => appendMessage(JSON.parse(event.data)));
+  chatThread.scrollTop = chatThread.scrollHeight;
+
+  const composeForm = document.getElementById('chat-compose');
+  composeForm?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    const csrf = composeForm.querySelector('[name=csrfmiddlewaretoken]').value;
+    try {
+      const response = await fetch(composeForm.action, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrf },
+        body: new URLSearchParams({ text }),
+      });
+      if (response.ok) appendMessage(await response.json());
+      else input.value = text;
+    } catch {
+      input.value = text;
+    }
+  });
+}

@@ -21,13 +21,13 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
     "localhost",
     "127.0.0.1",
     "testserver",
-    "10.58.15.93"
+    "192.168.31.191"
 ])
 
 CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[
     "http://localhost:8081",
     "http://127.0.0.1:8081",
-    "http://10.58.15.93:8081",
+    "http://192.168.31.191:8081",
 ])
 
 if not DEBUG:
@@ -43,6 +43,8 @@ AUTH_USER_MODEL = "accounts.User"
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',  # must precede staticfiles so its ASGI-aware runserver takes over
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -53,14 +55,30 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
+    "channels",
 
     "apps.accounts",
     "apps.leads",
     "apps.calls",
     "apps.followups",
     "apps.web",
+    "apps.chat",
 
 ]
+
+ASGI_APPLICATION = 'config.asgi.application'
+
+# In-memory channel layer works fine for local dev (single runserver process). Set
+# REDIS_URL in production so multiple Daphne/worker processes share the same pub-sub.
+REDIS_URL = env('REDIS_URL', default='')
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {'hosts': [REDIS_URL]},
+    } if REDIS_URL else {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    }
+}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -91,6 +109,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'apps.web.context_processors.notifications',
             ],
         },
     },

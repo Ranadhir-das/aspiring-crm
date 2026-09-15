@@ -70,11 +70,22 @@ class CallerSession(models.Model):
     end_reason = models.CharField(max_length=20, blank=True)
     attendance = models.ForeignKey('web.Attendance', null=True, blank=True, on_delete=models.SET_NULL, related_name='sessions')
     verification = models.ForeignKey('web.AttendancePhotoRequest', null=True, blank=True, on_delete=models.SET_NULL)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
 
     @property
     def active_display(self):
         seconds = int(self.active_seconds)
         return f'{seconds // 3600}h {(seconds % 3600) // 60}m {seconds % 60}s'
+
+    @property
+    def has_location(self):
+        return self.latitude is not None and self.longitude is not None
+
+    @property
+    def map_url(self):
+        return f'https://www.google.com/maps?q={self.latitude},{self.longitude}' if self.has_location else ''
 
     @property
     def online(self):

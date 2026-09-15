@@ -19,6 +19,13 @@ def needs_onboarding(user):
     return user.role not in {'ADMIN', 'SUPER_ADMIN'} and not AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
 
 
+def client_ip(request):
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+    if forwarded:
+        return forwarded.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
 def user_data(user):
     return {'id': user.pk, 'username': user.username, 'email': user.email,
             'name': user.get_full_name(), 'role': user.role, 'needs_onboarding': needs_onboarding(user)}
@@ -51,6 +58,8 @@ class MobileVerifyLoginView(PublicAuthView):
             challenge = serializers.UUIDField()
             photo = serializers.CharField(max_length=4_000_000, required=False)
             consent = serializers.BooleanField(default=False)
+            latitude = serializers.FloatField(required=False, allow_null=True)
+            longitude = serializers.FloatField(required=False, allow_null=True)
         data = Input(data=request.data)
         data.is_valid(raise_exception=True)
         values = data.validated_data
@@ -100,7 +109,8 @@ class MobileVerifyLoginView(PublicAuthView):
             attendance.save()
         Token.objects.filter(user=user).delete()
         token = Token.objects.create(user=user)
-        session = CallerSession.objects.create(caller=user, verified_at=now, expires_at=next_midnight(now), attendance=attendance, verification=verification)
+        session = CallerSession.objects.create(caller=user, verified_at=now, expires_at=next_midnight(now), attendance=attendance, verification=verification,
+            ip_address=client_ip(request), latitude=values.get('latitude'), longitude=values.get('longitude'))
         AuditEvent.objects.create(actor=user, category='ATTENDANCE', description=f'Mobile login session {session.pk}')
         return Response({'token': token.key, 'session_id': str(session.pk), 'expires_at': session.expires_at, 'user': user_data(user)})
 

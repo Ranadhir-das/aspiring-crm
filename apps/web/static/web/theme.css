@@ -46,4 +46,14 @@
 [data-theme=light] .story-copy>p,[data-theme=light] .login-help,[data-theme=light] .login-foot{color:var(--muted)}
 [data-theme=light] .orbit-label{background:#fff;color:#695087;border-color:#d7c9e8;box-shadow:0 6px 20px #6c538512}
 [data-theme=light] .orbit-ring{border-color:#c6b4e0}
+[data-theme=light] .notif-item:hover{background:#f7f8fc}
+[data-theme=light] .notif-badge{box-shadow:0 0 0 2px #fff}
+[data-theme=light] .chat-channels{background:#f8f8fc}
+[data-theme=light] .chat-channel-link{color:var(--muted)}
+[data-theme=light] .chat-channel-link:hover{background:#f0edf9}
+[data-theme=light] .chat-channel-link.active{background:#eee8fc;color:#59449e;border-color:#d5c8f2;box-shadow:inset 3px 0 #8d6fce}
+[data-theme=light] .chat-avatar{background:#eee8fb;color:#604797;border-color:#d7c9ee}
+[data-theme=light] .chat-msg-body{background:#f3f5fb;border-color:#dce1ec}
+[data-theme=light] .chat-msg.mine .chat-msg-body{background:var(--accent);border-color:var(--accent)}
+[data-theme=light] .chat-msg.mine p,[data-theme=light] .chat-msg.mine time{color:#fff}
 @media(max-width:760px){.auth-theme{top:20px;right:18px}.login-story .brand{max-width:calc(100% - 120px)}.topbar-right{gap:10px}.theme-toggle{padding:7px 9px;font-size:10px}}

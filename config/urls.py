@@ -30,4 +30,8 @@ urlpatterns = [
         "api/v1/mobile/",
         include("apps.followups.api.mobile_urls"),
     ),
+    path(
+        "api/v1/mobile/",
+        include("apps.chat.api.mobile_urls"),
+    ),
 ]

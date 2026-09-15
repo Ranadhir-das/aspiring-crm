@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from apps.accounts.models import User
 from apps.web.models import Attendance, LeaveRequest, Project, WorkReport, Holiday, AuditEvent
 from apps.web.workforce_forms import LeaveForm
-from apps.web.models import AttendancePhotoChallenge, AttendancePhotoRequest
+from apps.web.models import AttendancePhotoChallenge, AttendancePhotoRequest, Notice
 
 
 class EmployeeView(APIView):
@@ -88,6 +88,19 @@ class EmployeeReportView(EmployeeView):
         report, _ = WorkReport.objects.update_or_create(employee=request.user, date=date, defaults={**values, 'submitted_by': request.user})
         AuditEvent.objects.create(actor=request.user, category='REPORT', description=f'Mobile work report #{report.pk}')
         return Response({'id': report.pk})
+
+
+class EmployeeNoticeView(EmployeeView):
+    def get(self, request):
+        notices = [n for n in Notice.objects.select_related('created_by') if n.is_visible_to(request.user)]
+        return Response([{
+            'id': n.pk,
+            'title': n.title,
+            'body': n.body,
+            'audience': n.audience_label,
+            'created_by': n.created_by.get_full_name() or n.created_by.username if n.created_by else 'Management',
+            'created_at': n.created_at,
+        } for n in notices])
 
 
 class PhotoChallengeView(EmployeeView):

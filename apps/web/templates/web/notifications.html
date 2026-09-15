@@ -1,0 +1,8 @@
+{% if show_notifications %}<div class="notif-wrap no-print">
+  <button type="button" class="icon-button notif-bell" id="notif-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel" aria-label="Notifications, {{ header_notifications_count }} pending"><span class="notif-bell-icon"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="notif-badge">{{ header_notifications_count }}</span></span></button>
+  <div class="notif-panel" id="notif-panel" role="menu" hidden>
+    <div class="notif-panel-head"><strong>Notifications</strong><span class="muted">{{ header_notifications_count }} pending</span></div>
+    {% if header_notifications %}<div class="notif-list">{% for item in header_notifications %}<a role="menuitem" href="{{ item.url }}" class="notif-item"><span class="notif-icon">{{ item.icon }}</span><span class="notif-body"><strong>{{ item.title }}</strong><small>{{ item.detail }}</small></span><time datetime="{{ item.created_at|date:'c' }}">{{ item.created_at|timesince }} ago</time></a>{% endfor %}</div>
+    {% else %}<div class="notif-empty">You're all caught up.</div>{% endif %}
+  </div>
+</div>{% endif %}

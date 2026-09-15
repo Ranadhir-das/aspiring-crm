@@ -45,7 +45,7 @@ Use that same password in `.env` in step 4. **Do not** reuse the placeholder
 ```bash
 sudo mkdir -p /opt/aspiring-crm
 sudo chown $USER:$USER /opt/aspiring-crm
-git clone <your-repo-url> /opt/aspiring-crm
+git clone https://github.com/Ranadhir-das/aspiring-crm.git /opt/aspiring-crm
 cd /opt/aspiring-crm
 python3 -m venv venv
 source venv/bin/activate

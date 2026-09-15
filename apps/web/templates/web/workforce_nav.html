@@ -1,5 +1,7 @@
 <div class="nav-label">EMPLOYEE WORKSPACE</div>
 <a {% if section == 'employee-home' %}aria-current="page"{% endif %} href="{% url 'web:employee-home' %}"><span class="nav-icon">◈</span>My workspace</a>
+<a {% if section == 'chat' %}aria-current="page"{% endif %} href="{% url 'web:chat-home' %}"><span class="nav-icon">💬</span>Team chat</a>
+<a {% if section == 'notices' %}aria-current="page"{% endif %} href="{% url 'web:notices' %}"><span class="nav-icon">📣</span>Notices</a>
 <a {% if section == 'attendance' %}aria-current="page"{% endif %} href="{% url 'web:attendance' %}"><span class="nav-icon">◷</span>Attendance</a>
 <a {% if section == 'leaves' %}aria-current="page"{% endif %} href="{% url 'web:leaves' %}"><span class="nav-icon">☷</span>Leave requests</a>
 <a {% if section == 'holidays' %}aria-current="page"{% endif %} href="{% url 'web:holidays' %}"><span class="nav-icon">◇</span>Holiday calendar</a>

@@ -1,5 +1,5 @@
 from .employee_views import PhotoChallengeView, PhotoAttendanceView
-from .employee_views import EmployeeHomeView, EmployeeLeaveView, EmployeeProjectView, EmployeeReportView
+from .employee_views import EmployeeHomeView, EmployeeLeaveView, EmployeeProjectView, EmployeeReportView, EmployeeNoticeView
 from django.urls import path
 
 from .views import MobileLoginView, MobileMeView, MobileSessionView, MobileVerifyLoginView
@@ -16,6 +16,7 @@ urlpatterns = [
     path('employee/leaves/<int:pk>/', EmployeeLeaveView.as_view()),
     path('employee/projects/<int:pk>/', EmployeeProjectView.as_view()),
     path('employee/reports/', EmployeeReportView.as_view()),
+    path('employee/notices/', EmployeeNoticeView.as_view()),
     path("session/", MobileSessionView.as_view(), name="mobile-session"),
     path(
         "login/",
