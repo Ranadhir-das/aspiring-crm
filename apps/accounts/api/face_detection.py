@@ -47,7 +47,12 @@ def verify_face_photo(photo, reference):
     return score, score >= settings.FACE_MATCH_THRESHOLD
 
 
-def validate_face_photo(encoded):
+def decode_photo(encoded):
+    """Decode and sanity-check a base64 photo into a normalized PIL Image.
+
+    Shared by `validate_face_photo` (which additionally requires a face) and
+    `validate_generic_photo` (which doesn't) — this half has no face requirement.
+    """
     if not isinstance(encoded, str) or len(encoded) > 4_000_000:
         raise ValidationError('Choose a photo smaller than 3 MB.')
     try:
@@ -66,6 +71,17 @@ def validate_face_photo(encoded):
             image.load()
     except (binascii.Error, UnidentifiedImageError, OSError, Image.DecompressionBombWarning, Image.DecompressionBombError):
         raise ValidationError('This is not a valid photo.')
+    return image
+
+
+def encode_jpeg(image, quality=75):
+    output = io.BytesIO()
+    image.save(output, format='JPEG', quality=quality)
+    return output.getvalue()
+
+
+def validate_face_photo(encoded):
+    image = decode_photo(encoded)
     import cv2
     import numpy as np
     detector = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -75,6 +91,10 @@ def validate_face_photo(encoded):
     faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(70, 70))
     if len(faces) != 1:
         raise ValidationError('Show exactly one face, looking at the camera in good light. Please retake the photo.')
-    output = io.BytesIO()
-    image.save(output, format='JPEG', quality=75)
-    return output.getvalue()
+    return encode_jpeg(image)
+
+
+def validate_generic_photo(encoded):
+    """Decode/size/format-check a base64 photo with no face requirement — for
+    non-attendance uploads such as a work-report evidence photo."""
+    return encode_jpeg(decode_photo(encoded))

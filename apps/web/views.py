@@ -86,7 +86,13 @@ def dashboard(request):
     sources = list(lead_query.values('source').annotate(count=Count('id')).order_by('-count')[:5])
     for source in sources:
         source['percent'] = round(source['count'] / total * 100) if total else 0
+    top_performers = []
+    if request.user.role in MANAGEMENT:
+        from .performance_views import _caller_rows
+        top_performers, _ = _caller_rows(start, now.date())
+        top_performers = top_performers[:3]
     return page(request, 'dashboard', 'dashboard', total=total, interested=interested,
+                top_performers=top_performers,
                 interest_rate=round(interested / total * 100, 1) if total else 0,
                 today_calls=call_query.filter(started_at__date=now.date()).count(),
                 pending=lead_query.filter(status=Lead.Status.PENDING).count(),
@@ -135,7 +141,9 @@ def leads(request):
 def lead_create(request):
     form = LeadForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
-        lead = form.save()
+        lead = form.save(commit=False)
+        lead._changed_by = request.user
+        lead.save()
         messages.success(request, 'Lead created. Assign a caller from the lead directory.')
         return redirect('web:lead-detail', pk=lead.pk)
     return page(request, 'lead_form', 'leads', form=form, title='Create a lead')
@@ -148,6 +156,7 @@ def lead_detail(request, pk):
     follow_form = FollowUpForm(request.POST if request.method == 'POST' and request.POST.get('action') == 'followup' else None)
     if request.method == 'POST':
         if request.POST.get('action') == 'save' and form.is_valid():
+            lead._changed_by = request.user
             form.save()
             messages.success(request, 'Lead details saved.')
             return redirect('web:lead-detail', pk=pk)
@@ -161,9 +170,11 @@ def lead_detail(request, pk):
                     lead.save(update_fields=['status', 'updated_at'])
                 messages.success(request, 'Follow-up scheduled for the assigned caller.')
                 return redirect('web:lead-detail', pk=pk)
+    from apps.activity.models import ActivityLog
     return page(request, 'lead_detail', 'leads', lead=lead, form=form, follow_form=follow_form,
                 history=visible_calls(request.user).filter(lead=lead).order_by('-started_at')[:30],
-                followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20])
+                followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20],
+                activity_log=ActivityLog.objects.filter(lead=lead).select_related('actor').order_by('-created_at')[:50])
 
 
 @require_POST
@@ -231,6 +242,7 @@ def followup_complete(request, pk):
     followup = get_object_or_404(visible_followups(request.user), pk=pk)
     if followup.status == FollowUp.Status.PENDING:
         followup.status = FollowUp.Status.COMPLETED
+        followup._changed_by = request.user
         followup.save(update_fields=['status', 'updated_at'])
         messages.success(request, 'Follow-up marked complete.')
     return redirect('web:followups')
@@ -244,6 +256,19 @@ def team(request):
         call_count=Count('calls_made', distinct=True),
     ).order_by('-call_count', 'username')
     return page(request, 'team', 'team', records=paginate(request, callers))
+
+
+@workspace(management=True)
+def caller_detail(request, pk):
+    from apps.activity.models import ActivityLog
+    caller = get_object_or_404(User.objects.filter(role=User.Role.CALLER), pk=pk)
+    stats = User.objects.filter(pk=caller.pk).annotate(
+        lead_count=Count('assigned_leads', distinct=True),
+        interested_count=Count('assigned_leads', filter=Q(assigned_leads__status='INTERESTED'), distinct=True),
+        call_count=Count('calls_made', distinct=True),
+    ).first()
+    query = ActivityLog.objects.filter(actor=caller).select_related('lead').order_by('-created_at')
+    return page(request, 'caller_detail', 'team', caller=stats, records=paginate(request, query))
 
 
 @workspace(management=True)

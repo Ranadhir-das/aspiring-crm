@@ -1,8 +1,11 @@
 from django.db import transaction
+from django.db.models import BooleanField, Case, Value, When
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
 from apps.accounts.api.authentication import VerifiedSessionAuthentication
+from apps.accounts.api.face_detection import validate_generic_photo as validate_photo
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -30,7 +33,9 @@ class EmployeeHomeView(EmployeeView):
             'attendance': list(Attendance.objects.filter(employee=user).order_by('-date').values('id', 'date', 'status', 'checked_in', 'checked_out')[:30]),
             'leaves': list(LeaveRequest.objects.filter(employee=user).order_by('-created_at').values('id', 'start_date', 'end_date', 'reason', 'status', 'review_note')[:50]),
             'projects': list(Project.objects.filter(employee=user).order_by('status', 'due_date').values('id', 'title', 'description', 'due_date', 'status')[:100]),
-            'reports': list(WorkReport.objects.filter(employee=user).order_by('-date').values('id', 'date', 'notes', 'work_link')[:30]),
+            'reports': list(WorkReport.objects.filter(employee=user).order_by('-date')
+                             .annotate(has_photo=Case(When(photo__isnull=False, then=Value(True)), default=Value(False), output_field=BooleanField()))
+                             .values('id', 'date', 'notes', 'work_link', 'has_photo')[:30]),
             'holidays': list(Holiday.objects.filter(date__gte=today).order_by('date').values('id', 'name', 'date')[:10]),
         })
 
@@ -78,6 +83,9 @@ class EmployeeReportView(EmployeeView):
             date = serializers.DateField()
             notes = serializers.CharField(max_length=10000)
             work_link = serializers.URLField(required=False, allow_blank=True, default='')
+            # Optional base64-encoded photo of the work done that day (e.g. a screenshot or
+            # site photo). Omitted entirely on a same-day re-save leaves any existing photo as-is.
+            photo = serializers.CharField(max_length=4_000_000, required=False, allow_blank=True)
         data = Input(data=request.data)
         data.is_valid(raise_exception=True)
         if data.validated_data['date'] > timezone.localdate():
@@ -85,9 +93,23 @@ class EmployeeReportView(EmployeeView):
         User.objects.select_for_update().get(pk=request.user.pk)
         values = data.validated_data.copy()
         date = values.pop('date')
+        photo = values.pop('photo', '')
+        if photo:
+            values['photo'] = validate_photo(photo)
         report, _ = WorkReport.objects.update_or_create(employee=request.user, date=date, defaults={**values, 'submitted_by': request.user})
         AuditEvent.objects.create(actor=request.user, category='REPORT', description=f'Mobile work report #{report.pk}')
         return Response({'id': report.pk})
+
+
+class EmployeeReportPhotoView(EmployeeView):
+    def get(self, request, pk):
+        report = get_object_or_404(WorkReport, pk=pk, employee=request.user)
+        if not report.photo:
+            raise Http404
+        response = HttpResponse(bytes(report.photo), content_type='image/jpeg')
+        response['Cache-Control'] = 'no-store, private'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
 
 
 class EmployeeNoticeView(EmployeeView):

@@ -55,12 +55,16 @@ class ReportForm(forms.ModelForm):
         fields = ['date', 'work_link', 'notes']
         widgets = {'date': DATE, 'notes': forms.Textarea(attrs={'rows': 3})}
 
-    def __init__(self, *args, management=False, **kwargs):
+    def __init__(self, *args, management=False, employee=None, **kwargs):
         super().__init__(*args, **kwargs)
         if management:
             self.fields['employee'] = forms.ModelChoiceField(User.objects.filter(is_active=True))
-        for key, label in FEEDBACK:
-            self.fields['feedback_' + key] = forms.IntegerField(label=label, min_value=0, max_value=100000, initial=self.instance.feedback.get(key, 0) if self.instance.pk else 0)
+        # Manual feedback counters are call-outcome tallies — only meaningful for callers.
+        # `employee` is None when management hasn't picked one yet (new report); show the
+        # fields in that case since we can't tell yet, rather than hide them by default.
+        if employee is None or employee.role == 'CALLER':
+            for key, label in FEEDBACK:
+                self.fields['feedback_' + key] = forms.IntegerField(label=label, min_value=0, max_value=100000, initial=self.instance.feedback.get(key, 0) if self.instance.pk else 0)
 
     def clean_date(self):
         value = self.cleaned_data['date']

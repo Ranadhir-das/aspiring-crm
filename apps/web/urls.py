@@ -1,6 +1,8 @@
 from . import photo_views
 from . import chat_views
 from . import notice_views
+from . import performance_views
+from . import app_intro_views
 from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 from . import views
@@ -42,6 +44,7 @@ urlpatterns = [
     path('reports/', workforce.reports, name='reports'),
     path('reports/new/', workforce.report_edit, name='report-new'),
     path('reports/<int:pk>/', workforce.report_edit, name='report-edit'),
+    path('reports/<int:pk>/photo/', workforce.report_photo, name='report-photo'),
     path('feedback/', workforce.feedback, name='feedback'),
     path('expenses/', workforce.expenses, name='expenses'),
     path('expenses/new/', workforce.expense_new, name='expense-new'),
@@ -61,6 +64,8 @@ urlpatterns = [
     path('invoices/', workforce.invoices, name='invoices'),
     path('invoices/new/', workforce.invoice_new, name='invoice-new'),
     path('invoices/<int:pk>/', workforce.invoice_detail, name='invoice-detail'),
+    path('app/', app_intro_views.app_intro, name='app-intro'),
+    path('app/download/', app_intro_views.download_app, name='app-download'),
     path('login/', LoginView.as_view(template_name='web/login.html', authentication_form=LoginForm), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('', views.dashboard, name='dashboard'),
@@ -73,4 +78,6 @@ urlpatterns = [
     path('follow-ups/', views.followups, name='followups'),
     path('follow-ups/<int:pk>/complete/', views.followup_complete, name='followup-complete'),
     path('team/', views.team, name='team'),
+    path('team/<int:pk>/', views.caller_detail, name='caller-detail'),
+    path('performance/', performance_views.performance, name='performance'),
 ]

@@ -9,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Sum, Q
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -332,7 +332,14 @@ def reports(request):
 @workspace(employee=True)
 def report_edit(request, pk=None):
     report = get_object_or_404(scoped(WorkReport.objects.all(), request.user), pk=pk) if pk else None
-    form = ReportForm(request.POST or None, instance=report, management=request.user.role in MANAGEMENT)
+    is_management = request.user.role in MANAGEMENT
+    # Who the report is/will be for, so ReportForm can decide whether the caller-only
+    # feedback counters make sense. Unknown only when management is creating a brand-new
+    # report and hasn't picked an employee yet (or just submitted one via POST).
+    known_employee = report.employee if report else (None if is_management else request.user)
+    if is_management and request.method == 'POST' and request.POST.get('employee'):
+        known_employee = User.objects.filter(pk=request.POST['employee']).first() or known_employee
+    form = ReportForm(request.POST or None, instance=report, management=is_management, employee=known_employee)
     if report and request.method != 'POST' and 'employee' in form.fields:
         form.fields['employee'].initial = report.employee_id
     if request.method == 'POST' and form.is_valid():
@@ -346,11 +353,24 @@ def report_edit(request, pk=None):
                 obj = form.save(commit=False)
                 obj.employee = employee
                 obj.submitted_by = request.user
-                obj.feedback = {k: form.cleaned_data['feedback_' + k] for k, _ in FEEDBACK}
+                obj.feedback = {k: form.cleaned_data['feedback_' + k] for k, _ in FEEDBACK if 'feedback_' + k in form.cleaned_data}
                 obj.save()
                 audit(request, 'REPORT', f'Saved work report #{obj.pk} for employee #{employee.pk}')
                 return redirect('web:reports')
-    return form_page(request, 'Daily work & feedback report', form, 'reports', subtitle='Enter manually reported counts. These do not create call records.')
+    return form_page(request, 'Daily work & feedback report', form, 'reports', report=report,
+        subtitle='Enter manually reported counts. These do not create call records.' if (known_employee is None or known_employee.role == 'CALLER')
+        else 'Enter your notes, work link, and photo for the day.')
+
+
+@workspace(employee=True)
+def report_photo(request, pk):
+    report = get_object_or_404(scoped(WorkReport.objects.all(), request.user), pk=pk)
+    if not report.photo:
+        raise Http404
+    response = HttpResponse(bytes(report.photo), content_type='image/jpeg')
+    response['Cache-Control'] = 'no-store, private'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @workspace(employee=True)

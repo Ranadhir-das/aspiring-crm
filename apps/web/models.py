@@ -67,6 +67,7 @@ class WorkReport(models.Model):
     work_link = models.URLField(blank=True)
     notes = models.TextField(blank=True)
     feedback = models.JSONField(default=dict)
+    photo = models.BinaryField(null=True, blank=True)
     submitted_by = models.ForeignKey(USER, null=True, on_delete=models.SET_NULL, related_name='submitted_work_reports')
     updated_at = models.DateTimeField(auto_now=True)
 

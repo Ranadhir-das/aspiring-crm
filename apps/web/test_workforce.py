@@ -85,10 +85,12 @@ class WorkforceTests(TestCase):
         return {'date': self.today, 'notes': 'Daily progress', **{'feedback_'+k: 0 for k, _ in FEEDBACK}, **extra}
 
     def test_reports_persist_edit_and_do_not_duplicate(self):
-        self.login(self.employee)
+        # Feedback counters are caller-only (see test_report_feedback_fields_are_caller_only
+        # below), so this exercises CRUD/duplicate-prevention/privacy/export using a caller.
+        self.login(self.caller)
         data = self.report_data(feedback_INTERESTED=4)
         self.assertEqual(self.client.post('/reports/new/', data).status_code, 302)
-        report = WorkReport.objects.get(employee=self.employee)
+        report = WorkReport.objects.get(employee=self.caller)
         self.assertEqual(report.feedback_total, 4)
         self.client.post('/reports/new/', data)
         self.assertEqual(WorkReport.objects.count(), 1)
@@ -98,6 +100,31 @@ class WorkforceTests(TestCase):
         self.login(self.other)
         self.assertEqual(self.client.get(f'/reports/{report.pk}/').status_code, 404)
         self.assertNotContains(self.client.get('/reports/?export=csv'), 'Daily progress')
+
+    def test_report_feedback_fields_are_caller_only(self):
+        # IT/Video Editor/etc. daily reports have no call-outcome counters to fill in.
+        self.login(self.employee)  # role='IT'
+        response = self.client.get('/reports/new/')
+        self.assertNotIn('feedback_INTERESTED', response.context['form'].fields)
+        # Extra feedback data posted anyway (e.g. a stale client) is simply ignored, not an error.
+        response = self.client.post('/reports/new/', self.report_data(feedback_INTERESTED=9))
+        self.assertEqual(response.status_code, 302)
+        report = WorkReport.objects.get(employee=self.employee)
+        self.assertEqual(report.feedback, {})
+        self.assertEqual(report.feedback_total, 0)
+
+        self.login(self.caller)
+        response = self.client.get('/reports/new/')
+        self.assertIn('feedback_INTERESTED', response.context['form'].fields)
+
+        # Management editing an existing IT report also doesn't show the fields...
+        self.login(self.admin)
+        response = self.client.get(f'/reports/{report.pk}/')
+        self.assertNotIn('feedback_INTERESTED', response.context['form'].fields)
+        # ...but does for an existing caller report.
+        caller_report = WorkReport.objects.create(employee=self.caller, date=self.today - timedelta(days=1))
+        response = self.client.get(f'/reports/{caller_report.pk}/')
+        self.assertIn('feedback_INTERESTED', response.context['form'].fields)
 
     def test_manual_feedback_and_calls_are_not_added_together(self):
         lead = Lead.objects.create(name='Reassigned', phone='9876543210', assigned_caller=self.other)

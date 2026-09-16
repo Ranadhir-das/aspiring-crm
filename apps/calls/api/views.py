@@ -82,6 +82,7 @@ class CallCreateView(APIView):
 
         if new_status:
             lead.status = new_status
+            lead._changed_by = request.user
             lead.save(
                 update_fields=[
                     "status",

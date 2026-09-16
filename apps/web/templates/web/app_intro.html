@@ -1,0 +1,26 @@
+{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Get the app · Vaani</title><script src="{% static 'web/theme.js' %}?v=9"></script><link rel="stylesheet" href="{% static 'web/crm.css' %}?v=9"><link rel="stylesheet" href="{% static 'web/theme.css' %}?v=9"></head><body class="login-page"><div class="auth-theme">{% include 'web/theme_toggle.html' %}</div>
+<main class="intro-page">
+
+<header class="intro-header"><a class="brand" href="{% url 'web:app-intro' %}"><span class="brand-icon">V<span>↗</span></span><span>vaani<span class="brand-sub">CALLER APP</span></span></a><a class="text-link" href="{% url 'web:login' %}">Sign in to the CRM ↗</a></header>
+
+<section class="intro-hero"><div><span class="eyebrow">GET THE APP</span><h1>Your work,<br>right in your <em>pocket.</em></h1><p>Photo-verified attendance, calling, leave, daily reports, team chat and notices — everything you need for your shift, in one Android app connected straight to Vaani.</p>
+{% if apk.available %}<a class="button primary intro-download" href="{% url 'web:app-download' %}"><span>⭳</span> Download for Android</a><p class="muted intro-meta">{{ apk.size_mb }} MB · Updated {{ apk.built_at|date:'d M Y' }} · Android only, for now</p>{% else %}<a class="button intro-download" aria-disabled="true"><span>⭳</span> Coming soon</a><p class="muted intro-meta">The app build isn't published yet — check back shortly.</p>{% endif %}
+<p class="login-help">Already installed it? <a class="text-link" href="{% url 'web:login' %}">Sign in from your computer</a> or open the app on your phone.</p>
+</div><div class="intro-hero-art" aria-hidden="true"><div class="orbit"><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="orbit-core">A↗</div><span class="orbit-label one">📞 &nbsp; Call your leads</span><span class="orbit-label two">✅ &nbsp; Check in with a photo</span><span class="orbit-label three">💬 &nbsp; Stay in the loop</span></div></div></section>
+
+<section class="intro-steps"><div class="section-title"><h2>Three steps to your first shift</h2><p>No separate portal, no extra passwords — one account for the app and the CRM.</p></div><div class="intro-step-grid"><div class="intro-step"><span class="intro-step-number">1</span><h4>Install the app</h4><p>Download the APK above and install it on your Android phone.</p></div><div class="intro-step"><span class="intro-step-number">2</span><h4>Sign up or sign in</h4><p>New here? Create your account right from the app. Already registered? Just sign in.</p></div><div class="intro-step"><span class="intro-step-number">3</span><h4>Start your shift</h4><p>Check in with a live photo and you're ready — calling, leave, reports, chat, all in one place.</p></div></div></section>
+
+<section class="intro-features"><div class="section-title"><h2>Everything your shift needs</h2><p>Built for callers and every other role — IT, video editors, accountants and more.</p></div><div class="intro-feature-grid">
+<div class="intro-feature"><span class="intro-feature-icon">🔒</span><div><h4>Photo-verified attendance</h4><p>Check in and out with a live selfie, matched securely against your enrollment photo.</p></div></div>
+<div class="intro-feature"><span class="intro-feature-icon">📞</span><div><h4>Built-in calling workspace</h4><p>Your assigned leads, a dialer, and call outcomes — logged automatically as you work.</p></div></div>
+<div class="intro-feature"><span class="intro-feature-icon">🗓</span><div><h4>Leave, made simple</h4><p>Request leave with a calendar date picker and track approval status in real time.</p></div></div>
+<div class="intro-feature"><span class="intro-feature-icon">📝</span><div><h4>Daily work reports</h4><p>Log what you worked on, add a link or a photo of the work — done in under a minute.</p></div></div>
+<div class="intro-feature"><span class="intro-feature-icon">💬</span><div><h4>Team chat</h4><p>Real-time messaging with your whole team, organised into channels.</p></div></div>
+<div class="intro-feature"><span class="intro-feature-icon">📣</span><div><h4>Company notices</h4><p>Announcements from management, targeted to your role so you only see what matters.</p></div></div>
+<div class="intro-feature"><span class="intro-feature-icon">📋</span><div><h4>Projects &amp; follow-ups</h4><p>See what's assigned to you and update progress without leaving the app.</p></div></div>
+<div class="intro-feature"><span class="intro-feature-icon">🌓</span><div><h4>Light &amp; dark mode</h4><p>The app follows your phone's theme, or you can switch it yourself in Settings.</p></div></div>
+</div></section>
+
+<footer class="intro-footer"><a class="brand" href="{% url 'web:app-intro' %}"><span class="brand-icon">V<span>↗</span></span><span>vaani<span class="brand-sub">CRM WORKSPACE</span></span></a><p class="muted">&copy; {% now 'Y' %} Vaani · <a class="text-link" href="{% url 'web:login' %}">Workspace sign in</a></p></footer>
+
+</main></body></html>

@@ -443,7 +443,7 @@ def commit_import(file, imported_by, assigned_caller=None):
                 row.get("pcb_percentage")
             )
 
-            lead = Lead.objects.create(
+            lead = Lead(
                 import_batch=batch,
                 name=str(
                     row.get("name", "")
@@ -487,6 +487,8 @@ def commit_import(file, imported_by, assigned_caller=None):
                     row.get("notes", "")
                 ).strip(),
             )
+            lead._changed_by = imported_by
+            lead.save()
 
             created_ids.append(lead.pk)
             created_count += 1

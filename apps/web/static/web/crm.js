@@ -39,16 +39,18 @@ function updateSelection() {
 all?.addEventListener('change', () => { boxes.forEach(box => { box.checked = all.checked; }); updateSelection(); });
 boxes.forEach(box => box.addEventListener('change', updateSelection));
 
+const svgNS = 'http://www.w3.org/2000/svg';
+const svgElement = (tag, attrs, text) => {
+  const node = document.createElementNS(svgNS, tag);
+  Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, value));
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
 const dataNode = document.getElementById('dashboard-data');
 if (dataNode) {
   const data = JSON.parse(dataNode.textContent);
-  const ns = 'http://www.w3.org/2000/svg';
-  const element = (tag, attrs, text) => {
-    const node = document.createElementNS(ns, tag);
-    Object.entries(attrs || {}).forEach(([key, value]) => node.setAttribute(key, value));
-    if (text !== undefined) node.textContent = text;
-    return node;
-  };
+  const element = svgElement;
   const svg = element('svg', { viewBox: '0 0 600 235', role: 'img', 'aria-label': 'Daily calls. Exact counts are available in View chart data.' });
   const maximum = Math.max(4, ...data.trend.map(item => item.count));
   const ceiling = Math.ceil(maximum / 4) * 4;
@@ -85,6 +87,50 @@ if (dataNode) {
   });
   if (total) document.getElementById('pipeline-chart').style.background = `conic-gradient(${segments.join(',')})`;
 }
+
+const performanceNode = document.getElementById('performance-data');
+if (performanceNode) {
+  const data = JSON.parse(performanceNode.textContent);
+  const element = svgElement;
+  const chartHost = document.getElementById('compare-chart');
+  const trend = data.trend || [], series = data.series || [];
+  const svg = element('svg', { viewBox: '0 0 600 235', role: 'img', 'aria-label': "Selected callers' daily call volume. Exact counts are in each point's tooltip." });
+  const values = trend.flatMap(point => series.map(s => point[s.id] || 0));
+  const maximum = Math.max(4, ...values);
+  const ceiling = Math.ceil(maximum / 4) * 4;
+  const x = i => 40 + i * 538 / Math.max(1, trend.length - 1);
+  const y = value => 190 - value / ceiling * 155;
+  for (let i = 0; i <= 4; i++) {
+    const value = i * ceiling / 4;
+    svg.append(element('line', { x1: 40, x2: 578, y1: y(value), y2: y(value), stroke: '#2a2e3c', 'stroke-dasharray': '3 5' }));
+    svg.append(element('text', { x: 26, y: y(value) + 3, fill: '#8390a7', 'font-size': 9, 'text-anchor': 'end' }, value));
+  }
+  series.forEach(s => {
+    const points = trend.map((point, i) => `${x(i)},${y(point[s.id] || 0)}`).join(' ');
+    svg.append(element('polyline', { points, fill: 'none', stroke: s.color, 'stroke-width': 2.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+    trend.forEach((point, i) => {
+      const dot = element('circle', { cx: x(i), cy: y(point[s.id] || 0), r: trend.length <= 14 ? 3.5 : 2.5, fill: s.color, stroke: '#14171f', 'stroke-width': 1.5 });
+      dot.append(element('title', {}, `${s.name} · ${point.date}: ${point[s.id] || 0} calls`));
+      svg.append(dot);
+    });
+  });
+  trend.forEach((point, i) => {
+    if (i % Math.ceil(trend.length / 7) === 0 || i === trend.length - 1) {
+      svg.append(element('text', { x: x(i), y: 219, fill: '#8c97ab', 'font-size': 9, 'text-anchor': i === 0 ? 'start' : i === trend.length - 1 ? 'end' : 'middle' }, point.date));
+    }
+  });
+  if (!values.some(Boolean)) svg.append(element('text', { x: 310, y: 108, fill: '#9fa9be', 'font-size': 12, 'text-anchor': 'middle' }, 'No calls recorded in this period'));
+  chartHost?.append(svg);
+}
+
+const compareBoxes = [...document.querySelectorAll('input[name="compare"]')];
+const COMPARE_LIMIT = 4;
+function enforceCompareLimit() {
+  const checkedCount = compareBoxes.filter(box => box.checked).length;
+  compareBoxes.forEach(box => { box.disabled = !box.checked && checkedCount >= COMPARE_LIMIT; });
+}
+compareBoxes.forEach(box => box.addEventListener('change', enforceCompareLimit));
+enforceCompareLimit();
 
 document.querySelectorAll("[data-print]").forEach(button => button.addEventListener("click", () => window.print()));
 

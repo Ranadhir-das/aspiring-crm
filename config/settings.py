@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.leads",
     "apps.calls",
     "apps.followups",
+    "apps.activity",
     "apps.web",
     "apps.chat",
 
@@ -188,3 +189,9 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5_000_000
 
 FACE_MODEL_DIR = Path(env('FACE_MODEL_DIR', default=str(BASE_DIR / 'face_models')))
 FACE_MATCH_THRESHOLD = env.float('FACE_MATCH_THRESHOLD', default=0.363)
+
+# Local dev default assumes caller-app is checked out as a sibling directory and built via
+# scripts/build-android.ps1. Override with a real path once a signed release APK is hosted
+# (see the deferred VPS deployment plan — this needs to move off local disk at deploy time).
+CALLER_APK_PATH = Path(env('CALLER_APK_PATH', default=str(
+    BASE_DIR.parent / 'caller-app' / 'android' / 'app' / 'build' / 'outputs' / 'apk' / 'debug' / 'app-debug.apk')))
