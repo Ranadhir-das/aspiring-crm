@@ -1,4 +1,4 @@
-# Aspiring CRM web workspace
+# Vaani web workspace
 
 Open `http://localhost:8000/` and sign in with an existing CRM username and password.
 Super Admin, Admin and Manager roles have calling-management access; callers see assigned leads. IT, Video Editor, Employee and Accountant roles can now sign in to the employee workspace. Salary and finance records are restricted to Super Admin, Admin and Accountant; other employees can see only their own salary records.

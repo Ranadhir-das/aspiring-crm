@@ -1,29 +1,33 @@
-# systemd unit for the Django app server.
-# Install:
-#   sudo cp deploy/aspiring-crm.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now aspiring-crm
-# Logs:
-#   sudo journalctl -u aspiring-crm -f
+# systemd unit for the Vaani app server — Daphne (ASGI), not Gunicorn.
 #
-# Adjust User/Group and the paths below to match your actual deploy location
-# if you did not put the checkout at /opt/aspiring-crm.
+# Daphne serves BOTH plain HTTP (the CRM pages, the REST/mobile API) and
+# WebSocket (team chat) over the same socket, since config/asgi.py wires up
+# a ProtocolTypeRouter for both. That's simpler than running Gunicorn and
+# Daphne side by side and routing between them in Nginx.
+#
+# Install:
+#   sudo cp deploy/vaani.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now vaani
+# Logs:
+#   sudo journalctl -u vaani -f
+#
+# Adjust User/Group and the paths below if you did not put the checkout at
+# /opt/vaani.
 
 [Unit]
-Description=aspiring-crm Gunicorn daemon
-After=network.target postgresql.service
+Description=Vaani Daphne (ASGI) daemon
+After=network.target postgresql.service redis-server.service
 
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/aspiring-crm
-EnvironmentFile=/opt/aspiring-crm/.env
-ExecStart=/opt/aspiring-crm/venv/bin/gunicorn \
-    --workers 3 \
-    --timeout 60 \
-    --bind unix:/run/aspiring-crm/gunicorn.sock \
-    config.wsgi:application
-RuntimeDirectory=aspiring-crm
+WorkingDirectory=/opt/vaani
+EnvironmentFile=/opt/vaani/.env
+ExecStart=/opt/vaani/venv/bin/daphne \
+    --unix-socket /run/vaani/daphne.sock \
+    config.asgi:application
+RuntimeDirectory=vaani
 Restart=on-failure
 
 [Install]
