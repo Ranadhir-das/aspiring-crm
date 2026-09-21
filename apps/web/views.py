@@ -35,17 +35,17 @@ def workspace(management=False, employee=False):
 
 
 def visible_leads(user):
-    query = Lead.objects.select_related('assigned_caller')
+    query = Lead.objects.select_related('assigned_caller', 'import_batch')
     return query.filter(assigned_caller=user) if user.role == User.Role.CALLER else query
 
 
 def visible_calls(user):
-    query = Call.objects.select_related('lead', 'caller')
+    query = Call.objects.select_related('lead', 'lead__import_batch', 'caller')
     return query.filter(lead__assigned_caller=user) if user.role == User.Role.CALLER else query
 
 
 def visible_followups(user):
-    query = FollowUp.objects.select_related('lead', 'caller')
+    query = FollowUp.objects.select_related('lead', 'lead__import_batch', 'caller')
     return query.filter(caller=user, lead__assigned_caller=user) if user.role == User.Role.CALLER else query
 
 
@@ -106,7 +106,12 @@ def dashboard(request):
 
 @workspace()
 def leads(request):
-    query = visible_leads(request.user).order_by('-created_at')
+    query = visible_leads(request.user).order_by('import_batch_id', 'name', 'pk')
+    batch = request.GET.get('batch', '')
+    if batch == 'none':
+        query = query.filter(import_batch__isnull=True)
+    elif batch.isdigit():
+        query = query.filter(import_batch_id=int(batch))
     search = request.GET.get('q', '').strip()
     status = request.GET.get('status', '')
     owner = request.GET.get('owner', '')
@@ -132,6 +137,7 @@ def leads(request):
     else:
         query = query.none()
     return page(request, 'leads', 'leads', records=paginate(request, query), search=search,
+                selected_batch=batch, batches=LeadImportBatch.objects.filter(leads__in=visible_leads(request.user)).distinct().order_by('-created_at'),
                 selected_status=status, selected_owner=owner, statuses=Lead.Status.choices,
                 selected_source=source, sources=visible_leads(request.user).exclude(source='').values_list('source', flat=True).distinct(), date_filters=date_filters,
                 callers=User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else [])
@@ -218,7 +224,7 @@ def lead_import(request):
 
 @workspace()
 def calls(request):
-    query = visible_calls(request.user).order_by('-started_at')
+    query = visible_calls(request.user).order_by('lead__import_batch_id', '-started_at', '-pk')
     search = request.GET.get('q', '').strip()
     if search:
         query = query.filter(Q(lead__name__icontains=search) | Q(lead__phone__icontains=search))
@@ -227,7 +233,7 @@ def calls(request):
 
 @workspace()
 def followups(request):
-    query = visible_followups(request.user).order_by('scheduled_at')
+    query = visible_followups(request.user).order_by('lead__import_batch_id', 'scheduled_at', 'pk')
     selected = request.GET.get('status', 'PENDING')
     if selected == 'overdue':
         query = query.filter(status='PENDING', scheduled_at__lt=timezone.now())
@@ -268,7 +274,8 @@ def caller_detail(request, pk):
         call_count=Count('calls_made', distinct=True),
     ).first()
     query = ActivityLog.objects.filter(actor=caller).select_related('lead').order_by('-created_at')
-    return page(request, 'caller_detail', 'team', caller=stats, records=paginate(request, query))
+    from .caller_profile import profile_data
+    return page(request, 'caller_detail', 'performance', caller=stats, records=paginate(request, query), **profile_data(caller))
 
 
 @workspace(management=True)

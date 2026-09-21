@@ -112,6 +112,7 @@ def _comparison(request, rows, call_qs, start, end):
 
 @workspace(management=True)
 def performance(request):
+    from .caller_profile import status_data
     filters, start, end = _period(request)
     rows, call_qs = _caller_rows(start, end)
     compare_ids, compare_rows, series, trend = _comparison(request, rows, call_qs, start, end)
@@ -120,6 +121,7 @@ def performance(request):
     team_interested = sum(r['interested'] for r in rows)
     return page(request, 'performance', 'performance', filters=filters, start=start, end=end,
                 rows=rows, others=others, compare_ids=compare_ids, compare_rows=compare_rows,
+                status_bars=status_data(Lead.objects.all()),
                 team_calls=team_calls, team_interested=team_interested,
                 team_conversion=round(team_interested / team_calls * 100, 1) if team_calls else 0,
                 top_caller=rows[0] if rows and rows[0]['calls'] else None,
