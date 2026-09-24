@@ -51,7 +51,7 @@ const dataNode = document.getElementById('dashboard-data');
 if (dataNode) {
   const data = JSON.parse(dataNode.textContent);
   const element = svgElement;
-  const svg = element('svg', { viewBox: '0 0 600 235', role: 'img', 'aria-label': 'Daily calls. Exact counts are available in View chart data.' });
+  const svg = element('svg', { viewBox: '0 0 600 235', role: 'img', 'aria-label': 'Call volume by report interval. Exact counts are available in the chart data table.' });
   const maximum = Math.max(4, ...data.trend.map(item => item.count));
   const ceiling = Math.ceil(maximum / 4) * 4;
   const x = i => 40 + i * 538 / Math.max(1, data.trend.length - 1);
@@ -94,7 +94,7 @@ if (performanceNode) {
   const element = svgElement;
   const chartHost = document.getElementById('compare-chart');
   const trend = data.trend || [], series = data.series || [];
-  const svg = element('svg', { viewBox: '0 0 600 235', role: 'img', 'aria-label': "Selected callers' daily call volume. Exact counts are in each point's tooltip." });
+  const svg = element('svg', { viewBox: '0 0 600 235', role: 'img', 'aria-label': "Selected callers' call volume by report interval. Exact counts are in each point's tooltip." });
   const values = trend.flatMap(point => series.map(s => point[s.id] || 0));
   const maximum = Math.max(4, ...values);
   const ceiling = Math.ceil(maximum / 4) * 4;
@@ -212,4 +212,57 @@ if (chatThread) {
       input.value = text;
     }
   });
+}
+
+// A signed points trend shares the exact buckets used by the calls chart and data table.
+const pointsHost = document.getElementById('points-trend');
+if (pointsHost && dataNode) {
+  const rows = JSON.parse(dataNode.textContent).trend;
+  const low = Math.min(0, ...rows.map(row => row.points));
+  const high = Math.max(1, ...rows.map(row => row.points));
+  const x = i => 45 + i * 520 / Math.max(1, rows.length - 1);
+  const y = n => 185 - (n - low) / (high - low) * 150;
+  const svg = svgElement('svg', {viewBox:'0 0 600 230', role:'img', 'aria-label':'Points by selected interval. Exact values are in the interval totals table.'});
+  [low, 0, high].filter((n, i, a) => a.indexOf(n) === i).forEach(n => {
+    svg.append(svgElement('line', {x1:45,x2:565,y1:y(n),y2:y(n),stroke:'#929bb0','stroke-opacity':'.25'}));
+    svg.append(svgElement('text', {x:35,y:y(n)+4,fill:'#929bb0','font-size':10,'text-anchor':'end'}, n));
+  });
+  svg.append(svgElement('polyline', {points:rows.map((row,i)=>`${x(i)},${y(row.points)}`).join(' '),fill:'none',stroke:'#53c9ff','stroke-width':2.5}));
+  rows.forEach((row,i) => {
+    const dot=svgElement('circle',{cx:x(i),cy:y(row.points),r:3,fill:row.points<0?'#f287ad':'#53c9ff'});
+    dot.append(svgElement('title',{},`${row.date}: ${row.points} points`));svg.append(dot);
+    if(i % Math.ceil(rows.length/5) === 0 || i === rows.length-1) svg.append(svgElement('text',{x:x(i),y:215,fill:'#929bb0','font-size':9,'text-anchor':i===0?'start':i===rows.length-1?'end':'middle'},row.date));
+  });
+  pointsHost.append(svg);
+}
+
+const assignedLeadsNode = document.getElementById('assigned-leads-data');
+if (assignedLeadsNode) {
+  const rows = JSON.parse(assignedLeadsNode.textContent);
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  let cursor = 0;
+  const segments = rows.filter(row => row.value > 0).map(row => {
+    const end = cursor + row.value / total * 100;
+    const segment = `${row.color} ${cursor}% ${end}%`;
+    cursor = end;
+    return segment;
+  });
+  if (total) document.getElementById('assigned-leads-chart').style.background = `conic-gradient(${segments.join(',')})`;
+}
+
+const teamStatusNode = document.getElementById('team-status-data');
+if (teamStatusNode) {
+  const rows = JSON.parse(teamStatusNode.textContent);
+  const total = rows.reduce((sum, row) => sum + (row.value || 0), 0);
+  let cursor = 0;
+  const segments = rows.filter(row => row.value > 0).map(row => {
+    const end = cursor + row.value / total * 100;
+    const segment = `${row.color} ${cursor}% ${end}%`;
+    cursor = end;
+    return segment;
+  });
+  const donutEl = document.getElementById('team-status-donut');
+  if (donutEl && total > 0) donutEl.style.background = `conic-gradient(${segments.join(',')})`;
+  const totalEl = document.getElementById('team-status-total');
+  if (totalEl) totalEl.textContent = total;
 }

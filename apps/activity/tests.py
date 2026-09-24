@@ -87,7 +87,7 @@ class ActivityLogTests(TestCase):
         close_session(session, timezone.now())
         self.assertTrue(ActivityLog.objects.filter(actor=self.caller, verb=ActivityLog.Verb.LOGGED_OUT).exists())
 
-    def test_caller_detail_page_shows_only_that_caller_and_requires_management(self):
+    def test_caller_detail_page_shows_only_that_caller_or_management(self):
         lead = Lead.objects.create(name='Scoped', phone='9876500006', assigned_caller=self.caller)
         self.api.force_authenticate(self.caller)
         self.api.post('/api/v1/calls/', {
@@ -106,7 +106,8 @@ class ActivityLogTests(TestCase):
         self.assertEqual(actors, {self.caller.pk})
 
         self.client.force_login(self.caller)
-        self.assertEqual(self.client.get(f'/team/{self.caller.pk}/').status_code, 403)
+        self.assertEqual(self.client.get(f'/team/{self.caller.pk}/').status_code, 200)
+        self.assertEqual(self.client.get(f'/team/{self.other_caller.pk}/').status_code, 403)
 
     def test_lead_detail_page_renders_activity_timeline(self):
         lead = Lead.objects.create(name='Timeline', phone='9876500008', assigned_caller=self.caller)

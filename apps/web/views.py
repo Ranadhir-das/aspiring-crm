@@ -40,13 +40,13 @@ def visible_leads(user):
 
 
 def visible_calls(user):
-    query = Call.objects.select_related('lead', 'lead__import_batch', 'caller')
-    return query.filter(lead__assigned_caller=user) if user.role == User.Role.CALLER else query
+    query = Call.objects.select_related('lead', 'lead__import_batch', 'caller', 'recording')
+    return query.filter(caller=user).filter(Q(lead__assigned_caller=user) | Q(lead__isnull=True)) if user.role == User.Role.CALLER else query
 
 
 def visible_followups(user):
     query = FollowUp.objects.select_related('lead', 'lead__import_batch', 'caller')
-    return query.filter(caller=user, lead__assigned_caller=user) if user.role == User.Role.CALLER else query
+    return query.filter(caller=user).filter(Q(lead__assigned_caller=user) | Q(lead__isnull=True)) if user.role == User.Role.CALLER else query
 
 
 def page(request, template, section, **context):
@@ -80,8 +80,8 @@ def dashboard(request):
     trend = [{'date': (start + timedelta(days=i)).strftime('%d %b'),
               'count': daily.get(start + timedelta(days=i), 0)} for i in range(days)]
     counts = dict(lead_query.values('status').annotate(n=Count('id')).values_list('status', 'n'))
-    colors = ['#8b91ff', '#53c9ff', '#53e0b7', '#f287ad', '#e9bf70', '#b694f5', '#50d6d5', '#9ba7bf']
-    pipeline = [{'name': label, 'value': counts.get(key, 0), 'color': colors[i], 'key': key}
+    colors = ['#8b91ff', '#53c9ff', '#53e0b7', '#f287ad', '#e9bf70', '#b694f5', '#50d6d5', '#9ba7bf', '#f59e0b', '#a3e635', '#fb7185', '#22c55e', '#c084fc', '#94a3b8', '#38bdf8']
+    pipeline = [{'name': label, 'value': counts.get(key, 0), 'color': colors[i % len(colors)], 'key': key}
                 for i, (key, label) in enumerate(Lead.Status.choices)]
     sources = list(lead_query.values('source').annotate(count=Count('id')).order_by('-count')[:5])
     for source in sources:
@@ -227,7 +227,7 @@ def calls(request):
     query = visible_calls(request.user).order_by('lead__import_batch_id', '-started_at', '-pk')
     search = request.GET.get('q', '').strip()
     if search:
-        query = query.filter(Q(lead__name__icontains=search) | Q(lead__phone__icontains=search))
+        query = query.filter(Q(lead__name__icontains=search) | Q(lead__phone__icontains=search) | Q(phone_number__icontains=search))
     return page(request, 'calls', 'calls', records=paginate(request, query), search=search)
 
 
@@ -264,18 +264,47 @@ def team(request):
     return page(request, 'team', 'team', records=paginate(request, callers))
 
 
-@workspace(management=True)
+@workspace()
 def caller_detail(request, pk):
     from apps.activity.models import ActivityLog
-    caller = get_object_or_404(User.objects.filter(role=User.Role.CALLER), pk=pk)
-    stats = User.objects.filter(pk=caller.pk).annotate(
-        lead_count=Count('assigned_leads', distinct=True),
-        interested_count=Count('assigned_leads', filter=Q(assigned_leads__status='INTERESTED'), distinct=True),
-        call_count=Count('calls_made', distinct=True),
-    ).first()
-    query = ActivityLog.objects.filter(actor=caller).select_related('lead').order_by('-created_at')
+    from apps.performance.forms import AdjustmentForm, MilestoneForm
+    from apps.performance.reporting import between, report_window
+    from apps.performance.services import adjust_points, can_manage, record_milestone
+    from django.core.exceptions import ValidationError
     from .caller_profile import profile_data
-    return page(request, 'caller_detail', 'performance', caller=stats, records=paginate(request, query), **profile_data(caller))
+    caller = get_object_or_404(User.objects.select_related('manager').filter(role=User.Role.CALLER), pk=pk)
+    if request.user.role == User.Role.CALLER and caller.pk != request.user.pk:
+        raise PermissionDenied
+    filters, window, valid = report_window(request.GET, days=1)
+    adjustment_form = AdjustmentForm(request.POST if request.POST.get('action') == 'adjust' else None, auto_id='adjust_%s')
+    milestone_form = MilestoneForm(request.POST if request.POST.get('action') == 'milestone' else None, caller=caller, auto_id='milestone_%s')
+    if request.method == 'POST':
+        if not can_manage(request.user):
+            raise PermissionDenied
+        form = adjustment_form if request.POST.get('action') == 'adjust' else milestone_form
+        if form.is_valid():
+            try:
+                data = form.cleaned_data.copy()
+                if request.POST.get('action') == 'adjust':
+                    data['key'] = data.pop('request_id')
+                    adjust_points(actor=request.user, caller=caller, **data)
+                elif request.POST.get('action') == 'milestone':
+                    record_milestone(actor=request.user, caller=caller, **data)
+                else:
+                    raise ValidationError('Unknown action.')
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                messages.success(request, 'Performance entry recorded. Duplicate events are awarded only once.')
+                return redirect(request.get_full_path())
+    caller.lead_count = caller.assigned_leads.count()
+    caller.interested_count = caller.assigned_leads.filter(status='INTERESTED').count()
+    context = profile_data(caller, window)
+    query = between(ActivityLog.objects.filter(actor=caller).select_related('lead'), 'created_at', window).order_by('-created_at')
+    ledger_page = Paginator(context.pop('ledger'), 25).get_page(request.GET.get('ledger_page'))
+    return page(request, 'caller_detail', 'performance', caller=caller, records=paginate(request, query),
+                filters=filters, window=window, report_valid=valid, ledger=ledger_page,
+                adjustment_form=adjustment_form, milestone_form=milestone_form, can_adjust=can_manage(request.user), **context)
 
 
 @workspace(management=True)
@@ -328,3 +357,47 @@ def caller_sessions(request):
         if form.cleaned_data.get('caller'):
             query = query.filter(caller=form.cleaned_data['caller'])
     return page(request, 'caller_sessions', 'team', records=paginate(request, query), filters=form)
+
+
+@workspace()
+def admissions_view(request):
+    from apps.leads.models import Admission
+    user = request.user
+    query = Admission.objects.select_related('lead', 'caller', 'created_by').order_by('-admission_date', '-created_at')
+    if user.role == User.Role.CALLER:
+        query = query.filter(caller=user)
+    elif request.GET.get('caller') and request.GET.get('caller').isdigit():
+        query = query.filter(caller_id=int(request.GET.get('caller')))
+
+    search = request.GET.get('q', '').strip()
+    if search:
+        query = query.filter(
+            Q(lead__name__icontains=search)
+            | Q(lead__phone__icontains=search)
+            | Q(college__icontains=search)
+            | Q(course__icontains=search)
+        )
+
+    callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if user.role in MANAGEMENT else []
+    return page(request, 'admissions', 'admissions', records=paginate(request, query), search=search, callers=callers, selected_caller=request.GET.get('caller', ''))
+
+
+@workspace()
+def admission_create(request):
+    from .forms import AdmissionForm
+    lead_id = request.GET.get('lead')
+    initial = {}
+    if lead_id and lead_id.isdigit():
+        initial['lead'] = int(lead_id)
+
+    form = AdmissionForm(request.POST or None, initial=initial, user=request.user)
+    if request.method == 'POST' and form.is_valid():
+        admission = form.save(commit=False)
+        admission.created_by = request.user
+        if request.user.role == User.Role.CALLER:
+            admission.caller = request.user
+        admission.save()
+        messages.success(request, f"Admission successfully recorded for {admission.lead.name}!")
+        return redirect('web:admissions')
+    return page(request, 'admission_form', 'admissions', form=form, title='Record an Admission')
+

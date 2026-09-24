@@ -1,6 +1,6 @@
 .theme-toggle{font-size:11px;min-height:36px}.auth-theme{position:absolute;right:24px;top:22px;z-index:5}
 :root[data-theme=light]{color-scheme:light;--bg:#f5f6fb;--panel:#fff;--border:#dce1ec;--text:#20283b;--muted:#5d6880;--accent:#6751b9;--mint:#168368}
-[data-theme=light] .sidebar,[data-theme=light] .topbar{background:#fff}
+[data-theme=light] .sidebar,[data-theme=light] .topbar,[data-theme=light] .footer{background:#fff}
 [data-theme=light] input,[data-theme=light] select,[data-theme=light] textarea,[data-theme=light] .search-field{background:#fff;color:var(--text);border-color:#cdd4e2}
 [data-theme=light] input::placeholder{color:#69758a}
 [data-theme=light] label,[data-theme=light] .breadcrumbs strong,[data-theme=light] .person strong,[data-theme=light] .source-row strong,[data-theme=light] .empty strong{color:#303b51}

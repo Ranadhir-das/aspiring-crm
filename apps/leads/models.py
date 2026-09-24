@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Lead(models.Model):
@@ -13,6 +14,13 @@ class Lead(models.Model):
         BUSY = "BUSY", "Busy"
         CALL_BACK = "CALL_BACK", "Call Back"
         WRONG_NUMBER = "WRONG_NUMBER", "Wrong Number"
+        FORWARDED_CALLS = "FORWARDED_CALLS", "Forwarded Calls"
+        NO_CANDIDATE = "NO_CANDIDATE", "No Candidate"
+        DISCONNECTED = "DISCONNECTED", "Disconnected"
+        ADMISSION_DONE = "ADMISSION_DONE", "Admission Done"
+        ALL_WAITING = "ALL_WAITING", "Call Waiting"
+        NOT_REACHABLE = "NOT_REACHABLE", "Not Reachable"
+        RINGING = "RINGING", "Ringing"
 
     # -------------------------
     # Basic Information
@@ -205,3 +213,37 @@ class LeadImportBatch(models.Model):
 
     def __str__(self):
         return f"{self.filename} - {self.created_count} leads"
+
+
+class Admission(models.Model):
+    lead = models.ForeignKey(
+        Lead,
+        on_delete=models.CASCADE,
+        related_name="admissions",
+    )
+    caller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="caller_admissions",
+        limit_choices_to={"role": "CALLER"},
+    )
+    college = models.CharField(max_length=200, blank=True)
+    course = models.CharField(max_length=150, blank=True)
+    admission_date = models.DateField(default=timezone.localdate)
+    fees = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="admissions_recorded",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-admission_date", "-created_at"]
+
+    def __str__(self):
+        return f"{self.lead.name} - {self.college or 'Admitted'} ({self.caller.username})"

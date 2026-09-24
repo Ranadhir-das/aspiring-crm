@@ -1,0 +1,5 @@
+<section class="panel report-controls spaced"><form method="get" id="report-filter" class="filters">
+{% for field in filters %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}
+<button class="button primary">Update report</button><a class="text-link" href="{{ request.path }}">Reset</a>
+{{ filters.non_field_errors }}</form><p class="report-note">{{ window.start|date:'d M Y, H:i' }} to {{ window.end|date:'d M Y, H:i' }} (end exclusive) ? {{ workspace_timezone }}. End hour includes that entire hour.</p>
+{% if not report_valid %}<p class="notice error">The selected filters are invalid. Showing the default period until you correct them.</p>{% endif %}</section>

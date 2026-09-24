@@ -1,3 +1,5 @@
+from . import external_call_views
+from . import recording_views
 from . import photo_views
 from . import chat_views
 from . import notice_views
@@ -11,6 +13,10 @@ from .forms import LoginForm
 
 app_name = 'web'
 urlpatterns = [
+    path('recordings/', recording_views.call_recordings_list, name='call-recordings'),
+    path('calls/<int:call_id>/recording/', recording_views.recording_playback, name='call-recording'),
+    path('external-calls/', external_call_views.external_call_list, name='external-calls'),
+    path('external-calls/<int:pk>/', external_call_views.external_call_detail, name='external-call-detail'),
     path('notices/', notice_views.notices, name='notices'),
     path('notices/new/', notice_views.notice_new, name='notice-new'),
     path('notices/<int:pk>/delete/', notice_views.notice_delete, name='notice-delete'),
@@ -80,4 +86,6 @@ urlpatterns = [
     path('team/', views.team, name='team'),
     path('team/<int:pk>/', views.caller_detail, name='caller-detail'),
     path('performance/', performance_views.performance, name='performance'),
+    path('admissions/', views.admissions_view, name='admissions'),
+    path('admissions/new/', views.admission_create, name='admission-new'),
 ]

@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
 
-environ.Env.read_env(BASE_DIR / ".env")
+environ.Env.read_env(BASE_DIR / ".env", overwrite=True)
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "apps.activity",
     "apps.web",
     "apps.chat",
+    "apps.performance",
 
 ]
 
@@ -195,3 +196,6 @@ FACE_MATCH_THRESHOLD = env.float('FACE_MATCH_THRESHOLD', default=0.363)
 # (see the deferred VPS deployment plan — this needs to move off local disk at deploy time).
 CALLER_APK_PATH = Path(env('CALLER_APK_PATH', default=str(
     BASE_DIR.parent / 'caller-app' / 'android' / 'app' / 'build' / 'outputs' / 'apk' / 'debug' / 'app-debug.apk')))
+
+# Discover isolated app tests and converted root tests, not manual database smoke scripts.
+TEST_RUNNER = "config.test_runner.AppTestRunner"

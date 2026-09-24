@@ -79,3 +79,27 @@ class QuickLeadForm(forms.Form):
         return value
 
 QuickLeadFormSet = forms.formset_factory(QuickLeadForm, extra=10, max_num=1000, validate_max=True, min_num=1, validate_min=True)
+
+
+class AdmissionForm(forms.ModelForm):
+    class Meta:
+        from apps.leads.models import Admission
+        model = Admission
+        fields = ['lead', 'caller', 'college', 'course', 'admission_date', 'fees', 'notes']
+        widgets = {
+            'admission_date': forms.DateInput(attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        from apps.leads.models import Lead
+        if user and user.role == User.Role.CALLER:
+            self.fields['caller'].queryset = User.objects.filter(pk=user.pk)
+            self.fields['caller'].initial = user
+            self.fields['caller'].widget = forms.HiddenInput()
+            self.fields['lead'].queryset = Lead.objects.filter(assigned_caller=user)
+        else:
+            self.fields['caller'].queryset = User.objects.filter(role=User.Role.CALLER, is_active=True)
+            self.fields['lead'].queryset = Lead.objects.all()

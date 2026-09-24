@@ -1,0 +1,11 @@
+[Unit]
+Description=Reconcile overdue Vaani follow-up points
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/vaani
+EnvironmentFile=/opt/vaani/.env
+ExecStart=/opt/vaani/venv/bin/python manage.py reconcile_points

@@ -1,11 +1,25 @@
 from rest_framework import serializers
 
 from apps.calls.models import Call
+from apps.calls.phone import normalize_phone
+from apps.leads.models import Lead
+
+
+class ResolvePhoneSerializer(serializers.Serializer):
+    lead = serializers.PrimaryKeyRelatedField(queryset=Lead.objects.all(), required=False)
+    phone_number = serializers.CharField(required=False, max_length=30)
+
+    def validate(self, attrs):
+        if not attrs.get('lead'):
+            attrs['phone_number'] = normalize_phone(attrs.get('phone_number'))
+        return attrs
 
 
 class CallSerializer(serializers.ModelSerializer):
-    lead_name = serializers.CharField(source="lead.name", read_only=True)
-    lead_phone = serializers.CharField(source="lead.phone", read_only=True)
+    lead_name = serializers.CharField(source="lead.name", read_only=True, default=None)
+    lead_phone = serializers.CharField(source="lead.phone", read_only=True, default=None)
+    is_external = serializers.SerializerMethodField()
+    followup = serializers.SerializerMethodField()
     caller_name = serializers.SerializerMethodField()
 
     outcome_display = serializers.CharField(
@@ -24,7 +38,11 @@ class CallSerializer(serializers.ModelSerializer):
 
         fields = [
             "id",
+            "client_event_id",
             "lead",
+            "phone_number",
+            "is_external",
+            "followup",
             "lead_name",
             "lead_phone",
             "caller",
@@ -55,7 +73,20 @@ class CallSerializer(serializers.ModelSerializer):
 
         return value
 
+    def get_is_external(self, obj):
+        return obj.lead_id is None
+
+    def get_followup(self, obj):
+        item = getattr(obj, 'followup', None)
+        return {'id': item.pk, 'scheduled_at': item.scheduled_at, 'status': item.status} if item else None
+
+    def validate_phone_number(self, value):
+        return normalize_phone(value) if value else ''
+
     def validate(self, attrs):
+        if not attrs.get('lead') and not attrs.get('phone_number'):
+            raise serializers.ValidationError({'phone_number': 'Provide a lead or a phone number.'})
+
         started_at = attrs.get("started_at")
         ended_at = attrs.get("ended_at")
         outcome = attrs.get("outcome")

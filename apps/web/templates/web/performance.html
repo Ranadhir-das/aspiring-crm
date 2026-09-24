@@ -1,1 +1,301 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}Performance{% endblock %}{% block content %}<div class="page-heading"><div><div class="eyebrow">TEAM PERFORMANCE</div><h1>Performance<span class="accent">.</span></h1><p>Compare callers, spot your top performers, and keep an eye on the wider team — {{ start|date:'d M Y' }} to {{ end|date:'d M Y' }}.</p></div></div><section class="metrics" aria-label="Performance summary"><div class="metric"><div class="metric-top">Total calls <span class="metric-icon blue">↗</span></div><strong>{{ team_calls }}</strong><div class="metric-bottom"><span class="pill blue">Team</span><span>In this period</span></div></div><div class="metric"><div class="metric-top">Interested leads <span class="metric-icon mint">✧</span></div><strong>{{ team_interested }}</strong><div class="metric-bottom"><span class="pill mint">{{ team_conversion }}%</span><span>Team conversion rate</span></div></div><div class="metric"><div class="metric-top">Top performer <span class="metric-icon violet">★</span></div><strong>{% if top_caller %}{{ top_caller.caller|user_name }}{% else %}—{% endif %}</strong><div class="metric-bottom"><span>{% if top_caller %}{{ top_caller.calls }} calls this period{% else %}No calls recorded yet{% endif %}</span></div></div><div class="metric"><div class="metric-top">Callers tracked <span class="metric-icon amber">☰</span></div><strong>{{ rows|length }}</strong><div class="metric-bottom"><span>Active caller accounts</span></div></div></section>{% include "web/status_bars.html" %}<section class="panel"><div class="panel-heading"><div><h2>Caller leaderboard</h2><p>Ranked by calls made in the period — tick up to 4 to compare their trend</p></div></div><form method="get"><div class="filters"><div class="field"><label for="{{ filters.start_date.id_for_label }}">Start date</label>{{ filters.start_date }}</div><div class="field"><label for="{{ filters.end_date.id_for_label }}">End date</label>{{ filters.end_date }}</div><button class="button">Apply filters</button></div><div class="table-scroll"><table><thead><tr><th></th><th>#</th><th>Caller</th><th>Calls</th><th>Interested</th><th>Conversion</th><th>Avg duration</th><th>Leads assigned</th><th>Last call</th></tr></thead><tbody>{% for row in rows %}<tr><td><input type="checkbox" name="compare" value="{{ row.caller.pk }}" {% if row.caller.pk in compare_ids %}checked{% endif %} aria-label="Compare {{ row.caller|user_name }}"></td><td>{{ row.rank }}</td><td><div class="person"><a class="avatar subtle" href="{% url 'web:caller-detail' row.caller.pk %}">{{ row.caller|user_name|first|upper }}</a><span><a class="text-link" href="{% url 'web:caller-detail' row.caller.pk %}"><strong>{{ row.caller|user_name }}</strong></a><small>{{ row.caller.email|default:row.caller.username }}</small></span></div><div class="progress" style="margin-top:9px;max-width:180px"><span style="width:{{ row.bar_percent }}%"></span></div></td><td><strong class="accent">{{ row.calls }}</strong></td><td>{{ row.interested }}</td><td><span class="pill {% if row.conversion >= 50 %}mint{% elif row.conversion >= 20 %}amber{% else %}violet{% endif %}">{{ row.conversion }}%</span></td><td>{{ row.avg_duration }}s</td><td>{{ row.leads_assigned }}</td><td>{{ row.last_call|date:'d M, H:i'|default:'—' }}</td></tr>{% empty %}<tr><td colspan="9" class="empty">No caller accounts yet.</td></tr>{% endfor %}</tbody></table></div><div class="assignment-bar"><span>Select 2–4 callers above to compare their daily trend</span><button class="button primary">Compare selected ↗</button></div></form></section>{% if compare_rows %}<section class="panel spaced"><div class="panel-heading"><div><h2>Caller comparison</h2><p>{{ compare_rows|length }} callers selected · {{ start|date:'d M' }} – {{ end|date:'d M Y' }}</p></div></div><div class="chart-total">Daily calls <span>hover a point for the exact count</span></div><div id="compare-chart" class="activity-chart" aria-label="Selected callers' daily call volume"></div><div class="legend" style="grid-template-columns:1fr">{% for c in compare_rows %}<a href="{% url 'web:caller-detail' c.caller.pk %}"><span class="legend-dot" style="background:{{ c.color }}"></span><span>{{ c.caller|user_name }}</span><strong>{{ c.calls }} calls</strong></a>{% endfor %}</div><div class="table-scroll"><table><thead><tr><th>Caller</th><th>Calls</th><th>Interested</th><th>Conversion</th><th>Avg duration</th><th>Leads assigned</th></tr></thead><tbody>{% for c in compare_rows %}<tr><td><span class="legend-dot" style="background:{{ c.color }};display:inline-block;margin-right:9px"></span>{{ c.caller|user_name }}</td><td>{{ c.calls }}</td><td>{{ c.interested }}</td><td>{{ c.conversion }}%</td><td>{{ c.avg_duration }}s</td><td>{{ c.leads_assigned }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}<section class="panel spaced"><div class="panel-heading"><div><h2>Other employees</h2><p>Attendance and output for non-calling roles — IT, Video Editor, and more</p></div></div><div class="table-scroll"><table><thead><tr><th>Employee</th><th>Role</th><th>Attendance</th><th>Reports submitted</th><th>Projects completed</th></tr></thead><tbody>{% for row in others %}<tr><td><div class="person"><span class="avatar subtle">{{ row.employee|user_name|first|upper }}</span><span><strong>{{ row.employee|user_name }}</strong><small>{{ row.employee.email|default:row.employee.username }}</small></span></div></td><td>{{ row.employee.get_role_display }}</td><td><div class="progress" style="max-width:140px"><span style="width:{{ row.attendance_rate }}%"></span></div><small>{{ row.present }}/{{ row.total_days }} days · {{ row.attendance_rate }}%</small></td><td>{{ row.reports }}</td><td>{{ row.completed_projects }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">No other employee accounts yet.</td></tr>{% endfor %}</tbody></table></div></section>{{ chart_data|json_script:'performance-data' }}{% endblock %}
+{% extends 'web/base.html' %}{% load web_tags %}{% block title %}Performance{% endblock %}{% block breadcrumb %}Performance{% endblock %}{% block content %}
+<div class="futuristic-hero">
+  <div>
+    <div class="cyber-badge"><span class="pulse-dot"></span> TEAM TELEMETRY</div>
+    <h1>Performance Command<span class="accent">.</span></h1>
+    <p>Real-time caller leaderboard, call outcomes, conversion analytics, and lead backlog tracking.</p>
+  </div>
+</div>
+
+{% include 'web/performance_filter.html' %}
+
+<div class="futuristic-metrics">
+  <div class="futuristic-card">
+    <div class="card-head">
+      <span class="card-title">Net Team Points</span>
+      <span class="card-icon violet">✦</span>
+    </div>
+    <div class="card-value">{{ team_stats.total_points }}</div>
+    <div class="card-subtext">
+      <span class="positive">+{{ team_stats.positive_points }} awarded</span> · <span class="negative">{{ team_stats.negative_points }} deducted</span>
+    </div>
+  </div>
+
+  <div class="futuristic-card">
+    <div class="card-head">
+      <span class="card-title">Calls &amp; Talk Time</span>
+      <span class="card-icon cyan">📞</span>
+    </div>
+    <div class="card-value">{{ team_calls }} <small>/ {{ team_stats.connected_calls }} connected</small></div>
+    <div class="card-subtext">
+      <span>{{ team_stats.talk_time|duration }} cumulative talk time</span>
+    </div>
+  </div>
+
+  <div class="futuristic-card">
+    <div class="card-head">
+      <span class="card-title">Applications &amp; Admissions</span>
+      <span class="card-icon emerald">🎓</span>
+    </div>
+    <div class="card-value">{{ team_stats.applications }} <small>/ {{ team_stats.conversions }} admissions</small></div>
+    <div class="card-subtext">
+      <span>{{ team_conversion }}% conversion rate · {{ team_stats.interested }} interested</span>
+    </div>
+  </div>
+
+  <div class="futuristic-card">
+    <div class="card-head">
+      <span class="card-title">Calling Backlog</span>
+      <span class="card-icon amber">⏳</span>
+    </div>
+    <div class="card-value">{{ team_left_to_call }} <small>left to call</small></div>
+    <div class="card-subtext">
+      <span>{{ team_stats.leads_assigned }} total leads assigned to callers</span>
+    </div>
+  </div>
+
+  <div class="futuristic-card">
+    <div class="card-head">
+      <span class="card-title">Follow-ups Execution</span>
+      <span class="card-icon rose">🗓</span>
+    </div>
+    <div class="card-value">{{ team_stats.completed_followups }} <small>completed</small></div>
+    <div class="card-subtext">
+      <span class="negative">{{ team_stats.missed_followups }} missed follow-ups</span>
+    </div>
+  </div>
+</div>
+
+<div class="cyber-horizon-grid">
+  <div class="cyber-horizon-card today">
+    <div>
+      <div class="label">Today's Points</div>
+      <div class="timeframe">Current workspace day</div>
+    </div>
+    <div class="points-val">{{ team_stats.daily_points }}</div>
+  </div>
+  <div class="cyber-horizon-card week">
+    <div>
+      <div class="label">This Week's Points</div>
+      <div class="timeframe">Monday onward</div>
+    </div>
+    <div class="points-val">{{ team_stats.weekly_points }}</div>
+  </div>
+  <div class="cyber-horizon-card month">
+    <div>
+      <div class="label">This Month's Points</div>
+      <div class="timeframe">1st of month to date</div>
+    </div>
+    <div class="points-val">{{ team_stats.monthly_points }}</div>
+  </div>
+</div>
+
+<section class="panel spaced cyber-bars-panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Caller progress</h2>
+      <p>Net points distribution across active callers in the selected range. Click any caller to view full profile.</p>
+    </div>
+    <span class="pill violet">{{ rows|length }} callers</span>
+  </div>
+  <div class="cyber-bars-track" role="img" aria-label="Vertical bar chart of caller points">
+    {% for row in rows %}
+    <a class="cyber-bar-item" href="{% url 'web:caller-detail' row.caller.pk %}{% querystring page=None ledger_page=None %}" title="{{ row.caller|user_name }}: {{ row.total_points }} points">
+      <div class="cyber-bar-zone">
+        {% if row.total_points >= 0 %}
+          <div class="cyber-bar-pill" style="height:{{ row.bar_percent }}%">
+            <span class="cyber-bar-score">{{ row.total_points }}</span>
+          </div>
+        {% else %}
+          <div class="cyber-bar-pill negative negative-bar" style="height:{{ row.bar_percent }}%">
+            <span class="cyber-bar-score">{{ row.total_points }}</span>
+          </div>
+        {% endif %}
+      </div>
+      <span class="cyber-bar-name">{{ row.caller|user_name }}</span>
+      <span class="cyber-bar-calls">{{ row.calls }} calls</span>
+    </a>
+    {% empty %}
+    <p class="empty">No callers registered yet.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel spaced">
+  <div class="panel-heading">
+    <div>
+      <h2>Caller Leaderboard</h2>
+      <p>Ranked by net points and call activity. Select callers to compare trends.</p>
+    </div>
+    <button class="button primary" form="report-filter">Compare selected</button>
+  </div>
+  <div class="futuristic-table-wrap">
+    <table class="futuristic-table">
+      <thead>
+        <tr>
+          <th>Compare</th>
+          <th>#</th>
+          <th>Caller</th>
+          <th>Points (+ / −)</th>
+          <th>Calls / connected</th>
+          <th>Talk / avg</th>
+          <th>Follow-ups done / missed</th>
+          <th>Interested</th>
+          <th>Assigned leads</th>
+          <th>Left to call</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>
+            <input form="report-filter" type="checkbox" name="compare" value="{{ row.caller.pk }}" {% if row.caller.pk in compare_ids %}checked{% endif %} aria-label="Compare {{ row.caller|user_name }}">
+          </td>
+          <td>
+            <span class="rank-badge {% if row.rank == 1 %}rank-1{% elif row.rank == 2 %}rank-2{% elif row.rank == 3 %}rank-3{% else %}rank-other{% endif %}">
+              {{ row.rank }}
+            </span>
+          </td>
+          <td>
+            <a class="person" href="{% url 'web:caller-detail' row.caller.pk %}{% querystring page=None ledger_page=None %}">
+              <span class="avatar subtle">{{ row.caller|user_name|first|upper }}</span>
+              <span>
+                <strong>{{ row.caller|user_name }}</strong>
+                <small>{{ row.caller.email|default:row.caller.username }}{% if not row.caller.is_active %} · inactive{% endif %}</small>
+              </span>
+            </a>
+          </td>
+          <td>
+            <strong class="accent" style="font-size:15px">{{ row.total_points }}</strong>
+            <small class="points-split">+{{ row.positive_points }} / {{ row.negative_points }}</small>
+          </td>
+          <td>
+            <strong>{{ row.calls }}</strong> <small>/ {{ row.connected_calls }}</small>
+          </td>
+          <td>
+            {{ row.talk_time|duration }}
+            <small class="points-split">Avg {{ row.avg_duration|duration }}</small>
+          </td>
+          <td>
+            {{ row.completed_followups }} <small>/ {{ row.missed_followups }}</small>
+          </td>
+          <td>
+            <span class="pill mint">{{ row.interested }}</span>
+          </td>
+          <td>{{ row.leads_assigned }}</td>
+          <td>
+            <span class="left-to-call-pill {% if row.left_to_call > 0 %}has-pending{% else %}zero-pending{% endif %}">
+              <span class="dot"></span>{{ row.left_to_call }}
+            </span>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10" class="empty">No caller accounts yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if compare_rows %}
+<section class="panel spaced">
+  <div class="panel-heading">
+    <div>
+      <h2>Caller Activity Comparison Graph</h2>
+      <p>{% if window.interval == 'hour' %}Hourly{% else %}Daily{% endif %} calls in the selected window</p>
+    </div>
+  </div>
+  <div id="compare-chart" class="activity-chart"></div>
+  <div class="legend">
+    {% for row in compare_rows %}
+    <a href="{% url 'web:caller-detail' row.caller.pk %}{% querystring %}">
+      <span class="legend-dot" style="background:{{ row.color }}"></span>{{ row.caller|user_name }} <strong>{{ row.calls }}</strong>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="panel spaced">
+  <div class="panel-heading">
+    <div>
+      <h2>Leads by status · Pipeline Donut</h2>
+      <p>Live lead inventory across all pipeline stages, independent of the date filter.</p>
+    </div>
+    <span class="pill blue">All Leads</span>
+  </div>
+  <div class="futuristic-donut-container">
+    <div class="futuristic-donut-hud">
+      <div id="team-status-donut" class="futuristic-donut-disc" aria-hidden="true"></div>
+      <div class="futuristic-donut-center">
+        <strong id="team-status-total">—</strong>
+        <span>Total Leads</span>
+      </div>
+    </div>
+    <div class="cyber-breakdown-grid">
+      {% for item in status_bars %}
+      <div class="cyber-breakdown-chip">
+        <div class="chip-identity">
+          <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
+          <span class="chip-label">{{ item.name }}</span>
+        </div>
+        <span class="chip-count">{{ item.value }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{{ status_bars|json_script:'team-status-data' }}
+
+<section class="panel spaced">
+  <div class="panel-heading">
+    <div>
+      <h2>Other Employees Output</h2>
+      <p>Attendance and project performance for non-calling team members</p>
+    </div>
+  </div>
+  <div class="futuristic-table-wrap">
+    <table class="futuristic-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Role</th>
+          <th>Attendance Rate</th>
+          <th>Reports submitted</th>
+          <th>Projects completed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in others %}
+        <tr>
+          <td>
+            <div class="person">
+              <span class="avatar subtle">{{ row.employee|user_name|first|upper }}</span>
+              <span>
+                <strong>{{ row.employee|user_name }}</strong>
+                <small>{{ row.employee.email|default:row.employee.username }}</small>
+              </span>
+            </div>
+          </td>
+          <td>{{ row.employee.get_role_display }}</td>
+          <td>
+            <div class="progress" style="max-width:140px"><span style="width:{{ row.attendance_rate }}%"></span></div>
+            <small>{{ row.present }}/{{ row.total_days }} days · {{ row.attendance_rate }}%</small>
+          </td>
+          <td>{{ row.reports }}</td>
+          <td>{{ row.completed_projects }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="empty">No other employee accounts yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{{ chart_data|json_script:'performance-data' }}
+{% endblock %}

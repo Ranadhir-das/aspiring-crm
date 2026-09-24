@@ -1,0 +1,875 @@
+/* ==========================================================================
+   VAANI FUTURISTIC TELEMETRY & DASHBOARD SYSTEM
+   High-tech cyber HUD, neon luminous accents, glassmorphic surfaces,
+   modern data visualizations (donut, pie, area charts) and sleek rankings.
+   Supports both DARK (Cyberpunk HUD) and LIGHT (Luminous High-Tech) modes.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   DARK THEME TOKENS (Default)
+   -------------------------------------------------------------------------- */
+:root {
+  --neon-cyan: #00f2fe;
+  --neon-blue: #38bdf8;
+  --neon-violet: #a78bfa;
+  --neon-purple: #8b5cf6;
+  --neon-mint: #10b981;
+  --neon-emerald: #00f5a0;
+  --neon-amber: #f59e0b;
+  --neon-coral: #f43f5e;
+  --neon-rose: #fb7185;
+
+  /* Component Surfaces & Text - Dark */
+  --fd-hero-bg: radial-gradient(ellipse at 85% 15%, rgba(139, 92, 246, 0.2) 0%, transparent 60%),
+                radial-gradient(ellipse at 15% 85%, rgba(0, 242, 254, 0.12) 0%, transparent 55%),
+                linear-gradient(135deg, rgba(17, 21, 35, 0.95) 0%, rgba(11, 14, 23, 0.98) 100%);
+  --fd-hero-border: rgba(142, 153, 255, 0.2);
+  --fd-hero-title: linear-gradient(120deg, #ffffff 30%, #c4b5fd 100%);
+  --fd-hero-sub: #94a3b8;
+
+  --fd-badge-bg: rgba(139, 92, 246, 0.15);
+  --fd-badge-border: rgba(167, 139, 250, 0.35);
+  --fd-badge-text: #c4b5fd;
+
+  --fd-card-bg: rgba(16, 21, 33, 0.85);
+  --fd-card-border: rgba(142, 153, 255, 0.16);
+  --fd-card-hover-border: rgba(142, 153, 255, 0.4);
+  --fd-card-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  --fd-card-title: #94a3b8;
+  --fd-card-value: #f8fafc;
+  --fd-card-value-small: #64748b;
+  --fd-card-sub: #828fa7;
+
+  --fd-horizon-bg: linear-gradient(135deg, rgba(20, 26, 42, 0.85) 0%, rgba(13, 17, 27, 0.95) 100%);
+  --fd-horizon-border: rgba(142, 153, 255, 0.16);
+  --fd-horizon-label: #94a3b8;
+  --fd-horizon-sub: #64748b;
+  --fd-horizon-val: #f1f5f9;
+
+  --fd-table-wrap-bg: rgba(14, 18, 29, 0.85);
+  --fd-table-border: rgba(142, 153, 255, 0.16);
+  --fd-table-th-bg: rgba(19, 24, 38, 0.95);
+  --fd-table-th-color: #94a3b8;
+  --fd-table-td-color: #cbd5e1;
+  --fd-table-td-border: rgba(255, 255, 255, 0.04);
+  --fd-table-hover: rgba(139, 92, 246, 0.08);
+
+  --fd-bar-track-border: rgba(142, 153, 255, 0.25);
+  --fd-bar-score: #f1f5f9;
+  --fd-bar-name: #e2e8f0;
+  --fd-bar-calls: #64748b;
+
+  --fd-chip-bg: rgba(255, 255, 255, 0.03);
+  --fd-chip-border: rgba(255, 255, 255, 0.07);
+  --fd-chip-hover: rgba(255, 255, 255, 0.08);
+  --fd-chip-label: #cbd5e1;
+  --fd-chip-count: #f8fafc;
+
+  --fd-donut-center-val: #ffffff;
+  --fd-donut-center-sub: #94a3b8;
+  --fd-donut-target-ring: rgba(167, 139, 250, 0.25);
+  --fd-donut-fallback-bg: #1c2234;
+
+  --fd-profile-header-bg: linear-gradient(135deg, rgba(22, 28, 45, 0.85) 0%, rgba(13, 17, 28, 0.95) 100%);
+  --fd-profile-name: #f8fafc;
+  --fd-profile-sub: #94a3b8;
+  --fd-profile-pts-label: #94a3b8;
+  --fd-profile-pts-val: #a78bfa;
+
+  --fd-pill-pending-bg: rgba(245, 158, 11, 0.14);
+  --fd-pill-pending-border: rgba(245, 158, 11, 0.4);
+  --fd-pill-pending-text: #fbbf24;
+  --fd-pill-zero-bg: rgba(16, 185, 129, 0.14);
+  --fd-pill-zero-border: rgba(16, 185, 129, 0.4);
+  --fd-pill-zero-text: #34d399;
+
+  --fd-rank-other-bg: rgba(255, 255, 255, 0.06);
+  --fd-rank-other-border: rgba(255, 255, 255, 0.08);
+  --fd-rank-other-text: #94a3b8;
+}
+
+/* --------------------------------------------------------------------------
+   LIGHT THEME TOKENS (When [data-theme=light])
+   -------------------------------------------------------------------------- */
+:root[data-theme=light] {
+  --fd-hero-bg: radial-gradient(ellipse at 85% 15%, rgba(103, 81, 185, 0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 15% 85%, rgba(6, 182, 212, 0.08) 0%, transparent 55%),
+                linear-gradient(135deg, #ffffff 0%, #f4f3fb 100%);
+  --fd-hero-border: rgba(103, 81, 185, 0.22);
+  --fd-hero-title: linear-gradient(120deg, #1e1b4b 30%, #4338ca 100%);
+  --fd-hero-sub: #475569;
+
+  --fd-badge-bg: #ede9fe;
+  --fd-badge-border: #c4b5fd;
+  --fd-badge-text: #5b21b6;
+
+  --fd-card-bg: linear-gradient(135deg, #ffffff 0%, #f8f9fd 100%);
+  --fd-card-border: #e2e8f0;
+  --fd-card-hover-border: #a5b4fc;
+  --fd-card-shadow: 0 4px 16px rgba(103, 81, 185, 0.08);
+  --fd-card-title: #475569;
+  --fd-card-value: #0f172a;
+  --fd-card-value-small: #64748b;
+  --fd-card-sub: #475569;
+
+  --fd-horizon-bg: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  --fd-horizon-border: #e2e8f0;
+  --fd-horizon-label: #475569;
+  --fd-horizon-sub: #64748b;
+  --fd-horizon-val: #0f172a;
+
+  --fd-table-wrap-bg: #ffffff;
+  --fd-table-border: #e2e8f0;
+  --fd-table-th-bg: #f8fafc;
+  --fd-table-th-color: #475569;
+  --fd-table-td-color: #1e293b;
+  --fd-table-td-border: #f1f5f9;
+  --fd-table-hover: #f5f3ff;
+
+  --fd-bar-track-border: rgba(103, 81, 185, 0.2);
+  --fd-bar-score: #0f172a;
+  --fd-bar-name: #1e293b;
+  --fd-bar-calls: #64748b;
+
+  --fd-chip-bg: #ffffff;
+  --fd-chip-border: #e2e8f0;
+  --fd-chip-hover: #f8fafc;
+  --fd-chip-label: #334155;
+  --fd-chip-count: #0f172a;
+
+  --fd-donut-center-val: #0f172a;
+  --fd-donut-center-sub: #64748b;
+  --fd-donut-target-ring: rgba(103, 81, 185, 0.25);
+  --fd-donut-fallback-bg: #e2e8f0;
+
+  --fd-profile-header-bg: linear-gradient(135deg, #ffffff 0%, #f5f4fb 100%);
+  --fd-profile-name: #0f172a;
+  --fd-profile-sub: #475569;
+  --fd-profile-pts-label: #64748b;
+  --fd-profile-pts-val: #6751b9;
+
+  --fd-pill-pending-bg: rgba(245, 158, 11, 0.12);
+  --fd-pill-pending-border: #f59e0b;
+  --fd-pill-pending-text: #b45309;
+  --fd-pill-zero-bg: rgba(16, 185, 129, 0.12);
+  --fd-pill-zero-border: #10b981;
+  --fd-pill-zero-text: #047857;
+
+  --fd-rank-other-bg: #f1f5f9;
+  --fd-rank-other-border: #cbd5e1;
+  --fd-rank-other-text: #475569;
+}
+
+/* --------------------------------------------------------------------------
+   HERO BANNER
+   -------------------------------------------------------------------------- */
+.futuristic-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 30px 34px;
+  background: var(--fd-hero-bg);
+  border: 1px solid var(--fd-hero-border);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(16px);
+  margin-bottom: 24px;
+}
+
+.futuristic-hero::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--neon-cyan) 30%, var(--neon-violet) 70%, transparent 100%);
+  opacity: 0.85;
+}
+
+.futuristic-hero h1 {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -1.1px;
+  background: var(--fd-hero-title);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.futuristic-hero p {
+  color: var(--fd-hero-sub) !important;
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.cyber-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--fd-badge-bg);
+  border: 1px solid var(--fd-badge-border);
+  color: var(--fd-badge-text);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.15);
+  margin-bottom: 10px;
+}
+
+.cyber-badge .pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neon-cyan);
+  box-shadow: 0 0 8px var(--neon-cyan);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* --------------------------------------------------------------------------
+   FUTURISTIC HUD TELEMETRY METRIC TILES
+   -------------------------------------------------------------------------- */
+.futuristic-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+.futuristic-card {
+  position: relative;
+  background: var(--fd-card-bg);
+  border: 1px solid var(--fd-card-border);
+  border-radius: 14px;
+  padding: 22px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: var(--fd-card-shadow);
+}
+
+.futuristic-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--fd-card-hover-border);
+  box-shadow: 0 12px 28px rgba(103, 81, 185, 0.12);
+}
+
+.futuristic-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 36px;
+  height: 2px;
+  background: var(--neon-violet);
+  box-shadow: 0 0 8px var(--neon-violet);
+}
+
+.futuristic-card .card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.futuristic-card .card-title {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--fd-card-title);
+}
+
+.futuristic-card .card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+}
+
+.futuristic-card .card-icon.violet { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(167, 139, 250, 0.35); }
+.futuristic-card .card-icon.cyan   { background: rgba(6, 182, 212, 0.15);  color: #0284c7; border: 1px solid rgba(6, 182, 212, 0.35); }
+.futuristic-card .card-icon.emerald{ background: rgba(16, 185, 129, 0.15); color: #059669; border: 1px solid rgba(16, 185, 129, 0.35); }
+.futuristic-card .card-icon.amber  { background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.35); }
+.futuristic-card .card-icon.rose   { background: rgba(244, 63, 94, 0.15);  color: #e11d48; border: 1px solid rgba(244, 63, 94, 0.35); }
+
+.futuristic-card .card-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  color: var(--fd-card-value);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-feature-settings: 'tnum', 'zero';
+}
+
+.futuristic-card .card-value small {
+  font-size: 15px;
+  font-weight: 550;
+  color: var(--fd-card-value-small);
+}
+
+.futuristic-card .card-subtext {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--fd-card-sub);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* --------------------------------------------------------------------------
+   CYBER HORIZON CARDS (Today / Week / Month)
+   -------------------------------------------------------------------------- */
+.cyber-horizon-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 22px 0;
+}
+
+.cyber-horizon-card {
+  position: relative;
+  background: var(--fd-horizon-bg);
+  border: 1px solid var(--fd-horizon-border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--fd-card-shadow);
+}
+
+.cyber-horizon-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  height: 70%;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+}
+
+.cyber-horizon-card.today::before { background: var(--neon-cyan); box-shadow: 0 0 10px var(--neon-cyan); }
+.cyber-horizon-card.week::before  { background: var(--neon-violet); box-shadow: 0 0 10px var(--neon-violet); }
+.cyber-horizon-card.month::before { background: var(--neon-emerald); box-shadow: 0 0 10px var(--neon-emerald); }
+
+.cyber-horizon-card .label {
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--fd-horizon-label);
+  margin-bottom: 4px;
+}
+
+.cyber-horizon-card .timeframe {
+  font-size: 11px;
+  color: var(--fd-horizon-sub);
+}
+
+.cyber-horizon-card .points-val {
+  font-family: 'Manrope', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--fd-horizon-val);
+  letter-spacing: -0.5px;
+}
+
+/* --------------------------------------------------------------------------
+   FUTURISTIC LEADERBOARD & TABLES
+   -------------------------------------------------------------------------- */
+.futuristic-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 14px;
+  border: 1px solid var(--fd-table-border);
+  background: var(--fd-table-wrap-bg);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+}
+
+.futuristic-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+}
+
+.futuristic-table th {
+  background: var(--fd-table-th-bg);
+  color: var(--fd-table-th-color);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--fd-table-border);
+  white-space: nowrap;
+}
+
+.futuristic-table td {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--fd-table-td-border);
+  color: var(--fd-table-td-color);
+  font-size: 13px;
+  vertical-align: middle;
+  transition: background 0.15s ease;
+}
+
+.futuristic-table tbody tr:hover td {
+  background: var(--fd-table-hover);
+}
+
+.futuristic-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Rank Medals / Badges */
+.rank-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-family: 'Manrope', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.rank-badge.rank-1 {
+  background: linear-gradient(135deg, #ffd700 0%, #f59e0b 100%);
+  color: #1e1b10;
+  box-shadow: 0 0 14px rgba(255, 215, 0, 0.5);
+}
+
+.rank-badge.rank-2 {
+  background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%);
+  color: #0f172a;
+  border: 1px solid #94a3b8;
+  box-shadow: 0 0 10px rgba(203, 213, 225, 0.4);
+}
+
+.rank-badge.rank-3 {
+  background: linear-gradient(135deg, #fef3c7 0%, #d97706 100%);
+  color: #451a03;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+}
+
+.rank-badge.rank-other {
+  background: var(--fd-rank-other-bg);
+  color: var(--fd-rank-other-text);
+  border: 1px solid var(--fd-rank-other-border);
+}
+
+/* Left to call indicator badge */
+.left-to-call-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 12px;
+  font-weight: 750;
+  font-size: 12px;
+  font-family: 'Manrope', sans-serif;
+  letter-spacing: -0.2px;
+  font-feature-settings: 'tnum', 'zero';
+}
+
+.left-to-call-pill.has-pending {
+  background: var(--fd-pill-pending-bg);
+  border: 1px solid var(--fd-pill-pending-border);
+  color: var(--fd-pill-pending-text);
+}
+
+.left-to-call-pill.zero-pending {
+  background: var(--fd-pill-zero-bg);
+  border: 1px solid var(--fd-pill-zero-border);
+  color: var(--fd-pill-zero-text);
+}
+
+.left-to-call-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* --------------------------------------------------------------------------
+   CALLER PROGRESS STREAM (Bar Chart)
+   -------------------------------------------------------------------------- */
+.cyber-bars-panel {
+  padding: 24px;
+}
+
+.cyber-bars-track {
+  display: flex;
+  gap: 22px;
+  overflow-x: auto;
+  padding: 20px 10px;
+  align-items: flex-end;
+  min-height: 270px;
+}
+
+.cyber-bar-item {
+  width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  text-decoration: none;
+  transition: transform 0.2s ease;
+}
+
+.cyber-bar-item:hover {
+  transform: translateY(-4px);
+}
+
+.cyber-bar-zone {
+  height: 160px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  position: relative;
+}
+
+.cyber-bar-zone::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 1px;
+  background: var(--fd-bar-track-border);
+}
+
+.cyber-bar-pill {
+  width: 42px;
+  min-height: 4px;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 60%, #6366f1 100%);
+  position: relative;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.35);
+  transition: height 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+}
+
+.cyber-bar-item:hover .cyber-bar-pill {
+  filter: brightness(1.2);
+  box-shadow: 0 0 22px rgba(139, 92, 246, 0.55);
+}
+
+.cyber-bar-pill.negative {
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(180deg, #f43f5e 0%, #e11d48 100%);
+  box-shadow: 0 0 16px rgba(244, 63, 94, 0.35);
+}
+
+.cyber-bar-score {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Manrope', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--fd-bar-score);
+  white-space: nowrap;
+}
+
+.cyber-bar-name {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--fd-bar-name);
+  text-align: center;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cyber-bar-calls {
+  font-size: 11px;
+  color: var(--fd-bar-sub);
+  margin-top: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   HOLOGRAPHIC DONUT & PIE CHARTS
+   -------------------------------------------------------------------------- */
+.futuristic-donut-container {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 28px;
+  align-items: center;
+  padding: 24px;
+}
+
+@media (max-width: 768px) {
+  .futuristic-donut-container {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+.futuristic-donut-hud {
+  position: relative;
+  width: 210px;
+  height: 210px;
+  display: grid;
+  place-items: center;
+}
+
+.futuristic-donut-hud::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px dashed var(--fd-donut-target-ring);
+  animation: rotate-ring 40s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rotate-ring {
+  to { transform: rotate(360deg); }
+}
+
+.futuristic-donut-disc {
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  background: conic-gradient(#8b5cf6 0% 100%);
+  mask-image: radial-gradient(circle, transparent 58%, #000 59%);
+  -webkit-mask-image: radial-gradient(circle, transparent 58%, #000 59%);
+  filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.25));
+  transition: background 0.5s ease;
+}
+
+.futuristic-donut-center {
+  position: absolute;
+  text-align: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.futuristic-donut-center strong {
+  display: block;
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 32px;
+  font-weight: 850;
+  letter-spacing: -1px;
+  color: var(--fd-donut-center-val);
+  line-height: 1.1;
+}
+
+.futuristic-donut-center span {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--fd-donut-center-sub);
+}
+
+/* Generic Donut Elements */
+.donut-wrap {
+  position: relative;
+  height: 220px;
+  display: grid;
+  place-items: center;
+}
+
+.donut-wrap::before {
+  content: '';
+  position: absolute;
+  width: 216px;
+  height: 216px;
+  border-radius: 50%;
+  border: 1px dashed var(--fd-donut-target-ring);
+  animation: rotate-ring 40s linear infinite;
+  pointer-events: none;
+}
+
+.donut {
+  width: 190px !important;
+  height: 190px !important;
+  border-radius: 50%;
+  mask-image: radial-gradient(circle, transparent 58%, #000 59%);
+  -webkit-mask-image: radial-gradient(circle, transparent 58%, #000 59%);
+  filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.25));
+  transition: background 0.4s ease;
+}
+
+.donut-center strong {
+  font-family: 'Manrope', sans-serif;
+  font-size: 32px;
+  font-weight: 850;
+  color: var(--fd-donut-center-val);
+}
+
+.donut-center span {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--fd-donut-center-sub);
+}
+
+/* Breakdown / Legend grid */
+.cyber-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.cyber-breakdown-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--fd-chip-bg);
+  border: 1px solid var(--fd-chip-border);
+  border-radius: 10px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.cyber-breakdown-chip:hover {
+  background: var(--fd-chip-hover);
+  border-color: var(--fd-card-hover-border);
+}
+
+.chip-identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.chip-label {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--fd-chip-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip-count {
+  font-family: 'Manrope', sans-serif;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--fd-chip-count);
+  margin-left: 10px;
+}
+
+.outcome-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  padding: 16px 24px 24px;
+}
+
+.outcome-legend > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 13px;
+  background: var(--fd-chip-bg);
+  border: 1px solid var(--fd-chip-border);
+  border-radius: 9px;
+  font-size: 12px;
+  color: var(--fd-chip-label);
+}
+
+.outcome-legend > div strong {
+  color: var(--fd-chip-count);
+}
+
+.outcome-legend > div:hover {
+  background: var(--fd-chip-hover);
+  border-color: var(--fd-card-hover-border);
+}
+
+/* --------------------------------------------------------------------------
+   CALLER PROFILE HEADER & DETAILS
+   -------------------------------------------------------------------------- */
+.caller-profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 28px;
+  background: var(--fd-profile-header-bg);
+  border: 1px solid var(--fd-hero-border);
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(12px);
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.caller-profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.caller-avatar-huge {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-family: 'Manrope', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  background: linear-gradient(145deg, #7c3aed 0%, #4f46e5 100%);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.caller-profile-meta h2 {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--fd-profile-name);
+}
+
+.caller-profile-meta p {
+  color: var(--fd-profile-sub);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .cyber-horizon-grid {
+    grid-template-columns: 1fr;
+  }
+  .caller-profile-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

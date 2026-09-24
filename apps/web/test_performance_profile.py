@@ -33,7 +33,8 @@ class PerformanceProfileTests(TestCase):
         self.assertEqual(sum(p['count'] for p in response.context['profile_chart']['trend']), 1)
         self.assertContains(response, 'September.csv')
         self.assertContains(response, 'Batch lead')
-        self.assertContains(response, 'Not configured')
+        self.assertEqual(response.context['stats']['total_points'], 5)
+        self.assertContains(response, 'Points ledger')
         self.assertContains(response, '<h2>Activity</h2>', html=True)
 
     def test_all_statuses_and_empty_profile(self):
@@ -62,3 +63,29 @@ class PerformanceProfileTests(TestCase):
             response = self.client.get(reverse('web:leads'), {'batch': self.batch.pk, 'page': page})
             self.assertContains(response, 'batch-heading')
             self.assertTrue(all(lead.import_batch_id == self.batch.pk for lead in response.context['records']))
+
+    def test_leaderboard_columns_and_caller_profile_metrics(self):
+        # Caller has 1 pending lead (left to call)
+        response = self.client.get(reverse('web:performance'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Left to call')
+        self.assertNotContains(response, '<th>Today / week / month</th>')
+        self.assertNotContains(response, '<th>Counselling</th>')
+        self.assertNotContains(response, '<th>Applications</th>')
+        self.assertNotContains(response, '<th>Admissions</th>')
+        # Check caller row has left_to_call = 1
+        caller_row = next(r for r in response.context['rows'] if r['caller'].pk == self.caller.pk)
+        self.assertEqual(caller_row['left_to_call'], 1)
+        self.assertEqual(caller_row['leads_assigned'], 1)
+
+        # Check caller detail profile
+        profile_res = self.client.get(reverse('web:caller-detail', args=[self.caller.pk]))
+        self.assertEqual(profile_res.status_code, 200)
+        self.assertEqual(profile_res.context['left_to_call'], 1)
+        self.assertContains(profile_res, 'Counselling Sessions')
+        self.assertContains(profile_res, 'Student Applications')
+        self.assertContains(profile_res, 'Admissions Completed')
+        self.assertContains(profile_res, "Today's Points")
+        self.assertContains(profile_res, "This Week's Points")
+        self.assertContains(profile_res, "This Month's Points")
+

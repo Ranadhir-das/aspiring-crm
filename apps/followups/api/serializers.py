@@ -15,6 +15,8 @@ class FollowUpSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "lead",
+            "phone_number",
+            "call",
             "caller",
             "caller_name",
             "scheduled_at",

@@ -1,0 +1,9 @@
+{% extends 'web/base.html' %}{% load web_tags %}
+{% block title %}External Calls / Feedback{% endblock %}
+{% block breadcrumb %}External Calls / Feedback{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>External Calls / Feedback<span class="accent">.</span></h1><p>Direct calls to numbers without an associated lead. Times are shown in {{ workspace_timezone }}.</p></div></div>
+<section class="panel"><form method="get" class="filters">{{ form.non_field_errors }}{% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}<button class="button primary">Apply filters</button><a class="text-link" href="{% url 'web:external-calls' %}">Reset</a></form>
+<div class="table-scroll"><table><thead><tr><th>Call / phone</th><th>Caller</th><th>Date / start</th><th>End</th><th>Duration</th><th>Outcome</th><th>Notes</th><th>Recording</th><th>Follow-up</th><th>Created</th></tr></thead><tbody>
+{% for call in records %}<tr><td><a class="text-link" href="{% url 'web:external-call-detail' call.pk %}">#{{ call.pk }} &middot; {{ call.phone_number }}</a></td><td>{{ call.caller|user_name }}</td><td>{{ call.started_at|date:'d M Y, H:i:s' }}</td><td>{{ call.ended_at|date:'d M Y, H:i:s'|default:'-' }}</td><td>{{ call.duration_seconds }}s</td><td><span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display|default:'Recorded' }}</span></td><td class="notes-cell">{{ call.notes|truncatechars:100|default:'-' }}</td><td>{% include 'web/call_recording.html' %}</td><td>{% if call.followup %}{{ call.followup.get_status_display }}<br>{{ call.followup.scheduled_at|date:'d M Y, H:i' }}{% else %}-{% endif %}</td><td>{{ call.created_at|date:'d M Y, H:i' }}</td></tr>{% empty %}<tr><td colspan="10" class="empty">No external calls match these filters.</td></tr>{% endfor %}
+</tbody></table></div>{% include 'web/pagination.html' %}</section>{% endblock %}

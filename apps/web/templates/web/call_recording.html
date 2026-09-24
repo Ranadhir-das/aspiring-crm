@@ -1,0 +1,30 @@
+<div class="call-recording">
+{% if call.recording %}
+  <div class="vaani-audio-player vaani-player-compact">
+    <audio preload="none" src="{% url 'web:call-recording' call.pk %}"></audio>
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+      <strong style="color:var(--text);">{{ call.recording.duration_display }}</strong>
+      <a href="{% url 'web:call-recording' call.pk %}" download="call-{{ call.pk }}.m4a" class="btn-download-audio" title="Download audio" style="padding:2px 6px;font-size:10px;">⭳</a>
+    </div>
+    <div class="visualizer-box">
+      <canvas class="visualizer-canvas" height="36"></canvas>
+    </div>
+    <div class="player-controls-row" style="gap:8px;">
+      <button type="button" class="btn-play" aria-label="Play recording" style="width:30px;height:30px;font-size:11px;">
+        <span class="play-icon">▶</span>
+      </button>
+      <div class="timeline-container">
+        <div class="timeline-track">
+          <div class="timeline-fill"></div>
+        </div>
+        <div class="time-stamps" style="font-size:9px;">
+          <span class="time-current">00:00</span>
+          <span class="time-duration">{{ call.recording.duration_display }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <small class="muted">Not available</small>
+{% endif %}
+</div>
