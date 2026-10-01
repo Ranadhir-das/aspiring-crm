@@ -1,1 +1,143 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}{{ lead.name }}{% endblock %}{% block breadcrumb %}Lead details{% endblock %}{% block content %}<div class="page-heading"><div><a class="text-link" href="{% url 'web:leads' %}">← Lead directory</a><p>Batch: <a class="text-link" href="{% url 'web:leads' %}?batch={{ lead.import_batch_id|default:'none' }}">{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</a></p><h1>{{ lead.name }}<span class="accent">.</span></h1><p>{{ lead.phone }} · {{ lead.assigned_caller|user_name }}</p></div><span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span></div><div class="actions spaced"><a class="button" href="{% url 'web:lead-collaboration' lead.pk %}">Notes, qualification & consultation ?</a></div><div class="dashboard-grid spaced"><section class="panel form-panel"><div class="panel-heading"><div><h2>Lead profile</h2><p>Keep every detail in one place</p></div></div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="save">{% include 'web/form_fields.html' %}<div class="form-actions"><button class="button primary">Save changes</button></div></form></section><div class="stack"><section class="panel form-panel"><div class="panel-heading"><div><h2>Schedule a follow-up</h2><p>All times in {{ workspace_timezone }}</p></div></div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="followup">{% include 'web/form_fields.html' with form=follow_form %}<div class="form-actions"><button class="button primary">Schedule follow-up</button></div></form></section><section class="panel"><div class="panel-heading"><h2>Follow-up history</h2></div>{% for item in followup_history %}<div class="activity-row"><div><strong>{{ item.scheduled_at|date:'d M Y, H:i' }}</strong><p>{{ item.notes|default:'No notes' }}</p></div><span class="badge {{ item.status|lower }}">{{ item.get_status_display }}</span></div>{% empty %}<div class="empty">No follow-ups scheduled yet.</div>{% endfor %}</section></div></div><section class="panel spaced"><div class="panel-heading"><div><h2>Conversation history</h2><p>Most recent 30 calls</p></div></div><div class="table-scroll"><table><thead><tr><th>When</th><th>Caller</th><th>Outcome</th><th>Duration</th><th>Notes</th><th>Recording</th></tr></thead><tbody>{% for call in history %}<tr><td>{{ call.started_at|date:'d M Y, H:i' }}</td><td>{{ call.caller|user_name }}</td><td><span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display|default:'Recorded' }}</span></td><td>{{ call.duration_seconds }}s</td><td class="notes-cell">{{ call.notes|default:'—' }}</td><td>{% include 'web/call_recording.html' %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No calls recorded for this lead.</td></tr>{% endfor %}</tbody></table></div></section><section class="panel spaced"><div class="panel-heading"><div><h2>Lead activity</h2><p>Every status change, assignment, call and follow-up — most recent 50</p></div></div>{% for item in activity_log %}<div class="activity-row"><span class="activity-mark">{% if item.verb == 'CALL_LOGGED' %}📞{% elif item.verb == 'STATUS_CHANGED' %}↻{% elif item.verb == 'ASSIGNED' or item.verb == 'REASSIGNED' %}👤{% elif item.verb == 'FOLLOWUP_SCHEDULED' %}🗓{% elif item.verb == 'FOLLOWUP_COMPLETED' %}✓{% elif item.verb == 'FOLLOWUP_CANCELLED' %}✕{% else %}✦{% endif %}</span><div><strong>{{ item.description }}</strong></div><time>{{ item.created_at|date:'d M Y, H:i' }}</time></div>{% empty %}<div class="empty">No activity recorded for this lead yet.</div>{% endfor %}</section>{% endblock %}
+{% extends 'web/base.html' %}{% load web_tags %}{% block title %}{{ lead.name }}{% endblock %}{% block breadcrumb %}Lead details{% endblock %}{% block content %}<div class="page-heading"><div><a class="text-link" href="{% url 'web:leads' %}">← Lead directory</a><p>Batch: <a class="text-link" href="{% url 'web:leads' %}?batch={{ lead.import_batch_id|default:'none' }}">{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</a></p><h1>{{ lead.name }}<span class="accent">.</span></h1><p>{{ lead.phone }} · {{ lead.assigned_caller|user_name }}</p></div><span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span></div><div class="actions spaced" style="display:flex;gap:10px;align-items:center;"><a class="button" href="{% url 'web:lead-collaboration' lead.pk %}">Notes, qualification & consultation ↗</a><button type="button" class="button" id="open-wa-btn" style="background:#25D366;color:#ffffff;border-color:#25D366;font-weight:600;display:inline-flex;align-items:center;gap:6px;" onclick="openWhatsAppModal()"><span>💬</span> WhatsApp</button></div>
+
+<div id="wa-modal" class="panel spaced" style="display:none;background:var(--surface);border:1px solid #25D366;border-radius:12px;padding:20px;margin-bottom:24px;">
+  {% csrf_token %}
+  <div class="panel-heading" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <h2 style="color:#25D366;margin:0;font-size:18px;">Send WhatsApp (Manual Handoff)</h2>
+      <p style="margin:4px 0 0 0;font-size:13px;color:var(--muted);">CRM prepares recipient and prefilled message, then opens WhatsApp. You manually press Send inside WhatsApp.</p>
+    </div>
+    <button type="button" class="icon-button" onclick="closeWhatsAppModal()">✕</button>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+    <div><strong>Recipient:</strong> {{ lead.name }}</div>
+    <div><strong>Phone:</strong> {{ lead.phone }}</div>
+  </div>
+  <div class="field" style="margin-bottom:12px;">
+    <label for="wa-template-select" style="font-weight:600;display:block;margin-bottom:6px;">Select Template:</label>
+    <select id="wa-template-select" class="input" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--background);color:var(--text);" onchange="onTemplateChange(this)">
+      <option value="" data-body="">-- Custom Message (write your own) --</option>
+      {% for t in whatsapp_templates %}
+      <option value="{{ t.pk }}" data-body="{{ t.message }}">{{ t.title }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field" style="margin-bottom:16px;">
+    <label for="wa-message-body" style="font-weight:600;display:block;margin-bottom:6px;">Message (Editable):</label>
+    <textarea id="wa-message-body" rows="4" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border);background:var(--background);color:var(--text);font-family:inherit;font-size:14px;" placeholder="Type your WhatsApp message here..."></textarea>
+  </div>
+  <div class="form-actions" style="display:flex;gap:10px;justify-content:flex-end;">
+    <button type="button" class="button" onclick="closeWhatsAppModal()">Cancel</button>
+    <button type="button" class="button primary" id="wa-submit-btn" style="background:#25D366;border-color:#25D366;" onclick="submitWhatsAppInitiate()">Open WhatsApp ↗</button>
+  </div>
+</div>
+
+<div class="dashboard-grid spaced"><section class="panel form-panel"><div class="panel-heading"><div><h2>Lead profile</h2><p>Keep every detail in one place</p></div></div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="save">{% include 'web/form_fields.html' %}<div class="form-actions"><button class="button primary">Save changes</button></div></form></section><div class="stack"><section class="panel form-panel"><div class="panel-heading"><div><h2>Schedule a follow-up</h2><p>All times in {{ workspace_timezone }}</p></div></div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="followup">{% include 'web/form_fields.html' with form=follow_form %}<div class="form-actions"><button class="button primary">Schedule follow-up</button></div></form></section><section class="panel"><div class="panel-heading"><h2>Follow-up history</h2></div>{% for item in followup_history %}<div class="activity-row"><div><strong>{{ item.scheduled_at|date:'d M Y, H:i' }}</strong><p>{{ item.notes|default:'No notes' }}</p></div><span class="badge {{ item.status|lower }}">{{ item.get_status_display }}</span></div>{% empty %}<div class="empty">No follow-ups scheduled yet.</div>{% endfor %}</section></div></div>{% if website_submissions %}<section class="panel spaced"><div class="panel-heading"><div><h2>Website Enquiries</h2><p>Inbound website form submissions and source tracking</p></div></div><div class="table-scroll"><table><thead><tr><th>Submitted</th><th>Source</th><th>Campaign</th><th>Service</th><th>Type</th><th>Location</th><th>Notes</th></tr></thead><tbody>{% for sub in website_submissions %}<tr><td>{{ sub.submitted_at|date:'d M Y, H:i' }}</td><td>{{ sub.website_source.name|default:sub.source }}</td><td>{{ sub.campaign|default:'—' }}</td><td><span class="badge">{{ sub.service_type.code|default:sub.service|default:'—' }}</span></td><td>{% if sub.is_duplicate %}<span class="badge busy">Duplicate</span>{% else %}<span class="badge interested">New Lead</span>{% endif %}</td><td>{{ sub.location|default:'—' }}</td><td class="notes-cell">{{ sub.notes|default:'—' }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}<section class="panel spaced"><div class="panel-heading"><div><h2>Conversation history</h2><p>Most recent 30 calls</p></div></div><div class="table-scroll"><table><thead><tr><th>When</th><th>Caller</th><th>Outcome</th><th>Duration</th><th>Notes</th><th>Recording</th></tr></thead><tbody>{% for call in history %}<tr><td>{{ call.started_at|date:'d M Y, H:i' }}</td><td>{{ call.caller|user_name }}</td><td><span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display|default:'Recorded' }}</span></td><td>{{ call.duration_seconds }}s</td><td class="notes-cell">{{ call.notes|default:'—' }}</td><td>{% include 'web/call_recording.html' %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No calls recorded for this lead.</td></tr>{% endfor %}</tbody></table></div></section><section class="panel spaced"><div class="panel-heading"><div><h2>Lead activity</h2><p>Every status change, assignment, call and follow-up — most recent 50</p></div></div>{% for item in activity_log %}<div class="activity-row"><span class="activity-mark">{% if item.verb == 'CALL_LOGGED' %}📞{% elif item.verb == 'STATUS_CHANGED' %}↻{% elif item.verb == 'ASSIGNED' or item.verb == 'REASSIGNED' %}👤{% elif item.verb == 'FOLLOWUP_SCHEDULED' %}🗓{% elif item.verb == 'FOLLOWUP_COMPLETED' %}✓{% elif item.verb == 'FOLLOWUP_CANCELLED' %}✕{% elif item.verb == 'WHATSAPP_INITIATED' %}💬{% else %}✦{% endif %}</span><div><strong>{{ item.description }}</strong></div><time>{{ item.created_at|date:'d M Y, H:i' }}</time></div>{% empty %}<div class="empty">No activity recorded for this lead yet.</div>{% endfor %}</section>
+
+{{ lead.name|json_script:"wa-lead-name" }}
+<script>
+function openWhatsAppModal() {
+  const modal = document.getElementById('wa-modal');
+  if (!modal) return;
+  modal.style.display = 'block';
+  modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const select = document.getElementById('wa-template-select');
+  if (select && select.options.length > 1 && !select.value) {
+    select.selectedIndex = 1;
+    onTemplateChange(select);
+  }
+}
+function closeWhatsAppModal() {
+  const modal = document.getElementById('wa-modal');
+  if (modal) modal.style.display = 'none';
+}
+function onTemplateChange(select) {
+  if (!select) return;
+  const opt = select.options[select.selectedIndex];
+  let body = (opt && opt.getAttribute('data-body')) || '';
+  const leadNameEl = document.getElementById('wa-lead-name');
+  let parsedName = '';
+  if (leadNameEl && leadNameEl.textContent) {
+    try {
+      parsedName = JSON.parse(leadNameEl.textContent);
+    } catch (e) {
+      parsedName = leadNameEl.textContent.trim();
+    }
+  }
+  body = body.replace(/\{name\}/g, parsedName);
+  const textarea = document.getElementById('wa-message-body');
+  if (textarea) textarea.value = body;
+}
+async function submitWhatsAppInitiate() {
+  const btn = document.getElementById('wa-submit-btn');
+  const select = document.getElementById('wa-template-select');
+  const textarea = document.getElementById('wa-message-body');
+  const templateId = select && select.value ? parseInt(select.value, 10) : null;
+  const message = textarea ? textarea.value.trim() : '';
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+  const csrf = document.querySelector('#wa-modal [name=csrfmiddlewaretoken]')?.value
+    || document.querySelector('[name=csrfmiddlewaretoken]')?.value
+    || getCookie('csrftoken')
+    || '';
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Preparing...';
+  }
+
+  try {
+    const res = await fetch('/api/v1/leads/{{ lead.pk }}/whatsapp/initiate/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf,
+      },
+      body: JSON.stringify({
+        template_id: templateId,
+        message: message,
+        source: 'CRM',
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.detail || 'Could not initiate WhatsApp. Check phone number format.');
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Open WhatsApp ↗';
+      }
+      return;
+    }
+    // Open WhatsApp Web or application
+    if (data.web_link) {
+      window.open(data.web_link, '_blank');
+    }
+    closeWhatsAppModal();
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Open WhatsApp ↗';
+    }
+    // Reload page after brief delay to show the new timeline activity
+    setTimeout(() => { window.location.reload(); }, 1000);
+  } catch (err) {
+    alert('Network error while preparing WhatsApp.');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Open WhatsApp ↗';
+    }
+  }
+}
+</script>
+{% endblock %}

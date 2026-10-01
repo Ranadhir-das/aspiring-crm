@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from functools import wraps
 from zipfile import BadZipFile
 
@@ -106,39 +106,70 @@ def dashboard(request):
 
 @workspace()
 def leads(request):
-    query = visible_leads(request.user).order_by('import_batch_id', 'name', 'pk')
+    base_query = visible_leads(request.user)
     batch = request.GET.get('batch', '')
     if batch == 'none':
-        query = query.filter(import_batch__isnull=True)
+        base_query = base_query.filter(import_batch__isnull=True)
     elif batch.isdigit():
-        query = query.filter(import_batch_id=int(batch))
+        base_query = base_query.filter(import_batch_id=int(batch))
     search = request.GET.get('q', '').strip()
     status = request.GET.get('status', '')
     owner = request.GET.get('owner', '')
     if search:
-        query = query.filter(Q(name__icontains=search) | Q(phone__icontains=search) | Q(email__icontains=search))
-    if status in Lead.Status.values:
-        query = query.filter(status=status)
+        base_query = base_query.filter(Q(name__icontains=search) | Q(phone__icontains=search) | Q(email__icontains=search))
     if owner == 'unassigned':
-        query = query.filter(assigned_caller__isnull=True)
+        base_query = base_query.filter(assigned_caller__isnull=True)
     elif owner.isdigit():
-        query = query.filter(assigned_caller_id=int(owner))
+        base_query = base_query.filter(assigned_caller_id=int(owner))
     source = request.GET.get('source', '').strip()
     if source:
-        query = query.filter(source=source)
+        base_query = base_query.filter(source=source)
+    service = request.GET.get('service', '').strip()
+    if service:
+        if service.isdigit():
+            base_query = base_query.filter(Q(service_type_id=int(service)) | Q(service=service))
+        else:
+            base_query = base_query.filter(Q(service_type__code__iexact=service) | Q(service__iexact=service) | Q(service_type__name__iexact=service))
     from .workforce_views import PeriodForm
-    date_filters = PeriodForm(request.GET)
+    get_params = request.GET.copy()
+    if 'date_from' in get_params and 'start_date' not in get_params:
+        get_params['start_date'] = get_params['date_from']
+    if 'date_to' in get_params and 'end_date' not in get_params:
+        get_params['end_date'] = get_params['date_to']
+    date_filters = PeriodForm(get_params)
     date_filters.fields.pop('employee')
     if date_filters.is_valid():
         if date_filters.cleaned_data.get('start_date'):
-            query = query.filter(created_at__date__gte=date_filters.cleaned_data['start_date'])
+            base_query = base_query.filter(created_at__date__gte=date_filters.cleaned_data['start_date'])
         if date_filters.cleaned_data.get('end_date'):
-            query = query.filter(created_at__date__lte=date_filters.cleaned_data['end_date'])
+            base_query = base_query.filter(created_at__date__lte=date_filters.cleaned_data['end_date'])
     else:
-        query = query.none()
+        base_query = base_query.none()
+
+    # Pre-status-filter counts across the current scope
+    status_counts = dict(base_query.order_by().values('status').annotate(n=Count('pk', distinct=True)).values_list('status', 'n'))
+    total_matching_leads = sum(status_counts.values())
+
+    status_choices_with_counts = [
+        (key, label, status_counts.get(key, 0))
+        for key, label in Lead.Status.choices
+    ]
+
+    # Filter by status if provided
+    query = base_query
+    if status in Lead.Status.values:
+        query = query.filter(status=status)
+    query = query.order_by('import_batch_id', 'name', 'pk')
+
+    selected_status_display = dict(Lead.Status.choices).get(status, '')
+    selected_owner_user = User.objects.filter(pk=int(owner)).first() if owner.isdigit() else None
+
     return page(request, 'leads', 'leads', records=paginate(request, query), search=search,
                 selected_batch=batch, batches=LeadImportBatch.objects.filter(leads__in=visible_leads(request.user)).distinct().order_by('-created_at'),
-                selected_status=status, selected_owner=owner, statuses=Lead.Status.choices,
+                selected_status=status, selected_status_display=selected_status_display,
+                selected_owner=owner, selected_owner_user=selected_owner_user,
+                statuses=Lead.Status.choices, status_choices_with_counts=status_choices_with_counts,
+                total_matching_leads=total_matching_leads,
                 selected_source=source, sources=visible_leads(request.user).exclude(source='').values_list('source', flat=True).distinct(), date_filters=date_filters,
                 callers=User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else [])
 
@@ -177,10 +208,15 @@ def lead_detail(request, pk):
                 messages.success(request, 'Follow-up scheduled for the assigned caller.')
                 return redirect('web:lead-detail', pk=pk)
     from apps.activity.models import ActivityLog
+    from apps.leads.models import WhatsAppTemplate
+    website_submissions = list(lead.website_submissions.select_related('website_source', 'service_type').order_by('-submitted_at')[:20])
+    whatsapp_templates = list(WhatsAppTemplate.objects.filter(is_active=True).order_by('title'))
     return page(request, 'lead_detail', 'leads', lead=lead, form=form, follow_form=follow_form,
                 history=visible_calls(request.user).filter(lead=lead).order_by('-started_at')[:30],
                 followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20],
-                activity_log=ActivityLog.objects.filter(lead=lead).select_related('actor').order_by('-created_at')[:50])
+                activity_log=ActivityLog.objects.filter(lead=lead).select_related('actor').order_by('-created_at')[:50],
+                website_submissions=website_submissions,
+                whatsapp_templates=whatsapp_templates)
 
 
 @require_POST
@@ -224,11 +260,56 @@ def lead_import(request):
 
 @workspace()
 def calls(request):
-    query = visible_calls(request.user).order_by('lead__import_batch_id', '-started_at', '-pk')
+    base_query = visible_calls(request.user)
     search = request.GET.get('q', '').strip()
+    outcome = request.GET.get('outcome', '').strip()
+    caller = request.GET.get('caller', '').strip()
+
     if search:
-        query = query.filter(Q(lead__name__icontains=search) | Q(lead__phone__icontains=search) | Q(phone_number__icontains=search))
-    return page(request, 'calls', 'calls', records=paginate(request, query), search=search)
+        base_query = base_query.filter(Q(lead__name__icontains=search) | Q(lead__phone__icontains=search) | Q(phone_number__icontains=search))
+    if caller.isdigit():
+        base_query = base_query.filter(caller_id=int(caller))
+
+    start_date = request.GET.get('start_date') or request.GET.get('date_from')
+    end_date = request.GET.get('end_date') or request.GET.get('date_to')
+    if start_date:
+        try:
+            sd = datetime.strptime(start_date.strip(), '%Y-%m-%d').date()
+            base_query = base_query.filter(started_at__date__gte=sd)
+        except (ValueError, TypeError):
+            pass
+    if end_date:
+        try:
+            ed = datetime.strptime(end_date.strip(), '%Y-%m-%d').date()
+            base_query = base_query.filter(started_at__date__lte=ed)
+        except (ValueError, TypeError):
+            pass
+
+    # Pre-outcome-filter counts across current scope
+    outcome_counts = dict(base_query.order_by().values('outcome').annotate(n=Count('pk')).values_list('outcome', 'n'))
+    total_matching_calls = sum(outcome_counts.values())
+
+    outcome_choices_with_counts = [
+        (key, label, outcome_counts.get(key, 0))
+        for key, label in Call.Outcome.choices
+    ]
+
+    query = base_query
+    if outcome in Call.Outcome.values:
+        query = query.filter(outcome=outcome)
+    elif outcome == 'none':
+        query = query.filter(outcome='')
+    query = query.order_by('lead__import_batch_id', '-started_at', '-pk')
+
+    selected_outcome_display = dict(Call.Outcome.choices).get(outcome, '')
+    selected_caller_user = User.objects.filter(pk=int(caller)).first() if caller.isdigit() else None
+
+    return page(request, 'calls', 'calls', records=paginate(request, query), search=search,
+                selected_outcome=outcome, selected_outcome_display=selected_outcome_display,
+                selected_caller=caller, selected_caller_user=selected_caller_user,
+                outcome_choices_with_counts=outcome_choices_with_counts,
+                total_matching_calls=total_matching_calls,
+                callers=User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else [])
 
 
 @workspace()
@@ -276,7 +357,7 @@ def caller_detail(request, pk):
     if request.user.role == User.Role.CALLER and caller.pk != request.user.pk:
         raise PermissionDenied
     filters, window, valid = report_window(request.GET, days=1)
-    adjustment_form = AdjustmentForm(request.POST if request.POST.get('action') == 'adjust' else None, auto_id='adjust_%s')
+    adjustment_form = AdjustmentForm(request.POST if request.POST.get('action') == 'adjust' else None, caller=caller, auto_id='adjust_%s')
     milestone_form = MilestoneForm(request.POST if request.POST.get('action') == 'milestone' else None, caller=caller, auto_id='milestone_%s')
     if request.method == 'POST':
         if not can_manage(request.user):
@@ -287,6 +368,7 @@ def caller_detail(request, pk):
                 data = form.cleaned_data.copy()
                 if request.POST.get('action') == 'adjust':
                     data['key'] = data.pop('request_id')
+                    data.pop('caller', None)
                     adjust_points(actor=request.user, caller=caller, **data)
                 elif request.POST.get('action') == 'milestone':
                     record_milestone(actor=request.user, caller=caller, **data)
@@ -300,11 +382,14 @@ def caller_detail(request, pk):
     caller.lead_count = caller.assigned_leads.count()
     caller.interested_count = caller.assigned_leads.filter(status='INTERESTED').count()
     context = profile_data(caller, window)
+    from apps.performance.models import PointsAdjustment
+    adjustments = PointsAdjustment.objects.filter(caller=caller).select_related('recorded_by').order_by('-created_at')
     query = between(ActivityLog.objects.filter(actor=caller).select_related('lead'), 'created_at', window).order_by('-created_at')
     ledger_page = Paginator(context.pop('ledger'), 25).get_page(request.GET.get('ledger_page'))
     return page(request, 'caller_detail', 'performance', caller=caller, records=paginate(request, query),
                 filters=filters, window=window, report_valid=valid, ledger=ledger_page,
-                adjustment_form=adjustment_form, milestone_form=milestone_form, can_adjust=can_manage(request.user), **context)
+                adjustments=adjustments, adjustment_form=adjustment_form, milestone_form=milestone_form,
+                can_adjust=can_manage(request.user), **context)
 
 
 @workspace(management=True)
@@ -369,6 +454,21 @@ def admissions_view(request):
     elif request.GET.get('caller') and request.GET.get('caller').isdigit():
         query = query.filter(caller_id=int(request.GET.get('caller')))
 
+    start_date = request.GET.get('start_date') or request.GET.get('date_from')
+    end_date = request.GET.get('end_date') or request.GET.get('date_to')
+    if start_date:
+        try:
+            sd = datetime.strptime(start_date.strip(), '%Y-%m-%d').date()
+            query = query.filter(admission_date__gte=sd)
+        except (ValueError, TypeError):
+            pass
+    if end_date:
+        try:
+            ed = datetime.strptime(end_date.strip(), '%Y-%m-%d').date()
+            query = query.filter(admission_date__lte=ed)
+        except (ValueError, TypeError):
+            pass
+
     search = request.GET.get('q', '').strip()
     if search:
         query = query.filter(
@@ -382,22 +482,82 @@ def admissions_view(request):
     return page(request, 'admissions', 'admissions', records=paginate(request, query), search=search, callers=callers, selected_caller=request.GET.get('caller', ''))
 
 
-@workspace()
+@workspace(management=True)
 def admission_create(request):
+    from apps.leads.models import Admission, Lead, Counselling
     from .forms import AdmissionForm
-    lead_id = request.GET.get('lead')
+
+    lead_id = request.POST.get('lead') or request.GET.get('lead')
+    search_query = request.GET.get('q', '').strip()
+    search_results = []
+
+    if search_query:
+        search_filter = (
+            Q(name__icontains=search_query)
+            | Q(phone__icontains=search_query)
+            | Q(email__icontains=search_query)
+        )
+        if search_query.isdigit():
+            search_filter |= Q(pk=int(search_query))
+        search_results = (
+            Lead.objects
+            .select_related('assigned_caller', 'import_batch')
+            .filter(search_filter)
+            .order_by('-updated_at')[:15]
+        )
+
+    selected_lead = None
+    if lead_id and str(lead_id).isdigit():
+        selected_lead = (
+            Lead.objects
+            .select_related('assigned_caller', 'import_batch', 'service_type')
+            .prefetch_related('counsellings__caller')
+            .filter(pk=int(lead_id))
+            .first()
+        )
+
     initial = {}
-    if lead_id and lead_id.isdigit():
-        initial['lead'] = int(lead_id)
+    if selected_lead:
+        initial['lead'] = selected_lead.pk
+        if selected_lead.assigned_caller:
+            initial['caller'] = selected_lead.assigned_caller_id
+        if selected_lead.college:
+            initial['college'] = selected_lead.college
+        latest_counselling = selected_lead.counsellings.order_by('-conducted_at', '-created_at').first()
+        if latest_counselling:
+            if latest_counselling.college and not initial.get('college'):
+                initial['college'] = latest_counselling.college
+            if latest_counselling.course:
+                initial['course'] = latest_counselling.course
 
     form = AdmissionForm(request.POST or None, initial=initial, user=request.user)
     if request.method == 'POST' and form.is_valid():
         admission = form.save(commit=False)
         admission.created_by = request.user
-        if request.user.role == User.Role.CALLER:
-            admission.caller = request.user
         admission.save()
-        messages.success(request, f"Admission successfully recorded for {admission.lead.name}!")
+        if admission.lead:
+            admission.lead.status = Lead.Status.ADMISSION_DONE
+            admission.lead._changed_by = request.user
+            fields_to_update = ['status', 'updated_at']
+            if admission.college and not admission.lead.college:
+                admission.lead.college = admission.college
+                fields_to_update.append('college')
+            admission.lead.save(update_fields=fields_to_update)
+        messages.success(request, f"Admission successfully recorded for {admission.lead.name if admission.lead else 'student'}!")
         return redirect('web:admissions')
-    return page(request, 'admission_form', 'admissions', form=form, title='Record an Admission')
+
+    prior_counsellings = selected_lead.counsellings.select_related('caller').order_by('-conducted_at') if selected_lead else []
+
+    return page(
+        request,
+        'admission_form',
+        'admissions',
+        form=form,
+        title='Record an Admission',
+        selected_lead=selected_lead,
+        prior_counsellings=prior_counsellings,
+        search_query=search_query,
+        search_results=search_results,
+    )
+
 

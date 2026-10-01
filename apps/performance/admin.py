@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.db import transaction
-from .models import LeadMilestone, PointsAdjustment, PointsEntry
+from .models import LeadMilestone, PeerAppreciation, PointsAdjustment, PointsEntry
 from .services import can_manage
 
 
@@ -58,3 +58,11 @@ class LeadMilestoneAdmin(ImmutableAdmin):
     list_display = ['caller', 'lead', 'event', 'recorded_by', 'occurred_at']
     list_filter = ['event', 'occurred_at']
     readonly_fields = ['recorded_by', 'occurred_at']
+
+
+@admin.register(PeerAppreciation)
+class PeerAppreciationAdmin(admin.ModelAdmin):
+    list_display = ['reviewer', 'employee', 'month', 'score', 'created_at']
+    list_filter = ['month', 'score', 'created_at']
+    search_fields = ['reviewer__username', 'employee__username']
+    readonly_fields = ['created_at', 'updated_at']

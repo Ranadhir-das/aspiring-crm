@@ -136,3 +136,11 @@ class LeadUpdateSerializer(serializers.ModelSerializer):
             )
 
         return value.strip()
+
+    def validate_status(self, value):
+        request = self.context.get("request")
+        if request and getattr(request.user, "role", None) == "CALLER" and value == Lead.Status.ADMISSION_DONE:
+            raise serializers.ValidationError(
+                "Callers cannot mark leads as Admitted. Admission is an admin-only operation."
+            )
+        return value

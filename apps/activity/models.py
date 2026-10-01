@@ -23,6 +23,7 @@ class ActivityLog(models.Model):
         FOLLOWUP_CANCELLED = "FOLLOWUP_CANCELLED", "Follow-up cancelled"
         LOGGED_IN = "LOGGED_IN", "Logged in"
         LOGGED_OUT = "LOGGED_OUT", "Logged out"
+        WHATSAPP_INITIATED = "WHATSAPP_INITIATED", "WhatsApp initiated"
 
     # The caller/employee this event is attributed to. Null when the actor
     # can't be determined (e.g. a lead created by an unattended import).

@@ -96,10 +96,120 @@ class AdmissionForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         from apps.leads.models import Lead
         if user and user.role == User.Role.CALLER:
-            self.fields['caller'].queryset = User.objects.filter(pk=user.pk)
-            self.fields['caller'].initial = user
-            self.fields['caller'].widget = forms.HiddenInput()
-            self.fields['lead'].queryset = Lead.objects.filter(assigned_caller=user)
-        else:
-            self.fields['caller'].queryset = User.objects.filter(role=User.Role.CALLER, is_active=True)
-            self.fields['lead'].queryset = Lead.objects.all()
+            raise forms.ValidationError('Callers are not authorized to create or record admissions.')
+        self.fields['caller'].queryset = User.objects.filter(role=User.Role.CALLER, is_active=True)
+        self.fields['lead'].queryset = Lead.objects.all()
+
+
+class ServiceForm(forms.ModelForm):
+    class Meta:
+        from apps.leads.models import Service
+        model = Service
+        fields = ['name', 'code', 'description', 'is_active']
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def clean_code(self):
+        code = self.cleaned_data.get('code', '').strip().upper()
+        import re
+        if not re.match(r'^[A-Z][A-Z0-9_]*$', code):
+            raise forms.ValidationError('Use an uppercase code with letters, numbers and underscores (e.g. MBBS, MBA).')
+        return code
+
+
+class CallerServiceForm(forms.Form):
+    designation = forms.CharField(max_length=100, required=False, label="Designation / Title")
+    is_active = forms.BooleanField(required=False, label="Caller Eligibility (Active)")
+    services = forms.ModelMultipleChoiceField(
+        queryset=None,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Assigned Services",
+        help_text="Check the services this caller is authorized and eligible to handle.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.leads.models import Service
+        self.fields['services'].queryset = Service.objects.all().order_by('name')
+
+
+class WebsiteSourceForm(forms.ModelForm):
+    allowed_origins_raw = forms.CharField(
+        widget=forms.Textarea(attrs={'rows': 4, 'placeholder': "https://example.com\nhttps://portal.example.com"}),
+        required=False,
+        label="Allowed HTTPS Origins (CORS)",
+        help_text="One HTTPS origin per line. Wildcards and paths are not allowed.",
+    )
+
+    class Meta:
+        from apps.leads.models import WebsiteSource
+        model = WebsiteSource
+        fields = ['name', 'code', 'default_service', 'allowed_services', 'is_active']
+        widgets = {
+            'allowed_services': forms.CheckboxSelectMultiple(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.leads.models import Service
+        self.fields['default_service'].queryset = Service.objects.filter(is_active=True).order_by('name')
+        self.fields['allowed_services'].queryset = Service.objects.all().order_by('name')
+        if self.instance and self.instance.pk and self.instance.allowed_origins:
+            self.fields['allowed_origins_raw'].initial = "\n".join(self.instance.allowed_origins)
+
+    def clean_code(self):
+        code = self.cleaned_data.get('code', '').strip().lower()
+        import re
+        if not re.match(r'^[a-z0-9_-]+$', code):
+            raise forms.ValidationError("Website code can only contain lowercase letters, numbers, underscores, and hyphens.")
+        from apps.leads.models import WebsiteSource
+        qs = WebsiteSource.objects.filter(code__iexact=code)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(f"Website code '{code}' is already in use.")
+        return code
+
+    def clean_allowed_origins_raw(self):
+        raw = self.cleaned_data.get('allowed_origins_raw', '')
+        if not raw:
+            return []
+        cleaned = []
+        seen = set()
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if line == '*':
+                raise forms.ValidationError("Wildcard '*' is not permitted as a production origin.")
+            from urllib.parse import urlparse
+            parsed = urlparse(line)
+            if parsed.scheme != 'https':
+                raise forms.ValidationError(f"Origin '{line}' must use HTTPS.")
+            if not parsed.netloc:
+                raise forms.ValidationError(f"Origin '{line}' must include a valid domain.")
+            if parsed.path and parsed.path != '/':
+                raise forms.ValidationError(f"Origin '{line}' must not contain paths.")
+            if parsed.query or parsed.fragment:
+                raise forms.ValidationError(f"Origin '{line}' must not contain query parameters or fragments.")
+            normalized = f"https://{parsed.netloc.lower()}"
+            if normalized in seen:
+                raise forms.ValidationError(f"Duplicate origin '{normalized}' detected.")
+            seen.add(normalized)
+            cleaned.append(normalized)
+        return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if 'allowed_origins_raw' in self.cleaned_data:
+            instance.allowed_origins = self.cleaned_data['allowed_origins_raw']
+        if not instance.api_key:
+            from apps.leads.models import generate_api_key
+            instance.api_key = generate_api_key()
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+

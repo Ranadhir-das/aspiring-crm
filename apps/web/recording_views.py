@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
 from django.views.decorators.http import require_GET
@@ -56,14 +56,14 @@ def call_recordings_list(request):
     date_from = request.GET.get('date_from', '').strip()
     if date_from:
         try:
-            queryset = queryset.filter(call__started_at__date__gte=date_from)
+            queryset = queryset.filter(call__started_at__date__gte=date.fromisoformat(date_from))
         except (ValueError, TypeError):
             pass
 
     date_to = request.GET.get('date_to', '').strip()
     if date_to:
         try:
-            queryset = queryset.filter(call__started_at__date__lte=date_to)
+            queryset = queryset.filter(call__started_at__date__lte=date.fromisoformat(date_to))
         except (ValueError, TypeError):
             pass
 

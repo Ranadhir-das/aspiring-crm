@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Count
+from django.db.models import Count, Q
 from apps.performance.reporting import Window, between, metrics, report_window, trend as caller_trend
 from datetime import datetime, time
 from django.utils import timezone
@@ -23,13 +23,16 @@ def _caller_rows(start, end, window=None):
     call_qs = between(Call.objects.filter(caller__in=callers), 'started_at', window)
     lead_counts = dict(Lead.objects.filter(assigned_caller__in=callers).order_by().values('assigned_caller').annotate(n=Count('id')).values_list('assigned_caller', 'n'))
     left_counts = dict(Lead.objects.filter(assigned_caller__in=callers, status='PENDING').order_by().values('assigned_caller').annotate(n=Count('id')).values_list('assigned_caller', 'n'))
+    from apps.performance.services import get_peer_appreciation_summary
     rows = []
     for caller in callers:
         stats = metrics(caller, window)
         last_call = call_qs.filter(caller=caller).order_by('-started_at').first()
+        peer_summary = get_peer_appreciation_summary(caller.pk)
         stats.update(caller=caller, conversion=round(stats['conversions']/stats['applications']*100, 1) if stats['applications'] else 0,
                      leads_assigned=lead_counts.get(caller.pk, 0), left_to_call=left_counts.get(caller.pk, 0),
-                     last_call=last_call.started_at if last_call else None)
+                     last_call=last_call.started_at if last_call else None,
+                     peer_appreciation=peer_summary)
         rows.append(stats)
     rows.sort(key=lambda r: (-r['total_points'], -r['calls'], r['caller'].pk))
     maximum = max((abs(r['total_points']) for r in rows), default=0) or 1
@@ -92,12 +95,33 @@ def performance(request):
     rows, call_qs = _caller_rows(start, end, window)
     compare_ids, compare_rows, series, comparison_trend = _comparison(request, rows, call_qs, start, end, window)
     others = _other_rows(start, end)
-    totals = {key: sum(row[key] for row in rows) for key in ['total_points', 'positive_points', 'negative_points', 'daily_points', 'weekly_points', 'monthly_points', 'calls', 'connected_calls', 'talk_time', 'completed_followups', 'missed_followups', 'interested', 'applications', 'conversions', 'left_to_call', 'leads_assigned']}
+    totals = {key: sum(row[key] for row in rows) for key in ['total_points', 'positive_points', 'negative_points', 'daily_points', 'weekly_points', 'monthly_points', 'calls', 'connected_calls', 'talk_time', 'completed_followups', 'missed_followups', 'interested', 'not_interested', 'applications', 'conversions', 'left_to_call', 'leads_assigned']}
+    from apps.leads.models import Admission
+    team_admissions = Admission.objects.filter(
+        Q(created_at__gte=window.start, created_at__lt=window.end) |
+        Q(admission_date__gte=start, admission_date__lte=end)
+    ).count()
+    totals['conversions'] = max(totals.get('conversions', 0), team_admissions)
+    totals['applications'] = max(totals.get('applications', 0), totals['conversions'])
+
+    total_pending_leads = Lead.objects.filter(status=Lead.Status.PENDING).count()
+    unassigned_pending = Lead.objects.filter(assigned_caller__isnull=True, status=Lead.Status.PENDING).count()
+    totals['unassigned_pending'] = unassigned_pending
+    totals['assigned_pending'] = totals['left_to_call']
+    team_left_to_call = total_pending_leads
+
+    from .caller_profile import COLORS
+    team_call_counts = dict(call_qs.order_by().values('outcome').annotate(n=Count('pk')).values_list('outcome', 'n'))
+    choices = list(Call.Outcome.choices) + [('', 'Recorded / no outcome')]
+    team_call_pipeline = [dict(key=key, name=label, value=team_call_counts.get(key, 0), color=COLORS[i % len(COLORS)]) for i, (key, label) in enumerate(choices)]
+    team_call_total = sum(item['value'] for item in team_call_pipeline)
+
     return page(request, 'performance', 'performance', filters=filters, window=window, report_valid=valid, start=start, end=end,
                 rows=rows, others=others, compare_ids=compare_ids, compare_rows=compare_rows,
                 status_bars=status_data(Lead.objects.all()), team_stats=totals,
                 team_calls=totals['calls'], team_interested=totals['interested'],
-                team_left_to_call=totals['left_to_call'],
+                team_left_to_call=team_left_to_call,
+                team_call_pipeline=team_call_pipeline, team_call_total=team_call_total,
                 team_conversion=round(totals['conversions']/totals['applications']*100, 1) if totals['applications'] else 0,
                 top_caller=rows[0] if rows else None,
                 chart_data={'series': series, 'trend': comparison_trend})

@@ -1,0 +1,139 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Caller eligibility &amp; services{% endblock %}
+{% block breadcrumb %}Caller eligibility{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">WORKFORCE ELIGIBILITY &amp; SERVICE ALLOCATION</div>
+    <h1>Caller eligibility<span class="accent">.</span></h1>
+    <p>Map callers to service lines, assign designations, and control lead claim eligibility.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'web:services' %}">Service catalog ↗</a>
+    <a class="button primary" href="{% url 'web:lead-routing' %}">Lead routing monitor ↗</a>
+  </div>
+</div>
+
+<section class="panel" style="margin-bottom: 24px;">
+  <form method="get" class="filters">
+    <div class="search-field">
+      <span>⌕</span>
+      <input type="text" name="q" placeholder="Search caller, designation or username..." value="{{ search_query }}">
+    </div>
+
+    <div class="field">
+      <select name="service" onchange="this.form.submit()">
+        <option value="">All services</option>
+        {% for s in all_services %}
+        <option value="{{ s.code }}" {% if selected_service == s.code %}selected{% endif %}>{{ s.name }} ({{ s.code }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All eligibility</option>
+        <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active (Eligible)</option>
+        <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive (Paused)</option>
+      </select>
+    </div>
+
+    <button class="button" type="submit">Filter</button>
+    {% if search_query or selected_service or selected_status %}
+    <a class="button" href="{% url 'web:caller-services' %}">Clear</a>
+    {% endif %}
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Callers &amp; service mappings</h2>
+      <p>Only active callers assigned to a service can claim its website leads.</p>
+    </div>
+    <span class="badge">Showing {{ callers|length }} caller{{ callers|length|pluralize }}</span>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Team member</th>
+          <th>Designation</th>
+          <th>Eligibility</th>
+          <th>Assigned services</th>
+          <th>Available to claim</th>
+          <th>Assigned leads</th>
+          <th>Completed calls</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for caller in callers %}
+        <tr>
+          <td>
+            <div class="person">
+              <span class="avatar subtle">{{ caller|user_name|first|upper }}</span>
+              <span>
+                <strong>{{ caller|user_name }}</strong>
+                <small>{{ caller.email|default:caller.username }}</small>
+              </span>
+            </div>
+          </td>
+          <td>
+            {% if caller.designation %}
+            <span style="font-weight: 550; color: var(--text);">{{ caller.designation }}</span>
+            {% else %}
+            <span class="muted">Counselor</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if caller.is_active %}
+            <span class="badge interested">Eligible (Active)</span>
+            {% else %}
+            <span class="badge not_interested">Ineligible (Paused)</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if caller.active_services_list %}
+            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+              {% for s in caller.active_services_list %}
+              <span class="pill violet">{{ s.code }}</span>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="badge busy">No services</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if caller.is_active and caller.available_lead_count > 0 %}
+            <strong class="accent">{{ caller.available_lead_count }}</strong>
+            {% else %}
+            <span class="muted">0</span>
+            {% endif %}
+          </td>
+          <td>{{ caller.assigned_lead_count }}</td>
+          <td><strong class="accent">{{ caller.completed_calls }}</strong></td>
+          <td>
+            <div class="actions">
+              <a class="button" href="{% url 'web:caller-service-edit' caller.pk %}">Edit services</a>
+              <form method="post" action="{% url 'web:caller-eligibility-toggle' caller.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button class="button" type="submit">
+                  {% if caller.is_active %}Pause eligibility{% else %}Activate{% endif %}
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="empty">No callers match the selected criteria.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

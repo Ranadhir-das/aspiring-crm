@@ -18,7 +18,7 @@ class AdditionalOutcomeTests(TestCase):
         self.api.force_authenticate(self.caller)
 
     def test_new_outcomes_save_and_sync_without_creating_followups(self):
-        outcomes = ['FORWARDED_CALLS', 'NO_CANDIDATE', 'DISCONNECTED', 'ADMISSION_DONE', 'ALL_WAITING', 'NOT_REACHABLE', 'RINGING']
+        outcomes = ['FORWARDED_CALLS', 'NO_CANDIDATE', 'DISCONNECTED', 'ALL_WAITING', 'NOT_REACHABLE', 'RINGING']
         now = timezone.now()
         for outcome in outcomes:
             with self.subTest(outcome=outcome):
@@ -41,6 +41,14 @@ class AdditionalOutcomeTests(TestCase):
                     self.assertFalse(PointsEntry.objects.filter(call=call, event__in=['CONNECTED', 'DURATION']).exists())
         self.assertFalse(FollowUp.objects.exists())
         self.assertFalse(PointsEntry.objects.filter(event='ADMISSION').exists())
+
+        # Business Rule 1: Callers cannot submit ADMISSION_DONE outcome
+        admission_res = self.api.post('/api/v1/calls/', {
+            'lead': self.lead.pk, 'outcome': 'ADMISSION_DONE',
+            'started_at': (now-timedelta(seconds=60)).isoformat(),
+            'ended_at': now.isoformat(), 'duration_seconds': 60,
+        }, format='json')
+        self.assertEqual(admission_res.status_code, 403)
 
     def test_call_back_still_requires_followup_time(self):
         response = self.api.post('/api/v1/calls/', {'lead': self.lead.pk, 'outcome': 'CALL_BACK', 'started_at': timezone.now().isoformat()}, format='json')

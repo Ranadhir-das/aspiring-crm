@@ -141,3 +141,11 @@ class CallRecordingsWebTests(TestCase):
         metrics = response.context['metrics']
         self.assertEqual(metrics[0]['value'], '3')  # Total recordings
         self.assertEqual(response.context['total_count'], 3)
+
+    def test_invalid_date_filters_do_not_crash_or_bypass_isolation(self):
+        self.client.force_login(self.caller1)
+        for value in ['not-a-date', '2026-02-31']:
+            response = self.client.get('/recordings/', {'date_from': value, 'date_to': value})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.context['total_count'], 2)
+            self.assertNotContains(response, 'Rahul Verma')

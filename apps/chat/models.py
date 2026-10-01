@@ -41,7 +41,7 @@ class ChatChannel(models.Model):
 class ChatMessage(models.Model):
     channel = models.ForeignKey(ChatChannel, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(USER, on_delete=models.CASCADE, related_name='chat_messages')
-    text = models.TextField(max_length=4000)
+    text = models.TextField(max_length=4000, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -54,5 +54,32 @@ class ChatMessage(models.Model):
             'sender_id': self.sender_id,
             'sender_name': sender_name(self.sender),
             'text': self.text,
+            'attachments': [
+                {
+                    'id': a.pk,
+                    'original_name': a.original_name,
+                    'mime_type': a.mime_type,
+                    'file_size': a.file_size,
+                    'file_url': f'/api/v1/mobile/chat/attachments/{a.pk}/download/',
+                    'created_at': a.created_at.isoformat(),
+                }
+                for a in self.attachments.all()
+            ],
             'created_at': self.created_at.isoformat(),
         }
+
+
+class ChatAttachment(models.Model):
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='chat_attachments/%Y/%m/')
+    original_name = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=100)
+    file_size = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.original_name} (Msg #{self.message_id})"
+

@@ -1,6 +1,8 @@
+import os
+from django.core.validators import URLValidator
 from django.db import transaction
 from django.db.models import BooleanField, Case, Value, When
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
@@ -12,7 +14,7 @@ from rest_framework.views import APIView
 from apps.accounts.models import User
 from apps.web.models import Attendance, LeaveRequest, Project, WorkReport, Holiday, AuditEvent
 from apps.web.workforce_forms import LeaveForm
-from apps.web.models import AttendancePhotoChallenge, AttendancePhotoRequest, Notice
+from apps.web.models import AttendancePhotoChallenge, AttendancePhotoRequest, Notice, NoticeAttachment
 
 
 class EmployeeView(APIView):
@@ -35,7 +37,7 @@ class EmployeeHomeView(EmployeeView):
             'projects': list(Project.objects.filter(employee=user).order_by('status', 'due_date').values('id', 'title', 'description', 'due_date', 'status')[:100]),
             'reports': list(WorkReport.objects.filter(employee=user).order_by('-date')
                              .annotate(has_photo=Case(When(photo__isnull=False, then=Value(True)), default=Value(False), output_field=BooleanField()))
-                             .values('id', 'date', 'notes', 'work_link', 'has_photo')[:30]),
+                             .values('id', 'date', 'notes', 'work_link', 'work_links', 'has_photo')[:30]),
             'holidays': list(Holiday.objects.filter(date__gte=today).order_by('date').values('id', 'name', 'date')[:10]),
         })
 
@@ -82,7 +84,8 @@ class EmployeeReportView(EmployeeView):
         class Input(serializers.Serializer):
             date = serializers.DateField()
             notes = serializers.CharField(max_length=10000)
-            work_link = serializers.URLField(required=False, allow_blank=True, default='')
+            work_link = serializers.URLField(required=False, allow_blank=True, max_length=2000)
+            work_links = serializers.ListField(child=serializers.URLField(max_length=2000, validators=[URLValidator(schemes=['http', 'https'])]), required=False, max_length=30)
             # Optional base64-encoded photo of the work done that day (e.g. a screenshot or
             # site photo). Omitted entirely on a same-day re-save leaves any existing photo as-is.
             photo = serializers.CharField(max_length=4_000_000, required=False, allow_blank=True)
@@ -93,6 +96,12 @@ class EmployeeReportView(EmployeeView):
         User.objects.select_for_update().get(pk=request.user.pk)
         values = data.validated_data.copy()
         date = values.pop('date')
+        if 'work_links' in values:
+            values['work_link'] = next(iter(values['work_links']), '')
+        elif 'work_link' in values:
+            existing = WorkReport.objects.filter(employee=request.user, date=date).first()
+            extras = existing.all_work_links[1:] if existing else []
+            values['work_links'] = ([values['work_link']] if values['work_link'] else []) + extras
         photo = values.pop('photo', '')
         if photo:
             values['photo'] = validate_photo(photo)
@@ -114,7 +123,7 @@ class EmployeeReportPhotoView(EmployeeView):
 
 class EmployeeNoticeView(EmployeeView):
     def get(self, request):
-        notices = [n for n in Notice.objects.select_related('created_by') if n.is_visible_to(request.user)]
+        notices = [n for n in Notice.objects.select_related('created_by').prefetch_related('attachments') if n.is_visible_to(request.user)]
         return Response([{
             'id': n.pk,
             'title': n.title,
@@ -122,7 +131,30 @@ class EmployeeNoticeView(EmployeeView):
             'audience': n.audience_label,
             'created_by': n.created_by.get_full_name() or n.created_by.username if n.created_by else 'Management',
             'created_at': n.created_at,
+            'attachments': [{
+                'id': a.pk,
+                'original_filename': a.original_filename,
+                'mime_type': a.mime_type,
+                'file_size': a.file_size,
+                'file_url': f'/api/v1/mobile/notices/{n.pk}/attachments/{a.pk}/download/',
+            } for a in n.attachments.all()]
         } for n in notices])
+
+
+class EmployeeNoticeAttachmentDownloadView(EmployeeView):
+    def get(self, request, notice_id, pk):
+        notice = get_object_or_404(Notice, pk=notice_id)
+        if not notice.is_visible_to(request.user) and request.user.role not in {'SUPER_ADMIN', 'ADMIN'}:
+            raise Http404("You do not have access to this notice.")
+        attachment = get_object_or_404(NoticeAttachment, pk=pk, notice=notice)
+        if not attachment.file or not os.path.exists(attachment.file.path):
+            raise Http404("File not found on server.")
+
+        response = FileResponse(open(attachment.file.path, 'rb'), content_type=attachment.mime_type)
+        disposition = 'attachment' if request.GET.get('download') == '1' else 'inline'
+        response['Content-Disposition'] = f'{disposition}; filename="{attachment.original_filename}"'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
 
 
 class PhotoChallengeView(EmployeeView):

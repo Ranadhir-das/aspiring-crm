@@ -37,9 +37,9 @@
       <span class="card-title">Applications &amp; Admissions</span>
       <span class="card-icon emerald">🎓</span>
     </div>
-    <div class="card-value">{{ team_stats.applications }} <small>/ {{ team_stats.conversions }} admissions</small></div>
+    <div class="card-value">{{ team_stats.conversions }} <small>admissions</small></div>
     <div class="card-subtext">
-      <span>{{ team_conversion }}% conversion rate · {{ team_stats.interested }} interested</span>
+      <span>{{ team_stats.interested }} interested calls · {{ team_stats.not_interested }} not interested</span>
     </div>
   </div>
 
@@ -48,9 +48,9 @@
       <span class="card-title">Calling Backlog</span>
       <span class="card-icon amber">⏳</span>
     </div>
-    <div class="card-value">{{ team_left_to_call }} <small>left to call</small></div>
+    <div class="card-value">{{ team_left_to_call }} <small>pending backlog</small></div>
     <div class="card-subtext">
-      <span>{{ team_stats.leads_assigned }} total leads assigned to callers</span>
+      <span>{{ team_stats.assigned_pending }} assigned to callers · {{ team_stats.unassigned_pending }} unassigned</span>
     </div>
   </div>
 
@@ -141,6 +141,8 @@
           <th>Talk / avg</th>
           <th>Follow-ups done / missed</th>
           <th>Interested</th>
+          <th>Not Interested</th>
+          <th>Conversions</th>
           <th>Assigned leads</th>
           <th>Left to call</th>
         </tr>
@@ -180,18 +182,26 @@
             {{ row.completed_followups }} <small>/ {{ row.missed_followups }}</small>
           </td>
           <td>
-            <span class="pill mint">{{ row.interested }}</span>
+            <a href="{% url 'web:calls' %}?outcome=INTERESTED&caller={{ row.caller.pk }}" class="pill mint" style="text-decoration:none" title="View {{ row.interested }} interested calls">{{ row.interested }}</a>
           </td>
-          <td>{{ row.leads_assigned }}</td>
           <td>
-            <span class="left-to-call-pill {% if row.left_to_call > 0 %}has-pending{% else %}zero-pending{% endif %}">
+            <a href="{% url 'web:calls' %}?outcome=NOT_INTERESTED&caller={{ row.caller.pk }}" class="pill rose" style="text-decoration:none" title="View {{ row.not_interested }} not interested calls">{{ row.not_interested }}</a>
+          </td>
+          <td>
+            <a href="{% url 'web:leads' %}?status=ADMISSION_DONE&owner={{ row.caller.pk }}" class="pill emerald" style="text-decoration:none" title="View {{ row.conversions }} admissions">{{ row.conversions }}</a>
+          </td>
+          <td>
+            <a href="{% url 'web:leads' %}?owner={{ row.caller.pk }}" style="text-decoration:none;color:inherit;font-weight:600" title="View assigned leads">{{ row.leads_assigned }}</a>
+          </td>
+          <td>
+            <a href="{% url 'web:leads' %}?status=PENDING&owner={{ row.caller.pk }}" class="left-to-call-pill {% if row.left_to_call > 0 %}has-pending{% else %}zero-pending{% endif %}" style="text-decoration:none" title="View pending leads">
               <span class="dot"></span>{{ row.left_to_call }}
-            </span>
+            </a>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="10" class="empty">No caller accounts yet.</td>
+          <td colspan="12" class="empty">No caller accounts yet.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -221,6 +231,37 @@
 <section class="panel spaced">
   <div class="panel-heading">
     <div>
+      <h2>Call Outcomes Donut</h2>
+      <p>Distribution of call outcomes across the team in the selected window</p>
+    </div>
+    <span class="pill cyan">{{ team_call_total }} Calls in Window</span>
+  </div>
+  <div class="futuristic-donut-container">
+    <div class="futuristic-donut-hud">
+      <div id="team-call-donut" class="futuristic-donut-disc" aria-hidden="true"></div>
+      <div class="futuristic-donut-center">
+        <strong id="team-call-total">{{ team_call_total }}</strong>
+        <span>Total Calls</span>
+      </div>
+    </div>
+    <div class="cyber-breakdown-grid">
+      {% for item in team_call_pipeline %}
+      <a href="{% if item.key %}{% url 'web:calls' %}?outcome={{ item.key }}{% else %}{% url 'web:calls' %}{% endif %}" class="cyber-breakdown-chip" title="View {{ item.value }} {{ item.name }} calls">
+        <div class="chip-identity">
+          <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
+          <span class="chip-label">{{ item.name }}</span>
+        </div>
+        <span class="chip-count">{{ item.value }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{{ team_call_pipeline|json_script:'team-call-data' }}
+
+<section class="panel spaced">
+  <div class="panel-heading">
+    <div>
       <h2>Leads by status · Pipeline Donut</h2>
       <p>Live lead inventory across all pipeline stages, independent of the date filter.</p>
     </div>
@@ -236,13 +277,13 @@
     </div>
     <div class="cyber-breakdown-grid">
       {% for item in status_bars %}
-      <div class="cyber-breakdown-chip">
+      <a href="{% url 'web:leads' %}?status={{ item.key }}" class="cyber-breakdown-chip" title="View {{ item.value }} {{ item.name }} leads">
         <div class="chip-identity">
           <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
           <span class="chip-label">{{ item.name }}</span>
         </div>
         <span class="chip-count">{{ item.value }}</span>
-      </div>
+      </a>
       {% endfor %}
     </div>
   </div>

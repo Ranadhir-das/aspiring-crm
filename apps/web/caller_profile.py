@@ -12,7 +12,7 @@ def status_data(leads):
     # Clear ordering before GROUP BY: name/pk/batch ordering otherwise splits each status.
     counts = dict(leads.order_by().values('status').annotate(n=Count('pk', distinct=True)).values_list('status', 'n'))
     maximum = max(counts.values(), default=0) or 1
-    return [dict(name=label, value=counts.get(key, 0), color=COLORS[i % len(COLORS)],
+    return [dict(key=key, name=label, value=counts.get(key, 0), color=COLORS[i % len(COLORS)],
                  percent=round(counts.get(key, 0) / maximum * 100, 2))
             for i, (key, label) in enumerate(Lead.Status.choices)]
 
@@ -37,11 +37,13 @@ def profile_data(caller, window=None):
     # Pie and centre both describe exactly the same filtered set of calls.
     counts = dict(calls.order_by().values('outcome').annotate(n=Count('pk')).values_list('outcome', 'n'))
     choices = list(Call.Outcome.choices) + [('', 'Recorded / no outcome')]
-    pipeline = [dict(name=label, value=counts.get(key, 0), color=COLORS[i % len(COLORS)]) for i, (key, label) in enumerate(choices)]
+    pipeline = [dict(key=key, name=label, value=counts.get(key, 0), color=COLORS[i % len(COLORS)]) for i, (key, label) in enumerate(choices)]
     left_to_call = caller.assigned_leads.filter(status='PENDING').count()
     from apps.leads.models import Admission
     admissions_verified = Admission.objects.filter(caller=caller).count()
-    return dict(stats=stats, total_duration=calls.aggregate(n=Sum('duration_seconds'))['n'] or 0,
+    from apps.performance.services import get_peer_appreciation_summary
+    peer_appreciation = get_peer_appreciation_summary(caller.pk)
+    return dict(stats=stats, peer_appreciation=peer_appreciation, total_duration=calls.aggregate(n=Sum('duration_seconds'))['n'] or 0,
                 average_duration=stats['avg_duration'], app_active_seconds=active,
                 login_seconds=login_seconds, session_count=sessions.count(), active_estimated=estimated,
                 latest_session=caller.app_sessions.order_by('-logged_in_at').first(), last_call=calls.order_by('-started_at').first(),

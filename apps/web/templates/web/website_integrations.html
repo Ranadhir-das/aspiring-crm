@@ -1,0 +1,150 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Website integrations{% endblock %}
+{% block breadcrumb %}Website integrations{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">INTEGRATIONS &amp; WEBHOOKS</div>
+    <h1>Website integrations<span class="accent">.</span></h1>
+    <p>Manage external web forms, API credentials, allowed origins, and intake routing.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'web:services' %}">Service catalog ↗</a>
+    <a class="button" href="{% url 'web:lead-routing' %}">Lead routing ↗</a>
+    <a class="button primary" href="{% url 'web:website-integration-create' %}">+ Add website</a>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-top"><span>Total integrations</span><span class="metric-icon">⚡</span></div>
+    <strong>{{ total_sources }}</strong>
+    <div class="metric-bottom">Configured sources</div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Active sources</span><span class="metric-icon mint">✓</span></div>
+    <strong>{{ active_sources }}</strong>
+    <div class="metric-bottom"><span class="pill mint">Accepting submissions</span></div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Inactive sources</span><span class="metric-icon amber">✕</span></div>
+    <strong>{{ inactive_sources }}</strong>
+    <div class="metric-bottom">Blocked / Disabled</div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Total submissions</span><span class="metric-icon">📥</span></div>
+    <strong>{{ total_submissions }}</strong>
+    <div class="metric-bottom">Form leads received</div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Connected website sources</h2>
+      <p>External websites authorized to submit lead enquiries into the admissions CRM.</p>
+    </div>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Website Name</th>
+          <th>Source Code</th>
+          <th>Default Service</th>
+          <th>Allowed Services</th>
+          <th>Status</th>
+          <th>API Key</th>
+          <th>Allowed Origins</th>
+          <th>Submissions</th>
+          <th>Last Activity</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for source in sources %}
+        <tr>
+          <td>
+            <a class="text-link" href="{% url 'web:website-integration-detail' source.pk %}">
+              <strong>{{ source.name }}</strong>
+            </a>
+          </td>
+          <td>
+            <code>{{ source.code }}</code>
+          </td>
+          <td>
+            {% if source.default_service %}
+            <span class="badge">{{ source.default_service.code }}</span>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+              {% for svc in source.allowed_services.all %}
+              <span class="badge ghost">{{ svc.code }}</span>
+              {% empty %}
+              <span class="muted">—</span>
+              {% endfor %}
+            </div>
+          </td>
+          <td>
+            {% if source.is_active %}
+            <span class="badge interested">Active</span>
+            {% else %}
+            <span class="badge not_interested">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            <code style="font-size: 11px; letter-spacing: 0.5px;">{{ source.api_key_masked }}</code>
+          </td>
+          <td>
+            {% if source.allowed_origins %}
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              {% for origin in source.allowed_origins %}
+              <span style="font-size: 11px; font-family: monospace;">{{ origin }}</span>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="muted" title="Server-to-server only (no browser Origin restrictions)">Any (server-side)</span>
+            {% endif %}
+          </td>
+          <td>
+            <strong>{{ source.submission_count }}</strong>
+          </td>
+          <td>
+            {% if source.last_submitted_at %}
+            <span style="font-size: 12px;">{{ source.last_submitted_at|date:"d M Y, H:i" }}</span>
+            {% else %}
+            <span class="muted">Never</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="actions" style="gap: 6px;">
+              <a class="button small" href="{% url 'web:website-integration-detail' source.pk %}">Manage</a>
+              <a class="button small" href="{% url 'web:website-integration-edit' source.pk %}">Edit</a>
+              <form method="post" action="{% url 'web:website-integration-toggle-active' source.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button class="button small" type="submit">
+                  {% if source.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+              </form>
+              <form method="post" action="{% url 'web:website-integration-regenerate-key' source.pk %}" style="display:inline;" onsubmit="return confirm('Regenerating this API key will immediately invalidate the existing key. Any website using the old key will stop working until updated. Continue?');">
+                {% csrf_token %}
+                <button class="button small" type="submit" style="color: var(--danger, #f43f5e);">Regen Key</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10" class="empty">No website integrations configured yet. Click "+ Add website" to connect your first web form.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+

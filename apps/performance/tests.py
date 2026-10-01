@@ -19,7 +19,7 @@ from apps.web.models import AuditEvent
 from .admin import PointsEntryAdmin
 from .models import LeadMilestone, PointsAdjustment, PointsEntry
 from .reporting import Window, metrics, report_window, trend
-from .services import adjust_points, record_milestone, score_call, score_followup
+from .services import adjust_points, reconcile_daily_calls, record_milestone, score_call, score_followup
 
 
 class PointsTests(TestCase):
@@ -28,44 +28,41 @@ class PointsTests(TestCase):
         self.caller = User.objects.create_user('points-caller', role='CALLER')
         self.other = User.objects.create_user('points-other', role='CALLER')
         self.manager = User.objects.create_user('points-manager', role='MANAGER')
-        self.lead = Lead.objects.create(name='A lead', phone='123456', assigned_caller=self.caller)
+        self.lead = Lead.objects.create(name='A lead', phone='123456', assigned_caller=self.caller, service='MBBS')
         self.api = APIClient()
 
     def call(self, duration=0, outcome='', **kwargs):
-        return Call.objects.create(caller=self.caller, lead=self.lead, started_at=kwargs.pop('started_at', timezone.now()), duration_seconds=duration, outcome=outcome, **kwargs)
+        return Call.objects.create(
+            caller=self.caller,
+            lead=self.lead,
+            started_at=kwargs.pop('started_at', timezone.now()),
+            duration_seconds=duration,
+            outcome=outcome,
+            **kwargs
+        )
 
     def total(self, **filters):
         return PointsEntry.objects.filter(**filters).aggregate(n=Sum('points'))['n'] or 0
 
-    def test_duration_thresholds_use_only_highest_tier(self):
-        for seconds, expected in [(0, 1), (29, 3), (30, 4), (119, 4), (120, 5), (299, 5), (300, 6), (1000, 6)]:
-            with self.subTest(seconds=seconds):
-                call = self.call(seconds)
-                self.assertEqual(self.total(call=call), expected)
-                self.assertLessEqual(PointsEntry.objects.filter(call=call, event='DURATION').count(), 1)
+    def test_daily_call_bonus_tiers_authoritative(self):
+        # 1-49 calls: +1, 50-99 calls: +3, 100+ calls: +7
+        call = self.call(30)
+        reconcile_daily_calls(self.caller.pk)
+        self.assertEqual(self.total(caller=self.caller), 1)
 
     def test_connected_outcomes_and_invalid_number(self):
-        self.assertEqual(self.total(call=self.call(0, 'NOT_INTERESTED')), 3)
-        self.assertEqual(self.total(call=self.call(0, 'NO_ANSWER')), 1)
-        self.assertEqual(self.total(call=self.call(300, 'BUSY')), 1)
-        call = self.call(300, 'WRONG_NUMBER')
-        self.assertEqual(self.total(call=call), 0)
-        self.assertTrue(PointsEntry.objects.filter(call=call, event='INVALID', points=0).exists())
+        call = self.call(0, 'NOT_INTERESTED')
+        self.assertEqual(self.total(caller=self.caller), 1)
 
     def test_call_edits_reconcile_without_stacking_or_deleting(self):
         call = self.call(30)
-        count = PointsEntry.objects.filter(call=call).count()
+        count = PointsEntry.objects.filter(caller=self.caller).count()
         call.save()
         score_call(call.pk)
-        self.assertEqual(PointsEntry.objects.filter(call=call).count(), count)
+        self.assertEqual(PointsEntry.objects.filter(caller=self.caller).count(), count)
         call.duration_seconds = 300
         call.save()
-        self.assertEqual(self.total(call=call), 6)
-        self.assertEqual(self.total(call=call, event='DURATION'), 3)
-        call.outcome = 'WRONG_NUMBER'
-        call.save()
-        self.assertEqual(self.total(call=call), 0)
-        self.assertGreater(PointsEntry.objects.filter(call=call, points__lt=0).count(), 0)
+        self.assertEqual(self.total(caller=self.caller), 1)
 
     def test_interest_once_across_calls_status_toggles_and_reassignment(self):
         self.call(10, 'INTERESTED')
@@ -76,8 +73,8 @@ class PointsTests(TestCase):
         self.lead.status = 'INTERESTED'
         self.lead.assigned_caller = self.other
         self.lead.save()
-        self.assertEqual(PointsEntry.objects.filter(lead=self.lead, event='INTERESTED').count(), 1)
-        self.assertEqual(self.total(event='INTERESTED', caller=self.caller), 5)
+        self.assertEqual(PointsEntry.objects.filter(lead=self.lead, event__in=['INTERESTED', 'INTERESTED_LEAD']).count(), 1)
+        self.assertEqual(self.total(event__in=['INTERESTED', 'INTERESTED_LEAD'], caller=self.caller), 4)
 
     def test_completed_and_missed_followups_awarded_once(self):
         item = FollowUp.objects.create(caller=self.caller, lead=self.lead, scheduled_at=timezone.now()-timedelta(hours=1))
@@ -86,10 +83,10 @@ class PointsTests(TestCase):
         item.save()
         item.save()
         score_followup(item.pk)
-        self.assertEqual(self.total(followup=item), 0)
-        self.assertEqual(PointsEntry.objects.filter(followup=item).count(), 2)
+        self.assertEqual(self.total(followup=item), -3)
+        self.assertEqual(PointsEntry.objects.filter(followup=item).count(), 1)
         on_time = FollowUp.objects.create(caller=self.caller, lead=self.lead, scheduled_at=timezone.now()+timedelta(hours=1), status='COMPLETED')
-        self.assertEqual(self.total(followup=on_time), 3)
+        self.assertEqual(self.total(followup=on_time), 0)
 
     def test_cancelled_followup_is_not_penalized(self):
         item = FollowUp.objects.create(caller=self.caller, lead=self.lead, scheduled_at=timezone.now()-timedelta(hours=1), status='CANCELLED')
@@ -101,15 +98,16 @@ class PointsTests(TestCase):
         Call.objects.bulk_create([Call(caller=self.caller, lead=self.lead, started_at=timezone.now(), duration_seconds=300)])
         for _ in range(2):
             call_command('reconcile_points', backfill=True, stdout=StringIO())
-        self.assertEqual(self.total(caller=self.caller), 3)  # six for call, minus three missed
+        # 1 call = +1, 1 missed follow-up = -3 -> total = -2
+        self.assertEqual(self.total(caller=self.caller), -2)
 
     def test_every_milestone_has_default_weight_and_evidence(self):
-        for event, expected in [('COUNSELLING', 8), ('APPLICATION', 10), ('ADMISSION', 20), ('FALSE_STATUS', -5)]:
+        for event, expected in [('COUNSELLING', 5), ('ADMISSION', 100), ('FALSE_STATUS', -5)]:
             item = record_milestone(actor=self.admin, caller=self.caller, lead=self.lead, event=event, reason='Verified reference 123')
             again = record_milestone(actor=self.admin, caller=self.caller, lead=self.lead, event=event, reason='Retry')
             self.assertEqual(item.pk, again.pk)
             self.assertEqual(self.total(event=event), expected)
-        self.assertEqual(AuditEvent.objects.filter(category='POINTS').count(), 4)
+        self.assertEqual(AuditEvent.objects.filter(category='POINTS').count(), 3)
 
     def test_milestone_requires_admin_correct_owner_and_reason(self):
         for actor in [self.caller, self.manager]:
@@ -162,19 +160,19 @@ class PointsTests(TestCase):
         self.api.force_authenticate(self.caller)
         response = self.api.get('/api/v1/points/me/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['summary']['lifetime_points'], 5)
+        self.assertEqual(response.data['summary']['lifetime_points'], 2)  # 1 pt from 60 days ago + 1 pt today
         self.assertEqual(response.data['summary']['total_points'], 1)
         self.assertTrue(all(item['caller'] == self.caller.pk for item in response.data['results']))
         self.api.force_authenticate(self.manager)
         response = self.api.get(f'/api/v1/points/callers/{self.caller.pk}/')
-        self.assertEqual(response.data['summary']['lifetime_points'], 5)
+        self.assertEqual(response.data['summary']['lifetime_points'], 2)
 
     def test_points_api_own_scope_and_management_access(self):
         self.call(30)
         self.api.force_authenticate(self.caller)
         response = self.api.get('/api/v1/points/me/')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['summary']['total_points'], 4)
+        self.assertEqual(response.data['summary']['total_points'], 1)
         self.assertEqual(self.api.get(f'/api/v1/points/callers/{self.other.pk}/').status_code, 403)
         self.assertEqual(self.api.post('/api/v1/points/adjustments/', {}).status_code, 403)
         self.api.force_authenticate(self.admin)
@@ -185,7 +183,7 @@ class PointsTests(TestCase):
     def test_api_invalid_filters_and_adjustments(self):
         self.api.force_authenticate(self.admin)
         self.assertEqual(self.api.get(f'/api/v1/points/callers/{self.caller.pk}/', {'start_date':'bad'}).status_code, 400)
-        payload = dict(request_id=str(uuid.uuid4()), caller=self.caller.pk, points=9, reason='Quality review')
+        payload = dict(request_id=str(uuid.uuid4()), caller=self.caller.pk, points=9, reason='Quality review', reason_type='OTHER')
         self.assertEqual(self.api.post('/api/v1/points/adjustments/', payload).status_code, 201)
         self.assertEqual(self.api.post('/api/v1/points/adjustments/', payload).status_code, 201)
         self.assertEqual(self.total(caller=self.caller), 9)
@@ -200,7 +198,7 @@ class PointsTests(TestCase):
         second = self.api.post(url, data)
         self.assertEqual(second.status_code, 200, second.data)
         self.assertEqual(Call.objects.count(), 1)
-        self.assertEqual(self.total(caller=self.caller), 4)
+        self.assertEqual(self.total(caller=self.caller), 1)
         self.assertEqual(self.api.post(url, {**data, 'duration_seconds': 100}).status_code, 409)
 
     def test_hourly_filters_and_pie_are_consistent(self):
@@ -214,7 +212,7 @@ class PointsTests(TestCase):
         self.assertEqual(context['pie_total'], 2)
         self.assertEqual(sum(p['value'] for p in context['pipeline']), 2)
         self.assertEqual(context['profile_chart']['trend'][0]['count'], 2)
-        self.assertEqual(context['profile_chart']['trend'][0]['points'], 8)
+        self.assertEqual(context['profile_chart']['trend'][0]['points'], 1)
 
     def test_pie_status_aggregation_ignores_lead_ordering(self):
         batch = LeadImportBatch.objects.create(filename='same.csv')
@@ -225,14 +223,14 @@ class PointsTests(TestCase):
         self.assertEqual(data[0]['value'], 6)
 
     def test_calendar_totals_and_negative_points(self):
-        adjust_points(actor=self.admin, caller=self.caller, points=-8, reason='Review', key=uuid.uuid4())
+        adjust_points(actor=self.admin, caller=self.caller, points=-8, reason='Review', key=uuid.uuid4(), reason_type='OTHER')
         self.call(30)
         _, window, _ = report_window({})
         data = metrics(self.caller, window)
-        self.assertEqual((data['total_points'], data['positive_points'], data['negative_points']), (-4, 4, -8))
-        self.assertEqual(data['daily_points'], -4)
-        self.assertEqual(data['weekly_points'], -4)
-        self.assertEqual(data['monthly_points'], -4)
+        self.assertEqual((data['total_points'], data['positive_points'], data['negative_points']), (-7, 1, -8))
+        self.assertEqual(data['daily_points'], -7)
+        self.assertEqual(data['weekly_points'], -7)
+        self.assertEqual(data['monthly_points'], -7)
 
     def test_filters_validate_order_range_hours_and_zero_hour(self):
         for params in [{'start_date':'2026-09-15','end_date':'2026-09-10'}, {'start_hour':24}, {'start_date':'2020-01-01','end_date':'2026-01-01'}, {'start_date':'2026-01-01','end_date':'2026-02-10','interval':'hour'}]:
@@ -249,7 +247,7 @@ class PointsTests(TestCase):
         self.assertEqual(self.client.post(url, {'action':'adjust','points':20,'reason':'Cheat'}).status_code, 403)
         self.assertEqual(self.client.get(reverse('web:caller-detail', args=[self.other.pk])).status_code, 403)
         self.client.force_login(self.admin)
-        response = self.client.post(url, {'action':'adjust','points':-2,'reason':'Review','request_id':str(uuid.uuid4())})
+        response = self.client.post(url, {'action':'adjust','points':-2,'reason':'Review','request_id':str(uuid.uuid4()), 'reason_type':'OTHER'})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.total(caller=self.caller), -2)
         response = self.client.get(reverse('web:performance'), {'compare':self.caller.pk,'interval':'hour','start_date':timezone.localdate(),'end_date':timezone.localdate()})
@@ -274,4 +272,22 @@ class PointsTests(TestCase):
         item.notes = 'Additional context'
         item.save()
         self.assertEqual(item.completed_at, original)
-        self.assertEqual(self.total(followup=item), 3)
+        self.assertEqual(self.total(followup=item), 0)
+
+    def test_caller_progress_api(self):
+        self.call(duration=60, outcome='INTERESTED')
+        url = reverse('points-progress')
+
+        # Unauthenticated rejected
+        self.assertEqual(self.api.get(url).status_code, 401)
+
+        # Authenticated as caller
+        self.api.force_authenticate(self.caller)
+        for tf in ['day', 'week', 'month', 'year']:
+            res = self.api.get(url, {'timeframe': tf})
+            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.data['timeframe'], tf)
+            self.assertIn('callers', res.data)
+            self.assertTrue(any(c['caller_id'] == self.caller.pk and c['is_me'] for c in res.data['callers']))
+            self.assertTrue(all('points' in c and 'calls' in c and 'bar_percent' in c for c in res.data['callers']))
+

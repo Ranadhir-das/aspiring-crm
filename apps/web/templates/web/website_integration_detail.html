@@ -1,0 +1,204 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}{{ source.name }} · Website Integration{% endblock %}
+{% block breadcrumb %}{{ source.name }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">WEBSITE INTEGRATION DETAILS</div>
+    <h1>{{ source.name }}<span class="accent">.</span></h1>
+    <p>Source identifier: <code>{{ source.code }}</code></p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'web:website-integrations' %}">← All integrations</a>
+    <a class="button" href="{% url 'web:website-integration-edit' source.pk %}">Edit details</a>
+    <form method="post" action="{% url 'web:website-integration-toggle-active' source.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{% url 'web:website-integration-detail' source.pk %}" />
+      <button class="button" type="submit">
+        {% if source.is_active %}Deactivate source{% else %}Activate source{% endif %}
+      </button>
+    </form>
+    <form method="post" action="{% url 'web:website-integration-regenerate-key' source.pk %}" style="display:inline;" onsubmit="return confirm('Regenerating this API key will immediately invalidate the existing key. Any website using the old key will stop working until updated. Continue?');">
+      {% csrf_token %}
+      <button class="button" type="submit" style="color: var(--danger, #f43f5e);">Regenerate API Key</button>
+    </form>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-top"><span>Total submissions</span><span class="metric-icon">📥</span></div>
+    <strong>{{ total_submissions }}</strong>
+    <div class="metric-bottom">All-time form leads</div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>New unique leads</span><span class="metric-icon mint">★</span></div>
+    <strong>{{ new_submissions }}</strong>
+    <div class="metric-bottom">Created in CRM</div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Duplicate enquiries</span><span class="metric-icon amber">↻</span></div>
+    <strong>{{ duplicate_submissions }}</strong>
+    <div class="metric-bottom">Logged to existing leads</div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Status</span><span class="metric-icon">{% if source.is_active %}✓{% else %}✕{% endif %}</span></div>
+    <div style="margin: 8px 0;">
+      {% if source.is_active %}
+      <span class="badge interested" style="font-size: 13px;">Active</span>
+      {% else %}
+      <span class="badge not_interested" style="font-size: 13px;">Inactive</span>
+      {% endif %}
+    </div>
+    <div class="metric-bottom">{% if source.is_active %}Intake open{% else %}Intake blocked{% endif %}</div>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>Configuration &amp; Routing</h2>
+        <p>Routing rules and services for leads submitted by this website.</p>
+      </div>
+    </div>
+    <div style="padding: 20px; display: flex; flex-direction: column; gap: 14px; font-size: 14px;">
+      <div style="display: grid; grid-template-columns: 140px 1fr; gap: 8px;">
+        <span class="muted">Default Service:</span>
+        <div>
+          {% if source.default_service %}
+          <strong>{{ source.default_service.name }}</strong> (<code>{{ source.default_service.code }}</code>)
+          {% else %}
+          <span class="muted">—</span>
+          {% endif %}
+        </div>
+
+        <span class="muted">Allowed Services:</span>
+        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+          {% for svc in source.allowed_services.all %}
+          <span class="badge ghost">{{ svc.name }} ({{ svc.code }})</span>
+          {% empty %}
+          <span class="muted">None configured</span>
+          {% endfor %}
+        </div>
+
+        <span class="muted">Allowed Origins:</span>
+        <div>
+          {% if source.allowed_origins %}
+          {% for origin in source.allowed_origins %}
+          <div style="font-family: monospace; font-size: 12px; margin-bottom: 2px;">{{ origin }}</div>
+          {% endfor %}
+          {% else %}
+          <span class="muted">Any (server-to-server submissions)</span>
+          {% endif %}
+        </div>
+
+        <span class="muted">API Key:</span>
+        <div>
+          <code style="font-size: 12px;">{{ source.api_key_masked }}</code>
+          <small class="muted" style="display: block; font-size: 11px;">Secret is protected and never displayed in full.</small>
+        </div>
+
+        <span class="muted">Created:</span>
+        <div>{{ source.created_at|date:"d M Y, H:i" }}</div>
+
+        <span class="muted">Last Updated:</span>
+        <div>{{ source.updated_at|date:"d M Y, H:i" }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-heading">
+      <div>
+        <h2>API Integration Guide</h2>
+        <p>Submit leads to this endpoint via cURL or client-side fetch.</p>
+      </div>
+    </div>
+    <div style="padding: 20px; display: flex; flex-direction: column; gap: 14px; font-size: 13px;">
+      <div>
+        <strong>Endpoint:</strong> <code>POST {{ base_url }}/api/v1/public/leads/</code>
+      </div>
+      <div>
+        <strong>Headers:</strong> <code>Content-Type: application/json</code>, <code>X-Api-Key: YOUR_API_KEY</code>
+      </div>
+      <div style="margin-top: 8px;">
+        <span class="muted" style="display: block; margin-bottom: 4px;">cURL snippet:</span>
+        <pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; font-size: 11px; overflow-x: auto; line-height: 1.4;">curl -X POST "{{ base_url }}/api/v1/public/leads/" \
+  -H "Content-Type: application/json" \
+  -H "X-Api-Key: YOUR_API_KEY" \
+  -d '{
+    "name": "Applicant Name",
+    "phone": "+91 98765 43210",
+    "email": "applicant@example.com",
+    "service": "{{ source.default_service.code|default:'APOSTILLE' }}",
+    "source": "{{ source.code }}"
+  }'</pre>
+      </div>
+    </div>
+  </section>
+</div>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Recent Inbound Submissions</h2>
+      <p>Audit trail of recent leads submitted by this website source.</p>
+    </div>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Submitted At</th>
+          <th>Lead Name</th>
+          <th>Phone</th>
+          <th>Service</th>
+          <th>Campaign</th>
+          <th>Type</th>
+          <th>IP Address</th>
+          <th>CRM Lead</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sub in recent_submissions %}
+        <tr>
+          <td>{{ sub.submitted_at|date:"d M Y, H:i" }}</td>
+          <td><strong>{{ sub.name|default:"—" }}</strong></td>
+          <td><code>{{ sub.phone }}</code></td>
+          <td>
+            {% if sub.service_type %}
+            <span class="badge">{{ sub.service_type.code }}</span>
+            {% else %}
+            {{ sub.service|default:"—" }}
+            {% endif %}
+          </td>
+          <td>{{ sub.campaign|default:"—" }}</td>
+          <td>
+            {% if sub.is_duplicate %}
+            <span class="badge not_interested">Duplicate Enquiry</span>
+            {% else %}
+            <span class="badge interested">New Lead</span>
+            {% endif %}
+          </td>
+          <td><small class="muted">{{ sub.ip_address|default:"—" }}</small></td>
+          <td>
+            {% if sub.lead %}
+            <a class="text-link" href="{% url 'web:lead-detail' sub.lead_id %}">View lead #{{ sub.lead_id }} ↗</a>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="empty">No submissions logged for this website integration yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+

@@ -2,10 +2,17 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from apps.calls.models import Call
 from apps.followups.models import FollowUp
-from apps.leads.models import Lead
+from apps.leads.models import Lead, Admission, Counselling
 from apps.web.models import AuditEvent
-from .models import LeadMilestone, PointsAdjustment
-from .services import award, score_call, score_followup
+from .models import LeadMilestone, PointsAdjustment, PointsEntry
+from .services import (
+    award,
+    score_call,
+    score_counselling,
+    score_admission,
+    score_followup,
+    score_interested_lead,
+)
 
 
 @receiver(post_save, sender=Call)
@@ -23,22 +30,65 @@ def followup_points(sender, instance, raw=False, **kwargs):
 @receiver(post_save, sender=Lead)
 def lead_points(sender, instance, raw=False, **kwargs):
     if not raw and instance.status == 'INTERESTED' and instance.assigned_caller_id:
-        award(caller_id=instance.assigned_caller_id, event='INTERESTED', key=f'lead:{instance.pk}:INTERESTED',
-              reason='Lead first marked interested', occurred_at=instance.updated_at, lead=instance,
-              recorded_by=getattr(instance, '_changed_by', None))
+        score_interested_lead(
+            lead_id=instance.pk,
+            caller_id=instance.assigned_caller_id,
+            occurred_at=instance.updated_at
+        )
+
+
+@receiver(post_save, sender=Counselling)
+def counselling_points(sender, instance, created, raw=False, **kwargs):
+    if created and not raw:
+        score_counselling(instance.pk)
+
+
+@receiver(post_save, sender=Admission)
+def admission_points(sender, instance, created, raw=False, **kwargs):
+    if created and not raw:
+        score_admission(instance.pk)
 
 
 @receiver(post_save, sender=LeadMilestone)
 def milestone_points(sender, instance, created, raw=False, **kwargs):
     if created and not raw:
-        award(caller_id=instance.caller_id, event=instance.event, key=f'lead:{instance.lead_id}:{instance.event}',
-              reason=instance.reason, occurred_at=instance.occurred_at, lead=instance.lead, recorded_by=instance.recorded_by)
-        AuditEvent.objects.create(actor=instance.recorded_by, category='POINTS', description=f'{instance.event} for caller {instance.caller_id}, lead {instance.lead_id}: {instance.reason}'[:500])
+        pts = 100 if instance.event in {'ADMISSION', 'VERIFIED_ADMISSION'} else 5 if instance.event in {'COUNSELLING', 'COUNSELLING_COMPLETED'} else -5 if instance.event == 'FALSE_STATUS' else 0
+        award(
+            caller_id=instance.caller_id,
+            event=instance.event,
+            points=pts,
+            key=f'lead:{instance.lead_id}:{instance.event}',
+            reason=instance.reason,
+            occurred_at=instance.occurred_at,
+            lead=instance.lead,
+            recorded_by=instance.recorded_by
+        )
+        AuditEvent.objects.create(
+            actor=instance.recorded_by,
+            category='POINTS',
+            description=f'{instance.event} for caller {instance.caller_id}, lead {instance.lead_id}: {instance.reason}'[:500]
+        )
 
 
 @receiver(post_save, sender=PointsAdjustment)
 def adjustment_points(sender, instance, created, raw=False, **kwargs):
     if created and not raw:
-        award(caller_id=instance.caller_id, event='MANUAL', points=instance.points, key=f'adjustment:{instance.pk}',
-              reason=instance.reason, occurred_at=instance.created_at, lead=instance.lead, recorded_by=instance.recorded_by)
-        AuditEvent.objects.create(actor=instance.recorded_by, category='POINTS', description=f'Adjustment {instance.pk}: {instance.points:+d} to caller {instance.caller_id}: {instance.reason}'[:500])
+        # Check if already awarded (adjust_points creates PointsEntry directly)
+        key = f'adjustment:{instance.pk}'
+        if not PointsEntry.objects.filter(event_key=key).exists():
+            award(
+                caller_id=instance.caller_id,
+                event=PointsEntry.Event.ADMIN_ADJUSTMENT,
+                points=instance.points,
+                key=key,
+                reason=instance.reason,
+                occurred_at=instance.created_at,
+                lead=instance.lead,
+                recorded_by=instance.recorded_by
+            )
+            AuditEvent.objects.create(
+                actor=instance.recorded_by,
+                category='POINTS',
+                description=f'Adjustment {instance.pk}: {instance.points:+d} to caller {instance.caller_id}: {instance.reason}'[:500]
+            )
+

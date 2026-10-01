@@ -1,9 +1,51 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.conf import settings
+
+
+class PushDevice(models.Model):
+    class Platform(models.TextChoices):
+        ANDROID = 'android', 'Android'
+        IOS = 'ios', 'iOS'
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='push_devices')
+    expo_push_token = models.CharField(max_length=255, unique=True)
+    platform = models.CharField(max_length=10, choices=Platform.choices, default=Platform.ANDROID)
+    device_name = models.CharField(max_length=255, blank=True)
+    active = models.BooleanField(default=True)
+    last_seen = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['user', 'active'], name='push_device_user_active')]
+        ordering = ['-updated_at', '-pk']
+
+    @property
+    def masked_token(self):
+        prefix, separator, value = self.expo_push_token.partition('[')
+        if separator:
+            value = value.rstrip(']')
+            return f'{prefix}[{value[:3]}...{value[-3:]}]' if len(value) > 6 else f'{prefix}[...]'
+        return '...'
+
+    def __str__(self):
+        return f'Push device #{self.pk} ({self.platform})'
+
+
+class PushReceipt(models.Model):
+    ticket_id = models.CharField(max_length=255, primary_key=True)
+    device = models.ForeignKey(PushDevice, on_delete=models.CASCADE, related_name='receipts')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    # Snapshot guards against deactivating a device re-registered after sending.
+    device_last_seen = models.DateTimeField(null=True)
 
 
 class User(AbstractUser):
     registration_pending = models.BooleanField(default=False)
+    designation = models.CharField(max_length=100, blank=True)
+    services = models.ManyToManyField('leads.Service', through='EmployeeService',
+                                      related_name='employees', blank=True)
     class Role(models.TextChoices):
         SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
         ADMIN = "ADMIN", "Admin"
@@ -56,6 +98,19 @@ class User(AbstractUser):
         return f"{self.username} ({self.get_role_display()})"
 
 
+class EmployeeService(models.Model):
+    employee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='service_mappings')
+    service = models.ForeignKey('leads.Service', on_delete=models.CASCADE, related_name='employee_mappings')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['employee', 'service'], name='unique_employee_service')]
+
+    def __str__(self):
+        return f'{self.employee} — {self.service}'
+
+
 class CallerSession(models.Model):
     import uuid
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -73,6 +128,7 @@ class CallerSession(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
+    login_remark = models.CharField(max_length=500, blank=True, default='')
 
     @property
     def active_display(self):

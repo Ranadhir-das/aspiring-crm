@@ -161,4 +161,73 @@ assert res_search.status_code == 200
 assert any(l["id"] == lead_a.id for l in res_search.data)
 print("   -> Success: Lead search returned matching leads for form.")
 
+# 8. Test Recording Admission with Country for Online Lead
+print("7. Testing recording Online Lead admission with Country...")
+post_lead_with_country = {
+    "candidate_type": "LEAD",
+    "lead_id": lead_a.id,
+    "country": "Georgia",
+    "college": "Tbilisi State Medical University",
+    "course": "MD / MBBS",
+    "fees": "80000.00",
+    "notes": "Student interested in Georgia medical program.",
+}
+res_geo = client_a.post("/api/v1/mobile/admissions/", post_lead_with_country, format="json", secure=True)
+assert res_geo.status_code == 201
+geo_data = res_geo.data["admission"]
+assert geo_data["country"] == "Georgia"
+assert geo_data["candidate_type"] == "LEAD"
+assert geo_data["candidate_type_display"] == "Online Lead"
+print("   -> Success: Online lead admission with Country recorded and serialized properly.")
+
+# 9. Test Recording Walk-in Candidate Admission
+print("8. Testing recording Walk-in Candidate admission...")
+walkin_payload = {
+    "candidate_type": "WALK_IN",
+    "name": "Rohan Deshmukh",
+    "phone": "9898989801",
+    "email": "rohan.deshmukh@example.com",
+    "country": "Uzbekistan",
+    "college": "Samarkand State Medical University",
+    "course": "MBBS",
+    "fees": "60000.00",
+    "notes": "Candidate walked into office with parents.",
+}
+res_walkin = client_a.post("/api/v1/mobile/admissions/", walkin_payload, format="json", secure=True)
+assert res_walkin.status_code == 201, f"Expected 201, got {res_walkin.status_code}: {res_walkin.data}"
+walkin_data = res_walkin.data["admission"]
+assert walkin_data["candidate_type"] == "WALK_IN"
+assert walkin_data["candidate_type_display"] == "Walk-in"
+assert walkin_data["lead_name"] == "Rohan Deshmukh"
+assert walkin_data["lead_phone"] == "9898989801"
+assert walkin_data["country"] == "Uzbekistan"
+assert walkin_data["college"] == "Samarkand State Medical University"
+assert walkin_data["batch_name"] == "Walk-in"
+# Check that lead was created with source WALK_IN
+walkin_lead = Lead.objects.get(id=walkin_data["lead_id"])
+assert walkin_lead.source == "WALK_IN"
+assert walkin_lead.status == Lead.Status.ADMISSION_DONE
+assert walkin_lead.assigned_caller == caller_a
+print("   -> Success: Walk-in candidate admission recorded, auto-created lead, and serialized accurately.")
+
+# 10. Test Filtering by Candidate Type (LEAD vs WALK_IN)
+print("9. Testing Candidate Type Filtering (?type=WALK_IN and ?type=LEAD)...")
+res_walkins_only = client_a.get("/api/v1/mobile/admissions/?type=WALK_IN", secure=True)
+assert res_walkins_only.status_code == 200
+assert all(a["candidate_type"] == "WALK_IN" for a in res_walkins_only.data["admissions"])
+assert any(a["id"] == walkin_data["id"] for a in res_walkins_only.data["admissions"])
+
+res_leads_only = client_a.get("/api/v1/mobile/admissions/?type=LEAD", secure=True)
+assert res_leads_only.status_code == 200
+assert all(a["candidate_type"] == "LEAD" for a in res_leads_only.data["admissions"])
+assert not any(a["id"] == walkin_data["id"] for a in res_leads_only.data["admissions"])
+print("   -> Success: Candidate type filter isolates Walk-in vs Online Lead admissions.")
+
+# 11. Test Searching by Country
+print("10. Testing Admissions Search by Country (?search=Uzbekistan)...")
+res_search_country = client_a.get("/api/v1/mobile/admissions/?search=Uzbekistan", secure=True)
+assert res_search_country.status_code == 200
+assert any(a["id"] == walkin_data["id"] for a in res_search_country.data["admissions"])
+print("   -> Success: Admissions search query matches country field.")
+
 print("\nALL BACKEND ADMISSION TESTS PASSED SUCCESSFULLY!\n")

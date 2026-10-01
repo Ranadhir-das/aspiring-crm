@@ -735,7 +735,8 @@
   width: 100%;
 }
 
-.cyber-breakdown-chip {
+.cyber-breakdown-chip,
+a.cyber-breakdown-chip {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -743,12 +744,17 @@
   background: var(--fd-chip-bg);
   border: 1px solid var(--fd-chip-border);
   border-radius: 10px;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.cyber-breakdown-chip:hover {
+.cyber-breakdown-chip:hover,
+a.cyber-breakdown-chip:hover {
   background: var(--fd-chip-hover);
   border-color: var(--fd-card-hover-border);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .chip-identity {
@@ -790,6 +796,7 @@
   padding: 16px 24px 24px;
 }
 
+.outcome-legend > a,
 .outcome-legend > div {
   display: flex;
   align-items: center;
@@ -800,15 +807,21 @@
   border-radius: 9px;
   font-size: 12px;
   color: var(--fd-chip-label);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
+.outcome-legend > a strong,
 .outcome-legend > div strong {
   color: var(--fd-chip-count);
 }
 
+.outcome-legend > a:hover,
 .outcome-legend > div:hover {
   background: var(--fd-chip-hover);
   border-color: var(--fd-card-hover-border);
+  transform: translateY(-1px);
 }
 
 /* --------------------------------------------------------------------------

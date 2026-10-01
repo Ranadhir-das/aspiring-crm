@@ -1,0 +1,8 @@
+<div data-work-links data-name="{{ widget.name }}" data-id="{{ widget.attrs.id }}">
+  <div data-link-rows>{% for link in links %}<div data-link-row class="spaced">
+    <label for="{{ widget.attrs.id }}_{{ forloop.counter }}">Work Link {{ forloop.counter }}</label>
+    <input type="url" name="{{ widget.name }}" id="{{ widget.attrs.id }}_{{ forloop.counter }}" value="{{ link }}" maxlength="2000" placeholder="https://example.com/report">
+    <button type="button" class="button" data-remove-link>Remove link</button>
+  </div>{% endfor %}</div>
+  <button type="button" class="button spaced" data-add-link>+ Add Another Link</button>
+</div>

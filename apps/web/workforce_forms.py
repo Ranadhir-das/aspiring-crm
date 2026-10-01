@@ -1,4 +1,5 @@
 from django import forms
+from .work_links import WorkLinksField
 from django.contrib.auth.forms import UserCreationForm
 from django.utils import timezone
 from apps.accounts.models import User
@@ -15,15 +16,33 @@ class RegistrationForm(UserCreationForm):
 
 
 class EmployeeForm(forms.ModelForm):
+    services = forms.ModelMultipleChoiceField(
+        queryset=None,
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Assigned Services",
+        help_text="Services this caller/employee is eligible to handle.",
+    )
+
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone', 'role', 'manager', 'is_active']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'designation', 'role', 'manager', 'is_active', 'services']
 
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
+        from apps.leads.models import Service
+        self.fields['services'].queryset = Service.objects.all().order_by('name')
+        if self.instance and self.instance.pk:
+            self.fields['services'].initial = self.instance.services.all()
         if actor.role != 'SUPER_ADMIN':
             self.fields['role'].choices = [c for c in User.Role.choices if c[0] not in {'SUPER_ADMIN', 'ADMIN'}]
         self.fields['manager'].queryset = User.objects.filter(role__in=['ADMIN', 'MANAGER', 'SUPER_ADMIN'], is_active=True).exclude(pk=self.instance.pk)
+
+    def save(self, commit=True):
+        user = super().save(commit=commit)
+        if commit and 'services' in self.cleaned_data:
+            user.services.set(self.cleaned_data['services'])
+        return user
 
 
 class LeaveForm(forms.ModelForm):
@@ -50,13 +69,15 @@ class LeaveForm(forms.ModelForm):
 
 
 class ReportForm(forms.ModelForm):
+    work_links = WorkLinksField(required=False, label='Work links (optional)')
     class Meta:
         model = WorkReport
-        fields = ['date', 'work_link', 'notes']
+        fields = ['date', 'work_links', 'notes']
         widgets = {'date': DATE, 'notes': forms.Textarea(attrs={'rows': 3})}
 
     def __init__(self, *args, management=False, employee=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.initial['work_links'] = self.instance.all_work_links
         if management:
             self.fields['employee'] = forms.ModelChoiceField(User.objects.filter(is_active=True))
         # Manual feedback counters are call-outcome tallies — only meaningful for callers.
@@ -71,6 +92,13 @@ class ReportForm(forms.ModelForm):
         if value > timezone.localdate():
             raise forms.ValidationError('Reports cannot be dated in the future.')
         return value
+
+    def save(self, commit=True):
+        report = super().save(commit=False)
+        report.work_link = next(iter(report.work_links), '')
+        if commit:
+            report.save()
+        return report
 
 
 class HolidayForm(forms.ModelForm):

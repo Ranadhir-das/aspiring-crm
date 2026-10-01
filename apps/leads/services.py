@@ -1,6 +1,9 @@
 import csv
 import io
+import logging
 from decimal import Decimal, InvalidOperation
+
+logger = logging.getLogger(__name__)
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -500,7 +503,8 @@ def commit_import(file, imported_by, assigned_caller=None):
 
         if assigned_caller and created_ids:
             bulk_assign_leads(created_ids, assigned_caller, imported_by,
-                              reason=f'Assigned during import {batch.pk}')
+                              reason=f'Assigned during import {batch.pk}',
+                              notify=False)
 
         batch.created_count = created_count
         batch.duplicate_count = duplicate_count
@@ -532,6 +536,7 @@ def bulk_assign_leads(
     assigned_by,
     reassign=False,
     reason="",
+    notify=True,
 ):
     """
     Assign multiple leads to a caller.
@@ -560,6 +565,7 @@ def bulk_assign_leads(
     assigned_count = 0
     skipped_count = 0
     reassigned_count = 0
+    assigned_leads = []
 
     with transaction.atomic():
 
@@ -606,6 +612,26 @@ def bulk_assign_leads(
                 reassigned_count += 1
             else:
                 assigned_count += 1
+
+            assigned_leads.append(lead)
+
+        if notify and assigned_leads:
+            assigned_lead_ids = [l.pk for l in assigned_leads]
+            caller_pk = new_caller.pk
+            print(f"[Push Assignment] on_commit registered for caller_id={caller_pk} count={len(assigned_lead_ids)}")
+            logger.info("[Push Assignment] on_commit registered for caller_id=%s count=%s", caller_pk, len(assigned_lead_ids))
+
+            def _on_commit_notify():
+                print(f"[Push Assignment] on_commit executing for caller_id={caller_pk}")
+                logger.info("[Push Assignment] on_commit executing for caller_id=%s", caller_pk)
+                try:
+                    from apps.accounts.push_notifications import notify_caller_about_assigned_leads
+                    notify_caller_about_assigned_leads(caller_pk, assigned_lead_ids)
+                except Exception as exc:
+                    print(f"[Push Assignment] unexpected exception: {exc}")
+                    logger.exception("[Push Assignment] unexpected exception: %s", exc)
+
+            transaction.on_commit(_on_commit_notify)
 
     return {
         "success": True,

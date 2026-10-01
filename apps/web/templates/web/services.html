@@ -1,0 +1,119 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Service catalog{% endblock %}
+{% block breadcrumb %}Service catalog{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">LEAD INTAKE &amp; ROUTING CATALOG</div>
+    <h1>Service catalog<span class="accent">.</span></h1>
+    <p>Manage services, eligibility rules, and website intake routing.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'web:caller-services' %}">Caller eligibility ↗</a>
+    <a class="button" href="{% url 'web:lead-routing' %}">Lead routing ↗</a>
+    <a class="button primary" href="{% url 'web:service-create' %}">+ Create service</a>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-top"><span>Total services</span><span class="metric-icon">❖</span></div>
+    <strong>{{ total_services }}</strong>
+    <div class="metric-bottom">Registered in catalog</div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Active services</span><span class="metric-icon mint">✓</span></div>
+    <strong>{{ active_services }}</strong>
+    <div class="metric-bottom"><span class="pill mint">Receiving leads</span></div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Inactive services</span><span class="metric-icon amber">✕</span></div>
+    <strong>{{ inactive_services }}</strong>
+    <div class="metric-bottom">Paused from intake</div>
+  </div>
+</div>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Services &amp; routing rules</h2>
+      <p>Services match website forms to eligible callers.</p>
+    </div>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Service</th>
+          <th>Code</th>
+          <th>Description</th>
+          <th>Status</th>
+          <th>Eligible callers</th>
+          <th>Total leads</th>
+          <th>Available to claim</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for service in services %}
+        <tr>
+          <td>
+            <strong>{{ service.name }}</strong>
+          </td>
+          <td>
+            <code>{{ service.code }}</code>
+          </td>
+          <td class="notes-cell">
+            {{ service.description|default:"—"|truncatewords:15 }}
+          </td>
+          <td>
+            {% if service.is_active %}
+            <span class="badge interested">Active</span>
+            {% else %}
+            <span class="badge not_interested">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if service.caller_count > 0 %}
+            <a class="text-link" href="{% url 'web:caller-services' %}?service={{ service.code }}">
+              <strong>{{ service.caller_count }}</strong> caller{{ service.caller_count|pluralize }} ↗
+            </a>
+            {% else %}
+            <span class="badge busy">No callers mapped</span>
+            {% endif %}
+          </td>
+          <td>
+            <a class="text-link" href="{% url 'web:lead-routing' %}?service={{ service.code }}">
+              {{ service.lead_count }} lead{{ service.lead_count|pluralize }}
+            </a>
+          </td>
+          <td>
+            {% if service.available_lead_count > 0 %}
+            <strong class="accent">{{ service.available_lead_count }}</strong>
+            {% else %}
+            <span class="muted">0</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="actions">
+              <a class="button" href="{% url 'web:service-edit' service.pk %}">Edit</a>
+              <form method="post" action="{% url 'web:service-toggle-active' service.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button class="button" type="submit">
+                  {% if service.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="empty">No services defined yet. Click "Create service" to add one.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -47,6 +47,13 @@
     </div>
     <div class="points-val">{{ stats.monthly_points }}</div>
   </div>
+  <div class="cyber-horizon-card" style="border-left: 3px solid var(--accent)">
+    <div>
+      <div class="label">Peer Appreciation</div>
+      <div class="timeframe">{{ peer_appreciation.month }} ({{ peer_appreciation.review_count }} review{{ peer_appreciation.review_count|pluralize }})</div>
+    </div>
+    <div class="points-val">{% if peer_appreciation.average_score %}{{ peer_appreciation.average_score }} <span style="font-size:13px;color:var(--muted);font-weight:normal">/ 10</span>{% else %}—{% endif %}</div>
+  </div>
 </div>
 
 <!-- Key Milestone Telemetry (Counselling, Applications, Admissions, Left to Call) -->
@@ -193,13 +200,13 @@
     </div>
     <div class="outcome-legend">
       {% for item in pipeline %}
-      <div>
+      <a href="{% if item.key %}{% url 'web:calls' %}?outcome={{ item.key }}&caller={{ caller.pk }}{% else %}{% url 'web:calls' %}?caller={{ caller.pk }}{% endif %}" class="outcome-chip" title="View {{ item.value }} {{ item.name }} calls for {{ caller|user_name }}">
         <span style="display:flex;align-items:center;gap:7px">
           <span class="legend-dot" style="background:{{ item.color }};box-shadow:0 0 6px {{ item.color }}"></span>
           <span>{{ item.name }}</span>
         </span>
         <strong>{{ item.value }}</strong>
-      </div>
+      </a>
       {% endfor %}
     </div>
     {% if not pie_total %}
@@ -227,13 +234,13 @@
     </div>
     <div class="cyber-breakdown-grid">
       {% for item in lead_pipeline %}
-      <div class="cyber-breakdown-chip">
+      <a href="{% url 'web:leads' %}?status={{ item.key }}&owner={{ caller.pk }}" class="cyber-breakdown-chip" title="View {{ item.value }} {{ item.name }} leads for {{ caller|user_name }}">
         <div class="chip-identity">
           <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
           <span class="chip-label">{{ item.name }}</span>
         </div>
         <span class="chip-count">{{ item.value }}</span>
-      </div>
+      </a>
       {% endfor %}
     </div>
   </div>
@@ -306,12 +313,42 @@
       <form method="post">
         {% csrf_token %}
         <input type="hidden" name="action" value="adjust">
-        <h3>Manual Adjustment</h3>
-        <p>Use a positive or negative value and explain the correction. Your identity is recorded.</p>
+        <h3>Admin Point Adjustment</h3>
+        <p>Predefined reasons or custom adjustment. Your admin identity is recorded in the ledger.</p>
         {{ adjustment_form.as_p }}
         <button class="button">Record adjustment</button>
       </form>
     </div>
+
+    {% if adjustments %}
+    <div style="margin-top:20px; border-top: 1px solid var(--border); padding-top: 15px;">
+      <h3 style="margin-bottom:8px; font-size:14px; font-weight:600">Adjustment History</h3>
+      <div class="futuristic-table-wrap">
+        <table class="futuristic-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Reason</th>
+              <th>Points</th>
+              <th>Added By</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for adj in adjustments %}
+            <tr>
+              <td>{{ adj.created_at|date:"d M Y, H:i" }}</td>
+              <td>{{ adj.reason }}</td>
+              <td style="font-weight:600; color:{% if adj.points >= 0 %}var(--success){% else %}var(--danger){% endif %};">
+                {{ adj.points|stringformat:"+d" }}
+              </td>
+              <td>{{ adj.recorded_by.get_full_name|default:adj.recorded_by.username }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
   </details>
 </section>
 {% endif %}

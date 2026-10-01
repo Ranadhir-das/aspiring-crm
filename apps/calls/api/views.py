@@ -1,7 +1,10 @@
 import hashlib
 import json
+import logging
 from apps.calls.phone import matching_lead
 from django.db import transaction
+
+logger = logging.getLogger('apps.calls')
 
 from rest_framework import status
 from rest_framework.generics import ListAPIView
@@ -12,6 +15,7 @@ from apps.accounts.models import User
 from apps.calls.models import Call
 from apps.followups.models import FollowUp
 from apps.leads.models import Lead
+from apps.leads.outcomes import apply_website_outcome
 
 from .permissions import CanCreateCall
 from .serializers import CallSerializer, ResolvePhoneSerializer
@@ -70,10 +74,20 @@ class CallCreateView(APIView):
         # Capture callback_at BEFORE serializer.save()
         callback_at = serializer.validated_data.get("callback_at")
 
+        outcome = serializer.validated_data.get("outcome")
+
+        # Business Rule 1: Admission is Admin Only — Callers cannot mark Admission Done
+        if outcome == Call.Outcome.ADMISSION_DONE and request.user.role == User.Role.CALLER:
+            return Response(
+                {
+                    "detail": "Callers are not allowed to mark leads as Admitted or submit Admission Done outcome. Admission is an admin-only operation."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Safety check
         if (
-            serializer.validated_data.get("outcome")
-            == Call.Outcome.CALL_BACK
+            outcome == Call.Outcome.CALL_BACK
             and callback_at is None
         ):
             return Response(
@@ -89,6 +103,10 @@ class CallCreateView(APIView):
         # Create the Call
         call = serializer.save(
             caller=request.user, lead=lead, phone_number=phone, submission_fingerprint=fingerprint
+        )
+        logger.info(
+            "CALL_ENDED lead_id=%s caller_id=%s outcome=%s duration=%s",
+            lead.pk if lead else None, request.user.pk, call.outcome, call.duration_seconds,
         )
 
         # Sync Call outcome → Lead status
@@ -121,6 +139,8 @@ class CallCreateView(APIView):
                     "updated_at",
                 ]
             )
+
+        apply_website_outcome(lead, call)
 
         # If Call Back → create FollowUp
         if call.outcome == Call.Outcome.CALL_BACK:

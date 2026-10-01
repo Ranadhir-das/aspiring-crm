@@ -1,5 +1,174 @@
 {% extends 'web/base.html' %}{% load web_tags %}{% block title %}Lead directory{% endblock %}{% block breadcrumb %}Lead directory{% endblock %}{% block content %}{% if can_manage %}<div class="actions spaced"><a class="button" href="{% url 'web:lead-quick-entry' %}">Quick name / phone entry</a><a class="button" href="{% url 'web:lead-distribute' %}">Assign by quantity</a></div>{% endif %}
-<div class="page-heading"><div><div class="eyebrow">TURN INTEREST INTO OPPORTUNITY</div><h1>Lead directory<span class="accent">.</span></h1><p>Find the right person. Make the next conversation count.</p></div>{% if can_manage %}<div class="actions"><a class="button" href="{% url 'web:lead-distribute' %}">Distribute leads</a><a class="button" href="{% url 'web:lead-import' %}">⇧ Import leads</a><a class="button primary" href="{% url 'web:lead-create' %}">＋ New lead</a></div>{% endif %}</div>
-<section class="panel"><form class="filters" method="get"><label class="search-field"><span>⌕</span><input name="q" aria-label="Search leads" placeholder="Search name, phone or email…" value="{{ search }}"></label><select name="batch" aria-label="Lead batch"><option value="">All batches</option><option value="none" {% if selected_batch == 'none' %}selected{% endif %}>Manual / unbatched leads</option>{% for batch in batches %}<option value="{{ batch.pk }}" {% if selected_batch == batch.pk|stringformat:'s' %}selected{% endif %}>{{ batch.filename }} (#{{ batch.pk }})</option>{% endfor %}</select><select name="status" aria-label="Lead status"><option value="">All statuses</option>{% for key,label in statuses %}<option value="{{ key }}" {% if key == selected_status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>{% if can_manage %}<select name="owner" aria-label="Assigned caller"><option value="">All callers</option><option value="unassigned" {% if selected_owner == 'unassigned' %}selected{% endif %}>Unassigned</option>{% for caller in callers %}<option value="{{ caller.pk }}" {% if selected_owner == caller.pk|stringformat:'s' %}selected{% endif %}>{{ caller|user_name }}</option>{% endfor %}</select>{% endif %}<select name="source" aria-label="Lead source"><option value="">All sources</option>{% for source in sources %}<option {% if source == selected_source %}selected{% endif %}>{{ source }}</option>{% endfor %}</select>{% for field in date_filters %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}{{ date_filters.non_field_errors }}<button class="button" type="submit">Apply filters</button><a class="text-link" href="{% url 'web:leads' %}">Reset</a></form>
-<form action="{% url 'web:lead-assign' %}" method="post">{% csrf_token %}{% if can_manage %}<div class="assignment-bar"><span><strong id="selected-count">0</strong> selected</span><select name="caller_id" aria-label="Assign selected leads to caller" required><option value="">Assign to caller…</option>{% for caller in callers %}<option value="{{ caller.pk }}">{{ caller|user_name }}</option>{% endfor %}</select><label class="checkbox"><input name="reassign" type="checkbox"> Allow reassignment</label><button class="button" type="submit">Assign selected →</button></div>{% endif %}
-<div class="table-scroll"><table><thead><tr>{% if can_manage %}<th><input type="checkbox" id="select-all" aria-label="Select all leads on this page"></th>{% endif %}<th>Lead</th><th>Source</th><th>Status</th><th>Assigned caller</th><th>Added</th><th></th></tr></thead><tbody>{% for lead in records %}{% ifchanged lead.import_batch_id %}<tr class="batch-heading"><th colspan="7">{{ lead.import_batch.filename|default:"Manual / unbatched leads" }} <small>? Batch {% if lead.import_batch_id %}#{{ lead.import_batch_id }}{% else %}?{% endif %}</small></th></tr>{% endifchanged %}<tr>{% if can_manage %}<td><input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.name }}"></td>{% endif %}<td><a class="person" href="{% url 'web:lead-detail' lead.pk %}"><span class="avatar subtle">{{ lead.name|first|upper }}</span><span><small>{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</small><strong>{{ lead.name }}</strong><small>{{ lead.phone }}</small></span></a></td><td>{{ lead.source|default:'—' }}</td><td><span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span></td><td>{{ lead.assigned_caller|user_name }}</td><td>{{ lead.created_at|date:'d M Y' }}</td><td><a class="arrow-link" aria-label="Open {{ lead.name }}" href="{% url 'web:lead-detail' lead.pk %}">↗</a></td></tr>{% empty %}<tr><td colspan="7" class="empty"><strong>No matching leads</strong><p>Try another search or clear your filters.</p></td></tr>{% endfor %}</tbody></table></div></form>{% include 'web/pagination.html' %}</section>{% endblock %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">TURN INTEREST INTO OPPORTUNITY</div>
+    <h1>Lead directory<span class="accent">.</span></h1>
+    <p>Find the right person. Make the next conversation count.</p>
+  </div>
+  {% if can_manage %}
+  <div class="actions">
+    <a class="button" href="{% url 'web:lead-distribute' %}">Distribute leads</a>
+    <a class="button" href="{% url 'web:lead-import' %}">⇧ Import leads</a>
+    <a class="button primary" href="{% url 'web:lead-create' %}">＋ New lead</a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Interactive Quick Status Filter Pills with Exact Counts -->
+<div class="status-pills-scroll">
+  <div class="status-pills-bar">
+    <a href="{% querystring status='' page=None %}" class="status-filter-pill {% if not selected_status %}active{% endif %}" title="View all matching leads">
+      <span class="pill-label">All</span>
+      <span class="pill-count">{{ total_matching_leads }}</span>
+    </a>
+    {% for key, label, count in status_choices_with_counts %}
+    <a href="{% querystring status=key page=None %}" class="status-filter-pill {% if selected_status == key %}active{% endif %} {% if count > 0 %}has-items{% endif %}" title="Filter by {{ label }}">
+      <span class="pill-label">{{ label }}</span>
+      <span class="pill-count">{{ count }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<section class="panel">
+  <form class="filters" method="get">
+    <label class="search-field"><span>⌕</span><input name="q" aria-label="Search leads" placeholder="Search name, phone or email…" value="{{ search }}"></label>
+    <select name="batch" aria-label="Lead batch">
+      <option value="">All batches</option>
+      <option value="none" {% if selected_batch == 'none' %}selected{% endif %}>Manual / unbatched leads</option>
+      {% for batch in batches %}
+      <option value="{{ batch.pk }}" {% if selected_batch == batch.pk|stringformat:'s' %}selected{% endif %}>{{ batch.filename }} (#{{ batch.pk }})</option>
+      {% endfor %}
+    </select>
+    <select name="status" aria-label="Lead status">
+      <option value="">All statuses ({{ total_matching_leads }})</option>
+      {% for key, label, count in status_choices_with_counts %}
+      <option value="{{ key }}" {% if key == selected_status %}selected{% endif %}>{{ label }} ({{ count }})</option>
+      {% endfor %}
+    </select>
+    {% if can_manage %}
+    <select name="owner" aria-label="Assigned caller">
+      <option value="">All callers</option>
+      <option value="unassigned" {% if selected_owner == 'unassigned' %}selected{% endif %}>Unassigned</option>
+      {% for caller in callers %}
+      <option value="{{ caller.pk }}" {% if selected_owner == caller.pk|stringformat:'s' %}selected{% endif %}>{{ caller|user_name }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <select name="source" aria-label="Lead source">
+      <option value="">All sources</option>
+      {% for source in sources %}
+      <option {% if source == selected_source %}selected{% endif %}>{{ source }}</option>
+      {% endfor %}
+    </select>
+    {% for field in date_filters %}
+    <div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>
+    {% endfor %}
+    {{ date_filters.non_field_errors }}
+    <button class="button" type="submit">Apply filters</button>
+    <a class="text-link" href="{% url 'web:leads' %}">Reset</a>
+  </form>
+
+  <!-- Prominent Results Summary Bar showing the exact number of leads -->
+  <div class="lead-results-summary">
+    <div class="summary-left" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="exact-count-badge">
+        <strong>{{ records.paginator.count }}</strong> {% if records.paginator.count == 1 %}lead found{% else %}leads found{% endif %}
+      </span>
+      {% if selected_status_display %}
+        <span class="filter-indicator">Status: <strong>{{ selected_status_display }}</strong></span>
+      {% endif %}
+      {% if selected_owner_user %}
+        <span class="filter-indicator">Caller: <strong>{{ selected_owner_user|user_name }}</strong></span>
+      {% elif selected_owner == 'unassigned' %}
+        <span class="filter-indicator">Caller: <strong>Unassigned</strong></span>
+      {% endif %}
+      {% if selected_batch %}
+        <span class="filter-indicator">Batch: <strong>#{{ selected_batch }}</strong></span>
+      {% endif %}
+      {% if selected_source %}
+        <span class="filter-indicator">Source: <strong>{{ selected_source }}</strong></span>
+      {% endif %}
+    </div>
+    {% if selected_status or selected_owner or search or selected_batch or selected_source %}
+      <a class="clear-filter-btn" href="{% url 'web:leads' %}">Clear filters ✕</a>
+    {% endif %}
+  </div>
+
+  <form action="{% url 'web:lead-assign' %}" method="post">
+    {% csrf_token %}
+    {% if can_manage %}
+    <div class="assignment-bar">
+      <span><strong id="selected-count">0</strong> selected</span>
+      <select name="caller_id" aria-label="Assign selected leads to caller" required>
+        <option value="">Assign to caller…</option>
+        {% for caller in callers %}
+        <option value="{{ caller.pk }}">{{ caller|user_name }}</option>
+        {% endfor %}
+      </select>
+      <label class="checkbox"><input name="reassign" type="checkbox"> Allow reassignment</label>
+      <button class="button" type="submit">Assign selected →</button>
+    </div>
+    {% endif %}
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            {% if can_manage %}<th><input type="checkbox" id="select-all" aria-label="Select all leads on this page"></th>{% endif %}
+            <th>Lead</th>
+            <th>Source</th>
+            <th>Status</th>
+            <th>Assigned caller</th>
+            <th>Added</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lead in records %}
+          {% ifchanged lead.import_batch_id %}
+          <tr class="batch-heading">
+            <th colspan="7">{{ lead.import_batch.filename|default:"Manual / unbatched leads" }} <small>• Batch {% if lead.import_batch_id %}#{{ lead.import_batch_id }}{% else %}—{% endif %}</small></th>
+          </tr>
+          {% endifchanged %}
+          <tr>
+            {% if can_manage %}<td><input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.name }}"></td>{% endif %}
+            <td>
+              <a class="person" href="{% url 'web:lead-detail' lead.pk %}">
+                <span class="avatar subtle">{{ lead.name|first|upper }}</span>
+                <span><small>{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</small><strong>{{ lead.name }}</strong><small>{{ lead.phone }}</small></span>
+              </a>
+            </td>
+            <td>{{ lead.source|default:'—' }}</td>
+            <td>
+              <a href="{% querystring status=lead.status page=None %}" title="Filter by {{ lead.get_status_display }}" style="text-decoration:none">
+                <span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span>
+              </a>
+            </td>
+            <td>
+              {% if lead.assigned_caller %}
+                <a href="{% querystring owner=lead.assigned_caller_id page=None %}" title="Filter by {{ lead.assigned_caller|user_name }}" style="text-decoration:none;color:inherit">
+                  {{ lead.assigned_caller|user_name }}
+                </a>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td>{{ lead.created_at|date:'d M Y' }}</td>
+            <td><a class="arrow-link" aria-label="Open {{ lead.name }}" href="{% url 'web:lead-detail' lead.pk %}">↗</a></td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="empty">
+              <strong>No matching leads</strong>
+              <p>Try another search or clear your filters.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+  {% include 'web/pagination.html' %}
+</section>
+{% endblock %}

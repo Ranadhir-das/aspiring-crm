@@ -1,4 +1,4 @@
-﻿from django.db import transaction
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
@@ -60,9 +60,11 @@ class MobileVerifyLoginView(PublicAuthView):
             consent = serializers.BooleanField(default=False)
             latitude = serializers.FloatField(required=False, allow_null=True)
             longitude = serializers.FloatField(required=False, allow_null=True)
+            login_remark = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
         data = Input(data=request.data)
         data.is_valid(raise_exception=True)
         values = data.validated_data
+        login_remark = values.get('login_remark', '').strip()[:500]
         seed = get_object_or_404(AttendancePhotoChallenge, pk=values['challenge'])
         user = User.objects.select_for_update().get(pk=seed.employee_id)
         challenge = get_object_or_404(AttendancePhotoChallenge.objects.select_for_update(), pk=seed.pk, used=False)
@@ -101,16 +103,18 @@ class MobileVerifyLoginView(PublicAuthView):
             if LeaveRequest.objects.filter(employee=user, status='APPROVED', start_date__lte=timezone.localdate(), end_date__gte=timezone.localdate()).exists():
                 return Response({'detail': 'You have approved leave today. Contact your administrator before checking in.'}, status=409)
         close_open_sessions(user, now)
-        if verification:
-            attendance, _ = Attendance.objects.get_or_create(employee=user, date=timezone.localdate(), defaults={'checked_in': now})
+        if verification or user.role in {'ADMIN', 'SUPER_ADMIN'}:
+            attendance, _ = Attendance.objects.get_or_create(employee=user, date=timezone.localdate(), defaults={'checked_in': now, 'login_remark': login_remark})
             if attendance.checked_in is None:
                 attendance.checked_in = now
             attendance.checked_out = None
+            if login_remark and not attendance.login_remark:
+                attendance.login_remark = login_remark
             attendance.save()
         Token.objects.filter(user=user).delete()
         token = Token.objects.create(user=user)
         session = CallerSession.objects.create(caller=user, verified_at=now, expires_at=next_midnight(now), attendance=attendance, verification=verification,
-            ip_address=client_ip(request), latitude=values.get('latitude'), longitude=values.get('longitude'))
+            ip_address=client_ip(request), latitude=values.get('latitude'), longitude=values.get('longitude'), login_remark=login_remark)
         AuditEvent.objects.create(actor=user, category='ATTENDANCE', description=f'Mobile login session {session.pk}')
         return Response({'token': token.key, 'session_id': str(session.pk), 'expires_at': session.expires_at, 'user': user_data(user)})
 

@@ -105,7 +105,7 @@ class ExternalCallTests(TestCase):
         self.assertEqual(replay.status_code, 200, replay.data)
         self.assertEqual(replay.data['id'], first.data['id'])
         self.assertEqual(replay.data['followup']['status'], 'COMPLETED')
-        self.assertEqual((Call.objects.count(), FollowUp.objects.count(), PointsEntry.objects.count()), (1, 1, count + 1))
+        self.assertEqual((Call.objects.count(), FollowUp.objects.count(), PointsEntry.objects.count()), (1, 1, count))
         changed = dict(data, notes='Different feedback')
         self.assertEqual(self.post(changed).status_code, 409)
         self.assertEqual(Call.objects.count(), 1)

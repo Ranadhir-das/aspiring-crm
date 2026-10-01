@@ -47,6 +47,7 @@ class Attendance(models.Model):
     status = models.CharField(max_length=16, choices=[('PRESENT', 'Present'), ('WFH', 'Work from home'), ('WEEK_OFF', 'Week off')], default='PRESENT')
     checked_in = models.DateTimeField(null=True, blank=True)
     checked_out = models.DateTimeField(null=True, blank=True)
+    login_remark = models.CharField(max_length=500, blank=True, default='')
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['employee', 'date'], name='one_attendance_daily')]
@@ -54,6 +55,13 @@ class Attendance(models.Model):
     @property
     def hours(self):
         return round(((self.checked_out or timezone.now()) - self.checked_in).total_seconds() / 3600, 2) if self.checked_in else 0
+
+    @property
+    def is_late(self):
+        if self.checked_in:
+            local = timezone.localtime(self.checked_in)
+            return (local.hour > 10) or (local.hour == 10 and local.minute > 0)
+        return False
 
 
 class Holiday(models.Model):
@@ -64,7 +72,8 @@ class Holiday(models.Model):
 class WorkReport(models.Model):
     employee = models.ForeignKey(USER, on_delete=models.PROTECT, related_name='work_reports')
     date = models.DateField(default=timezone.localdate)
-    work_link = models.URLField(blank=True)
+    work_link = models.URLField(blank=True, max_length=2000)
+    work_links = models.JSONField(default=list, blank=True)
     notes = models.TextField(blank=True)
     feedback = models.JSONField(default=dict)
     photo = models.BinaryField(null=True, blank=True)
@@ -73,6 +82,10 @@ class WorkReport(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['employee', 'date'], name='one_report_daily')]
+
+    @property
+    def all_work_links(self):
+        return self.work_links or ([self.work_link] if self.work_link else [])
 
     @property
     def feedback_total(self):
@@ -228,3 +241,20 @@ class Notice(models.Model):
         from apps.accounts.models import User
         labels = dict(User.Role.choices)
         return ', '.join(labels.get(role, role) for role in self.roles)
+
+
+class NoticeAttachment(models.Model):
+    notice = models.ForeignKey(Notice, on_delete=models.CASCADE, related_name='attachments')
+    uploaded_by = models.ForeignKey(USER, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    file = models.FileField(upload_to='notice_attachments/%Y/%m/')
+    original_filename = models.CharField(max_length=255)
+    mime_type = models.CharField(max_length=100)
+    file_size = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"{self.original_filename} ({self.notice.title})"
+

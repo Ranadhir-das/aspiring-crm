@@ -24,10 +24,9 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[
     "192.168.31.191"
 ])
 
-CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[
-    "http://localhost:8081",
-    "http://127.0.0.1:8081",
-    "http://192.168.31.191:8081",
+CORS_ALLOWED_ORIGINS = env.list("WEBSITE_CORS_ALLOWED_ORIGINS", default=[
+    "https://authenticattest.com",
+    "https://www.authenticattest.com",
 ])
 
 if not DEBUG:
@@ -58,6 +57,7 @@ INSTALLED_APPS = [
     "channels",
 
     "apps.accounts",
+    "apps.notifications",
     "apps.leads",
     "apps.calls",
     "apps.followups",
@@ -171,6 +171,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 LOGIN_URL = 'web:login'
 LOGIN_REDIRECT_URL = 'web:dashboard'
 LOGOUT_REDIRECT_URL = 'web:login'
@@ -199,3 +201,49 @@ CALLER_APK_PATH = Path(env('CALLER_APK_PATH', default=str(
 
 # Discover isolated app tests and converted root tests, not manual database smoke scripts.
 TEST_RUNNER = "config.test_runner.AppTestRunner"
+
+# Independent website intake limits; existing authenticated API limits are unchanged.
+PUBLIC_LEAD_BURST_RATE = env('PUBLIC_LEAD_BURST_RATE', default='5/min')
+PUBLIC_LEAD_DAILY_RATE = env('PUBLIC_LEAD_DAILY_RATE', default='50/day')
+
+# Website-claim outcomes only; batch/manual lead ownership is unchanged.
+WEBSITE_LEAD_BUSY_RETRY_SECONDS = env.int('WEBSITE_LEAD_BUSY_RETRY_SECONDS', default=900)
+WEBSITE_LEAD_NO_ANSWER_RETRY_SECONDS = env.int('WEBSITE_LEAD_NO_ANSWER_RETRY_SECONDS', default=3600)
+
+# Website lead source authentication
+WEBSITE_LEAD_REQUIRE_API_KEY = True
+DEFAULT_WEBSITE_SOURCE_CODE = env('DEFAULT_WEBSITE_SOURCE_CODE', default='official_website')
+DEFAULT_WEBSITE_SOURCE_NAME = env('DEFAULT_WEBSITE_SOURCE_NAME', default='Official Website')
+DEFAULT_WEBSITE_API_KEY = env('DEFAULT_WEBSITE_API_KEY', default='')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} [{name}] {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'apps.leads': {
+            'handlers': ['console'],
+            'level': env('LEADS_LOG_LEVEL', default='INFO'),
+            'propagate': False,
+        },
+    },
+}
+
+# Explicit website origins; never use CORS as authentication.
+from corsheaders.defaults import default_headers
+CORS_ALLOW_HEADERS = (*default_headers, "x-api-key")
+
+# Expo push credentials stay on the server.
+WEBSITE_LEAD_PUSH_ENABLED = env.bool("WEBSITE_LEAD_PUSH_ENABLED", default=True)
+EXPO_PUSH_ACCESS_TOKEN = env("EXPO_PUSH_ACCESS_TOKEN", default="")

@@ -1,3 +1,4 @@
+from django.utils.html import format_html_join
 import csv
 import calendar
 from datetime import date, timedelta
@@ -203,8 +204,8 @@ def leave_action(request, pk):
 def attendance(request):
     query, filters = filtered(request, scoped(Attendance.objects.select_related('employee'), request.user))
     records = paginate(request, query.order_by('-date', 'employee__username'))
-    rows = [{'cells': [r.date, employee_name(r.employee), r.get_status_display(), r.checked_in or '—', r.checked_out or '—', f'{r.hours} h']} for r in records]
-    return table_page(request, 'Attendance', 'attendance', ['Date', 'Employee', 'Status', 'Check-in', 'Check-out', 'Elapsed time'], rows,
+    rows = [{'cells': [r.date, employee_name(r.employee), r.get_status_display(), r.checked_in or '—', r.checked_out or '—', f'{r.hours} h', r.login_remark or '—']} for r in records]
+    return table_page(request, 'Attendance', 'attendance', ['Date', 'Employee', 'Status', 'Check-in', 'Check-out', 'Elapsed time', 'Login Remark'], rows,
         records=records, filters=filters, attendance_controls=True,
         subtitle='Elapsed time is measured between check-in and check-out; it is not an estimate of active computer use.')
 
@@ -226,7 +227,8 @@ def attendance_action(request):
             mode = request.POST.get('status', 'PRESENT')
             if mode not in {'PRESENT', 'WFH', 'WEEK_OFF'}:
                 mode = 'PRESENT'
-            Attendance.objects.create(employee=request.user, date=today, status=mode, checked_in=timezone.now() if mode != 'WEEK_OFF' else None)
+            login_remark = request.POST.get('login_remark', '').strip()[:500]
+            Attendance.objects.create(employee=request.user, date=today, status=mode, checked_in=timezone.now() if mode != 'WEEK_OFF' else None, login_remark=login_remark)
             audit(request, 'ATTENDANCE', f'Marked {mode} for {today}')
     elif action == 'out':
         record = Attendance.objects.filter(employee=request.user, checked_in__isnull=False, checked_out__isnull=True).order_by('-date').first()
@@ -319,12 +321,12 @@ def reports(request):
             s = str(value)
             return "'" + s if s.lstrip().startswith(('=', '+', '-', '@')) else s
         for report in query.order_by('-date').iterator():
-            writer.writerow([report.date, safe(employee_name(report.employee)), safe(report.work_link), safe(report.notes)] + [report.feedback.get(k, 0) for k, _ in FEEDBACK])
+            writer.writerow([report.date, safe(employee_name(report.employee)), safe('\n'.join(report.all_work_links)), safe(report.notes)] + [report.feedback.get(k, 0) for k, _ in FEEDBACK])
         return response
     records = paginate(request, query.order_by('-date', '-updated_at'))
     missing = User.objects.filter(is_active=True).exclude(work_reports__date=timezone.localdate()) if request.user.role in MANAGEMENT else []
-    rows = [{'cells': [r.date, employee_name(r.employee), r.feedback_total, r.notes], 'url': reverse('web:report-edit', args=[r.pk]), 'label': 'View / edit'} for r in records]
-    return table_page(request, 'Work reports', 'reports', ['Date', 'Employee', 'Manual feedback count', 'Notes'], rows, records=records, filters=filters,
+    rows = [{'cells': [r.date, employee_name(r.employee), r.feedback_total, format_html_join('<br>', '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', ((url, url) for url in r.all_work_links)), r.notes], 'url': reverse('web:report-edit', args=[r.pk]), 'label': 'View / edit'} for r in records]
+    return table_page(request, 'Work reports', 'reports', ['Date', 'Employee', 'Manual feedback count', 'Work links', 'Notes'], rows, records=records, filters=filters,
         create_url=reverse('web:report-new'), export=True, missing=missing,
         subtitle='One report per employee per day. Manual feedback is kept separate from recorded calls.')
 
@@ -359,7 +361,7 @@ def report_edit(request, pk=None):
                 return redirect('web:reports')
     return form_page(request, 'Daily work & feedback report', form, 'reports', report=report,
         subtitle='Enter manually reported counts. These do not create call records.' if (known_employee is None or known_employee.role == 'CALLER')
-        else 'Enter your notes, work link, and photo for the day.')
+        else 'Enter your notes, work links, and photo for the day.')
 
 
 @workspace(employee=True)

@@ -1,1 +1,135 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}Call activity{% endblock %}{% block breadcrumb %}Call activity{% endblock %}{% block content %}<div class="page-heading"><div><div class="eyebrow">EVERY CONVERSATION COUNTS</div><h1>Call activity<span class="accent">.</span></h1><p>Recorded conversations from your CRM and caller app.</p></div></div><section class="panel"><form class="filters" method="get"><label class="search-field"><span>⌕</span><input name="q" aria-label="Search calls" value="{{ search }}" placeholder="Search lead name or phone…"></label><button class="button">Search</button><a class="text-link" href="{% url 'web:calls' %}">Reset</a></form><div class="table-scroll"><table><thead><tr><th>Lead</th><th>Caller</th><th>Outcome</th><th>Started</th><th>Duration</th><th>Notes</th><th>Recording</th></tr></thead><tbody>{% for call in records %}{% ifchanged call.lead.import_batch_id %}<tr class="batch-heading"><th colspan="7">{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }} <small>? Batch {% if call.lead.import_batch_id %}#{{ call.lead.import_batch_id }}{% else %}?{% endif %}</small></th></tr>{% endifchanged %}<tr><td>{% if call.lead_id %}<a class="person" href="{% url 'web:lead-detail' call.lead_id %}"><span class="avatar subtle">{{ call.lead.name|first|upper }}</span><span><small>{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }}</small><strong>{{ call.lead.name }}</strong><small>{{ call.lead.phone }}</small></span></a>{% else %}<strong>{{ call.phone_number }}</strong><small>External call</small>{% endif %}</td><td>{{ call.caller|user_name }}</td><td><span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display|default:'Recorded' }}</span></td><td>{{ call.started_at|date:'d M, H:i' }}</td><td>{{ call.duration_seconds }}s</td><td class="notes-cell">{{ call.notes|default:'—' }}</td><td>{% include 'web/call_recording.html' %}</td></tr>{% empty %}<tr><td colspan="7" class="empty">No calls found. Calls saved from the mobile app will appear here.</td></tr>{% endfor %}</tbody></table></div>{% include 'web/pagination.html' %}</section>{% endblock %}
+{% extends 'web/base.html' %}{% load web_tags %}
+{% block title %}Call activity{% endblock %}
+{% block breadcrumb %}Call activity{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">EVERY CONVERSATION COUNTS</div>
+    <h1>Call activity<span class="accent">.</span></h1>
+    <p>Recorded conversations from your CRM and caller app.</p>
+  </div>
+</div>
+
+<!-- Interactive Quick Outcome Filter Pills with Exact Counts -->
+<div class="status-pills-scroll">
+  <div class="status-pills-bar">
+    <a href="{% querystring outcome='' page=None %}" class="status-filter-pill {% if not selected_outcome %}active{% endif %}" title="View all matching calls">
+      <span class="pill-label">All</span>
+      <span class="pill-count">{{ total_matching_calls }}</span>
+    </a>
+    {% for key, label, count in outcome_choices_with_counts %}
+    <a href="{% querystring outcome=key page=None %}" class="status-filter-pill {% if selected_outcome == key %}active{% endif %} {% if count > 0 %}has-items{% endif %}" title="Filter by {{ label }}">
+      <span class="pill-label">{{ label }}</span>
+      <span class="pill-count">{{ count }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<section class="panel">
+  <form class="filters" method="get">
+    <label class="search-field"><span>⌕</span><input name="q" aria-label="Search calls" value="{{ search }}" placeholder="Search lead name or phone…"></label>
+    <select name="outcome" aria-label="Call outcome">
+      <option value="">All outcomes ({{ total_matching_calls }})</option>
+      {% for key, label, count in outcome_choices_with_counts %}
+      <option value="{{ key }}" {% if key == selected_outcome %}selected{% endif %}>{{ label }} ({{ count }})</option>
+      {% endfor %}
+    </select>
+    {% if can_manage %}
+    <select name="caller" aria-label="Caller">
+      <option value="">All callers</option>
+      {% for c in callers %}
+      <option value="{{ c.pk }}" {% if selected_caller == c.pk|stringformat:'s' %}selected{% endif %}>{{ c|user_name }}</option>
+      {% endfor %}
+    </select>
+    {% endif %}
+    <button class="button" type="submit">Filter calls</button>
+    <a class="text-link" href="{% url 'web:calls' %}">Reset</a>
+  </form>
+
+  <!-- Prominent Results Summary Bar showing the exact number of calls -->
+  <div class="lead-results-summary">
+    <div class="summary-left" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="exact-count-badge">
+        <strong>{{ records.paginator.count }}</strong> {% if records.paginator.count == 1 %}call found{% else %}calls found{% endif %}
+      </span>
+      {% if selected_outcome_display %}
+        <span class="filter-indicator">Outcome: <strong>{{ selected_outcome_display }}</strong></span>
+      {% endif %}
+      {% if selected_caller_user %}
+        <span class="filter-indicator">Caller: <strong>{{ selected_caller_user|user_name }}</strong></span>
+      {% endif %}
+    </div>
+    {% if selected_outcome or selected_caller or search %}
+      <a class="clear-filter-btn" href="{% url 'web:calls' %}">Clear filters ✕</a>
+    {% endif %}
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Lead</th>
+          <th>Caller</th>
+          <th>Outcome</th>
+          <th>Started</th>
+          <th>Duration</th>
+          <th>Notes</th>
+          <th>Recording</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for call in records %}
+        {% ifchanged call.lead.import_batch_id %}
+        <tr class="batch-heading">
+          <th colspan="7">{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }} <small>• Batch {% if call.lead.import_batch_id %}#{{ call.lead.import_batch_id }}{% else %}—{% endif %}</small></th>
+        </tr>
+        {% endifchanged %}
+        <tr>
+          <td>
+            {% if call.lead_id %}
+            <a class="person" href="{% url 'web:lead-detail' call.lead_id %}">
+              <span class="avatar subtle">{{ call.lead.name|first|upper }}</span>
+              <span><small>{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }}</small><strong>{{ call.lead.name }}</strong><small>{{ call.lead.phone }}</small></span>
+            </a>
+            {% else %}
+            <strong>{{ call.phone_number }}</strong><small>External call</small>
+            {% endif %}
+          </td>
+          <td>
+            {% if call.caller %}
+            <a href="{% querystring caller=call.caller_id page=None %}" title="Filter by {{ call.caller|user_name }}" style="text-decoration:none;color:inherit">
+              {{ call.caller|user_name }}
+            </a>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if call.outcome %}
+            <a href="{% querystring outcome=call.outcome page=None %}" title="Filter by {{ call.get_outcome_display }}" style="text-decoration:none">
+              <span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display }}</span>
+            </a>
+            {% else %}
+            <span class="badge">Recorded</span>
+            {% endif %}
+          </td>
+          <td>{{ call.started_at|date:'d M, H:i' }}</td>
+          <td>{{ call.duration_seconds }}s</td>
+          <td class="notes-cell">{{ call.notes|default:'—' }}</td>
+          <td>{% include 'web/call_recording.html' %}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="empty">
+            <strong>No matching calls found</strong>
+            <p>Try another search or clear your filters.</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'web/pagination.html' %}
+</section>
+{% endblock %}

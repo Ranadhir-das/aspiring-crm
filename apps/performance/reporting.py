@@ -76,8 +76,22 @@ def metrics(caller, window):
     stats['lifetime_points'] = PointsEntry.objects.filter(caller=caller).aggregate(n=Sum('points'))['n'] or 0
     stats.update(calendar_points(PointsEntry.objects.filter(caller=caller)))
     events = dict(entries.order_by().values('event').annotate(n=Count('pk')).values_list('event', 'n'))
-    stats.update(interested=events.get('INTERESTED', 0), applications=events.get('APPLICATION', 0), conversions=events.get('ADMISSION', 0),
-                 counselling=events.get('COUNSELLING', 0), completed_followups=events.get('FOLLOWUP_COMPLETED', 0), missed_followups=events.get('MISSED_FOLLOWUP', 0),
+    call_outcomes = dict(calls.order_by().values('outcome').annotate(n=Count('pk')).values_list('outcome', 'n'))
+    from apps.leads.models import Admission
+    window_end_date = (window.end - timedelta(microseconds=1)).date()
+    admissions_count = Admission.objects.filter(caller=caller).filter(
+        Q(created_at__gte=window.start, created_at__lt=window.end) |
+        Q(admission_date__gte=window.start.date(), admission_date__lte=window_end_date)
+    ).count()
+    conversions = max(admissions_count, call_outcomes.get('ADMISSION_DONE', 0), events.get('ADMISSION', 0))
+    interested = max(call_outcomes.get('INTERESTED', 0), events.get('INTERESTED', 0))
+    not_interested = call_outcomes.get('NOT_INTERESTED', 0)
+    applications = max(events.get('APPLICATION', 0), conversions)
+
+    stats.update(interested=interested, not_interested=not_interested, applications=applications, conversions=conversions,
+                 counselling=events.get('COUNSELLING', 0),
+                 completed_followups=events.get('FOLLOWUP_COMPLETED', 0) or between(FollowUp.objects.filter(caller=caller, status='COMPLETED'), 'updated_at', window).count(),
+                 missed_followups=events.get('MISSED_FOLLOWUP', 0) or between(FollowUp.objects.filter(caller=caller, status='PENDING', scheduled_at__lt=timezone.now()), 'scheduled_at', window).count(),
                  followups=between(FollowUp.objects.filter(caller=caller), 'scheduled_at', window).count())
     return stats
 

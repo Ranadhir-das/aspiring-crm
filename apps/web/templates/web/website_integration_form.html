@@ -1,0 +1,117 @@
+{% extends 'web/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block breadcrumb %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">WEBSITE INTEGRATIONS</div>
+    <h1>{{ title }}<span class="accent">.</span></h1>
+    <p>Configure website source details, default service, allowed services, and allowed origins.</p>
+  </div>
+  <a class="button" href="{% url 'web:website-integrations' %}">← Back to integrations</a>
+</div>
+
+<section class="panel form-panel" style="max-width: 720px;">
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="notice error">
+      {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid" style="grid-template-columns: 1fr; gap: 16px;">
+      <div class="field">
+        <label for="id_name">Website Name *</label>
+        {{ form.name }}
+        {% if form.name.errors %}
+        <ul class="errorlist">{% for err in form.name.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+        {% endif %}
+        <small class="muted">Human-readable label (e.g. "AuthenticAttest Official", "MBBS Portal Landing Page").</small>
+      </div>
+
+      <div class="field">
+        <label for="id_code">Website Code / Source Identifier *</label>
+        {{ form.code }}
+        {% if form.code.errors %}
+        <ul class="errorlist">{% for err in form.code.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+        {% endif %}
+        <small class="muted">Unique lowercase identifier passed in API payloads as <code>"source": "..."</code> (e.g. <code>authentic_attest</code>, <code>mbbs_portal</code>).</small>
+      </div>
+
+      <div class="field">
+        <label for="id_default_service">Default Service *</label>
+        {{ form.default_service }}
+        {% if form.default_service.errors %}
+        <ul class="errorlist">{% for err in form.default_service.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+        {% endif %}
+        <small class="muted">Fallback service if a lead submission does not specify one or specifies an unmapped service.</small>
+      </div>
+
+      <div class="field">
+        <label>Allowed Services *</label>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-top: 6px; padding: 12px; background: var(--bg-surface-2, rgba(255,255,255,0.03)); border-radius: 8px; border: 1px solid var(--border-color, rgba(255,255,255,0.08));">
+          {% for checkbox in form.allowed_services %}
+          <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; margin-bottom: 0; cursor: pointer;">
+            {{ checkbox.tag }}
+            <span>{{ checkbox.choice_label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% if form.allowed_services.errors %}
+        <ul class="errorlist">{% for err in form.allowed_services.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+        {% endif %}
+        <small class="muted">Submissions attempting to specify a service outside this list will be rejected.</small>
+      </div>
+
+      <div class="field">
+        <label for="id_allowed_origins_raw">Allowed HTTPS Origins (CORS)</label>
+        {{ form.allowed_origins_raw }}
+        {% if form.allowed_origins_raw.errors %}
+        <ul class="errorlist">{% for err in form.allowed_origins_raw.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+        {% endif %}
+        <small class="muted">
+          Allowed browser origins, one per line (e.g. <code>https://authenticattest.com</code>).
+          Wildcards (<code>*</code>), paths, and queries are strictly forbidden.
+          Leave empty only if submissions are strictly server-side / backend proxies.
+        </small>
+      </div>
+
+      {% if mode == 'create' %}
+      <div style="padding: 12px 16px; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; border-radius: 4px; font-size: 13px;">
+        <strong>Security Notice:</strong>
+        A cryptographically secure API key will be automatically generated upon creation. You will be provided the key on the next screen.
+      </div>
+      {% else %}
+      <div style="padding: 12px 16px; background: rgba(148, 163, 184, 0.08); border-left: 3px solid #94a3b8; border-radius: 4px; font-size: 13px;">
+        <strong>API Key:</strong>
+        <code>{{ source.api_key_masked }}</code>
+        <span class="muted" style="display: block; font-size: 12px; margin-top: 4px;">
+          Editing this form does not change or regenerate the API key. To generate a new key, use the "Regenerate Key" action.
+        </span>
+      </div>
+      {% endif %}
+
+      <div class="field checkbox" style="margin-top: 10px;">
+        {{ form.is_active }}
+        <label for="id_is_active" style="margin-bottom: 0; cursor: pointer;">
+          <strong>Active (Receiving Leads)</strong>
+          <span style="display: block; font-size: 11px; color: var(--muted); margin-top: 2px;">
+            Uncheck to immediately reject public lead intake requests for this website source.
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-actions" style="margin-top: 24px; display: flex; gap: 12px;">
+      <button class="button primary" type="submit">
+        {% if mode == 'create' %}Create Website Integration{% else %}Save Changes{% endif %}
+      </button>
+      <a class="button" href="{% if source %}{% url 'web:website-integration-detail' source.pk %}{% else %}{% url 'web:website-integrations' %}{% endif %}">
+        Cancel
+      </a>
+    </div>
+  </form>
+</section>
+{% endblock %}
+

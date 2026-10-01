@@ -1,0 +1,67 @@
+{% extends 'web/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block breadcrumb %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">SERVICE CATALOG</div>
+    <h1>{{ title }}<span class="accent">.</span></h1>
+    <p>{{ subtitle|default:"Define service code, display name, and intake availability." }}</p>
+  </div>
+  <a class="button" href="{% url 'web:services' %}">← Back to services</a>
+</div>
+
+<section class="panel form-panel" style="max-width: 680px;">
+  <form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="notice error">
+      {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid" style="grid-template-columns: 1fr;">
+      <div class="field">
+        <label for="id_name">Service Name *</label>
+        {{ form.name }}
+        {% if form.name.errors %}
+        <ul class="errorlist">{% for err in form.name.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+        {% endif %}
+        <small class="muted">Descriptive name shown to counselors and applicants (e.g. "MBBS Abroad", "Management Studies").</small>
+      </div>
+
+      <div class="field">
+        <label for="id_code">Service Code (Uppercase) *</label>
+        {{ form.code }}
+        {% if form.code.errors %}
+        <ul class="errorlist">{% for err in form.code.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+        {% endif %}
+        <small class="muted">Identifier used in website lead forms (e.g. <code>MBBS</code>, <code>MBA</code>, <code>APOSTILLE</code>, <code>OTHER</code>).</small>
+      </div>
+
+      <div class="field">
+        <label for="id_description">Description</label>
+        {{ form.description }}
+        {% if form.description.errors %}
+        <ul class="errorlist">{% for err in form.description.errors %}<li>{{ err }}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+
+      <div class="field checkbox" style="margin-top: 10px;">
+        {{ form.is_active }}
+        <label for="id_is_active" style="margin-bottom: 0; cursor: pointer;">
+          <strong>Active (Receiving Leads)</strong>
+          <span style="display: block; font-size: 11px; color: var(--muted); margin-top: 2px;">
+            Uncheck to pause lead routing for this service without deleting historical records.
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-actions" style="margin-top: 28px;">
+      <a class="button" href="{% url 'web:services' %}">Cancel</a>
+      <button class="button primary" type="submit">{{ action_name|default:"Save" }}</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -1,2 +1,188 @@
-{% extends 'web/base.html' %}{% block title %}Record Admission{% endblock %}{% block breadcrumb %}Record Admission{% endblock %}{% block content %}<div class="page-heading"><div><a class="text-link" href="{% url 'web:admissions' %}">← Admissions</a><h1>{{ title }}<span class="accent">.</span></h1><p>Record a confirmed student admission.</p></div></div><section class="panel form-panel"><form method="post">{% csrf_token %}{% include 'web/form_fields.html' %}<div class="form-actions"><a class="button" href="{% url 'web:admissions' %}">Cancel</a><button class="button primary">Save Admission ↗</button></div></form></section>{% endblock %}
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Record Admission{% endblock %}
+{% block breadcrumb %}Record Admission{% endblock %}
 
+{% block content %}
+<div class="page-heading">
+  <div>
+    <a class="text-link" href="{% url 'web:admissions' %}">← Admissions</a>
+    <h1>{{ title }}<span class="accent">.</span></h1>
+    <p>Search, inspect student details and counselling history, and confirm admission.</p>
+  </div>
+</div>
+
+<!-- Step 1: Lead Search -->
+<section class="panel spaced">
+  <div class="panel-heading">
+    <div>
+      <h2>1. Search and Select Lead</h2>
+      <p>Search existing leads by Student Name, Phone, Email, or Lead ID</p>
+    </div>
+  </div>
+  <form method="get" class="filters" style="margin-bottom: 0;">
+    <label class="search-field" style="flex: 1;">
+      <span>⌕</span>
+      <input type="text" name="q" value="{{ search_query }}" placeholder="Enter student name, phone, email, or lead ID…" aria-label="Search lead">
+    </label>
+    <button type="submit" class="button primary">Search</button>
+    {% if search_query %}
+      <a class="text-link" href="{% url 'web:admission-new' %}">Clear</a>
+    {% endif %}
+  </form>
+
+  {% if search_results %}
+    <div class="table-scroll" style="margin-top: 16px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Phone &amp; Email</th>
+            <th>Batch</th>
+            <th>Assigned Caller</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for res in search_results %}
+            <tr {% if selected_lead and selected_lead.pk == res.pk %}style="background: rgba(37,99,235,0.08);"{% endif %}>
+              <td><strong>{{ res.name }}</strong></td>
+              <td>{{ res.phone }}<br><small>{{ res.email|default:'—' }}</small></td>
+              <td><small>{{ res.import_batch.filename|default:'Manual / Direct' }}</small></td>
+              <td>{{ res.assigned_caller|user_name }}</td>
+              <td><span class="badge {{ res.status|lower }}">{{ res.get_status_display }}</span></td>
+              <td>
+                <a class="button subtle" href="{% url 'web:admission-new' %}?lead={{ res.pk }}{% if search_query %}&q={{ search_query }}{% endif %}">
+                  Select Lead →
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% elif search_query %}
+    <p class="empty" style="margin-top: 16px;">No leads matching "{{ search_query }}" were found.</p>
+  {% endif %}
+</section>
+
+<!-- Step 2: Selected Lead Inspection & Counselling History -->
+{% if selected_lead %}
+<section class="panel spaced">
+  <div class="panel-heading">
+    <div>
+      <h2>2. Student Profile &amp; History</h2>
+      <p>Verify lead details and prior counselling before recording admission</p>
+    </div>
+    <span class="badge {{ selected_lead.status|lower }}">{{ selected_lead.get_status_display }}</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+    <div style="padding: 12px 16px; background: rgba(0,0,0,0.03); border-radius: 8px;">
+      <small style="color: #64748b; display: block; margin-bottom: 4px;">STUDENT NAME</small>
+      <strong>{{ selected_lead.name }}</strong> <small>(ID: #{{ selected_lead.pk }})</small>
+    </div>
+    <div style="padding: 12px 16px; background: rgba(0,0,0,0.03); border-radius: 8px;">
+      <small style="color: #64748b; display: block; margin-bottom: 4px;">PHONE / EMAIL</small>
+      <div>{{ selected_lead.phone }}</div>
+      <small style="color: #64748b;">{{ selected_lead.email|default:'No email' }}</small>
+    </div>
+    <div style="padding: 12px 16px; background: rgba(0,0,0,0.03); border-radius: 8px;">
+      <small style="color: #64748b; display: block; margin-bottom: 4px;">BATCH / SOURCE</small>
+      <div>{{ selected_lead.import_batch.filename|default:'Direct / Website' }}</div>
+      <small style="color: #64748b;">{{ selected_lead.location|default:selected_lead.source }}</small>
+    </div>
+    <div style="padding: 12px 16px; background: rgba(0,0,0,0.03); border-radius: 8px;">
+      <small style="color: #64748b; display: block; margin-bottom: 4px;">ASSIGNED CALLER</small>
+      <strong>{{ selected_lead.assigned_caller|user_name }}</strong>
+    </div>
+  </div>
+
+  <div class="panel-heading" style="margin-top: 12px;">
+    <div>
+      <h3>Prior Counselling Sessions</h3>
+      <p>Walk-in counselling and consultation notes recorded for this student</p>
+    </div>
+  </div>
+
+  {% if prior_counsellings %}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Date / Time</th>
+            <th>Counselling Type</th>
+            <th>Counsellor</th>
+            <th>College / Course Discussed</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in prior_counsellings %}
+            <tr>
+              <td><strong>{{ c.conducted_at|date:'d M Y, H:i' }}</strong></td>
+              <td><span class="badge info">{{ c.get_counselling_type_display }}</span></td>
+              <td>{{ c.caller|user_name }}</td>
+              <td>
+                <strong>{{ c.college|default:'—' }}</strong>
+                {% if c.course %}<br><small>{{ c.course }}</small>{% endif %}
+              </td>
+              <td class="notes-cell">{{ c.notes|default:'—' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="empty">No prior counselling sessions recorded for this lead.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<!-- Step 3: Admission Form -->
+<section class="panel form-panel spaced">
+  <div class="panel-heading">
+    <div>
+      <h2>{% if selected_lead %}3. Enter Admission Details{% else %}Admission Details{% endif %}</h2>
+      <p>{% if selected_lead %}Confirm admission for <strong>{{ selected_lead.name }}</strong> (Lead #{{ selected_lead.pk }}){% else %}Select a lead above or choose from the list below{% endif %}</p>
+    </div>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    {% if selected_lead %}
+      <input type="hidden" name="lead" value="{{ selected_lead.pk }}">
+    {% endif %}
+
+    {% for field in form %}
+      {% if field.name == 'lead' and selected_lead %}
+        {# Lead is already selected and inspected above #}
+      {% else %}
+        <div class="form-row">
+          <label for="{{ field.id_for_label }}">
+            {{ field.label }}
+            {% if field.field.required %}<span class="accent">*</span>{% endif %}
+          </label>
+          {{ field }}
+          {% if field.help_text %}
+            <small class="help-text">{{ field.help_text }}</small>
+          {% endif %}
+          {% if field.errors %}
+            <div class="field-errors">
+              {% for error in field.errors %}
+                <p class="error">{{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% endfor %}
+
+    <div class="form-actions">
+      <a class="button" href="{% url 'web:admissions' %}">Cancel</a>
+      <button class="button primary">Save Admission ↗</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

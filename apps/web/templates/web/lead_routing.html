@@ -1,0 +1,340 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Lead routing &amp; queue monitor{% endblock %}
+{% block breadcrumb %}Lead routing{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">AUTOMATIC ROUTING &amp; QUEUE MONITOR</div>
+    <h1>Lead routing<span class="accent">.</span></h1>
+    <p>Monitor incoming website leads, service assignment queues, and caller availability.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'web:services' %}">Service catalog ↗</a>
+    <a class="button" href="{% url 'web:caller-services' %}">Caller eligibility ↗</a>
+  </div>
+</div>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-top"><span>Total website leads</span><span class="metric-icon">⇶</span></div>
+    <strong>{{ total_website_leads }}</strong>
+    <div class="metric-bottom">Inbound website inquiries</div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Available to claim</span><span class="metric-icon mint">✓</span></div>
+    <strong>{{ available_count }}</strong>
+    <div class="metric-bottom"><span class="pill mint">Ready in caller app</span></div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>Claimed / in-progress</span><span class="metric-icon blue">📞</span></div>
+    <strong>{{ claimed_count }}</strong>
+    <div class="metric-bottom">Locked to active callers</div>
+  </div>
+  <div class="metric">
+    <div class="metric-top"><span>No eligible caller</span><span class="metric-icon {% if no_caller_count > 0 %}amber{% endif %}">⚠</span></div>
+    <strong class="{% if no_caller_count > 0 %}accent{% endif %}">{{ no_caller_count }}</strong>
+    <div class="metric-bottom">
+      {% if no_caller_count > 0 %}
+      <span class="pill amber">Needs caller mapping</span>
+      {% else %}
+      <span class="muted">All services covered</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="tabs" style="margin-bottom: 20px;">
+  <a href="?tab=all{% if selected_service %}&amp;service={{ selected_service }}{% endif %}" {% if selected_tab == 'all' or not selected_tab %}aria-current="page"{% endif %}>
+    All Website Leads ({{ total_website_leads }})
+  </a>
+  <a href="?tab=available{% if selected_service %}&amp;service={{ selected_service }}{% endif %}" {% if selected_tab == 'available' %}aria-current="page"{% endif %}>
+    Available to Claim ({{ available_count }})
+  </a>
+  <a href="?tab=no_caller{% if selected_service %}&amp;service={{ selected_service }}{% endif %}" {% if selected_tab == 'no_caller' %}aria-current="page"{% endif %}>
+    No Eligible Caller {% if no_caller_count > 0 %}<span class="badge not_interested" style="margin-left: 6px;">{{ no_caller_count }}</span>{% endif %}
+  </a>
+  <a href="?tab=workload" {% if selected_tab == 'workload' %}aria-current="page"{% endif %}>
+    Caller Workload Summary
+  </a>
+</div>
+
+{% if selected_tab == 'no_caller' %}
+<div class="notice error" style="margin-bottom: 22px;">
+  <strong>Attention:</strong> These website leads cannot be claimed by callers because no active callers are currently assigned to their service.
+  <a href="{% url 'web:caller-services' %}" style="text-decoration: underline; font-weight: 700; margin-left: 8px;">
+    Assign eligible callers to these services now ↗
+  </a>
+</div>
+{% endif %}
+
+{% if selected_tab != 'workload' %}
+<section class="panel" style="margin-bottom: 20px;">
+  <form method="get" class="filters">
+    <input type="hidden" name="tab" value="{{ selected_tab }}">
+    <div class="search-field">
+      <span>⌕</span>
+      <input type="text" name="q" placeholder="Search name, phone, email, notes..." value="{{ search_query }}">
+    </div>
+
+    <div class="field">
+      <select name="service" onchange="this.form.submit()">
+        <option value="">All services</option>
+        {% for s in all_services %}
+        <option value="{{ s.code }}" {% if selected_service == s.code %}selected{% endif %}>{{ s.name }} ({{ s.code }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <select name="caller" onchange="this.form.submit()">
+        <option value="">All callers</option>
+        {% for c in all_callers %}
+        <option value="{{ c.pk }}" {% if selected_caller == c.pk|stringformat:'s' %}selected{% endif %}>{{ c|user_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        {% for code, label in all_statuses %}
+        <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field" style="display: flex; gap: 6px; align-items: center;">
+      <input type="date" name="date_from" value="{{ date_from }}" title="From date" style="padding: 7px 10px; font-size: 11px;">
+      <span class="muted">to</span>
+      <input type="date" name="date_to" value="{{ date_to }}" title="To date" style="padding: 7px 10px; font-size: 11px;">
+    </div>
+
+    <button class="button" type="submit">Filter</button>
+    {% if search_query or selected_service or selected_caller or selected_status or date_from or date_to %}
+    <a class="button" href="?tab={{ selected_tab }}">Clear</a>
+    {% endif %}
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Website leads routing</h2>
+      <p>Real-time queue state, eligible callers, and availability diagnostics.</p>
+    </div>
+    <span class="badge">Showing {{ records|length }} of {{ records.paginator.count }} leads</span>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Lead</th>
+          <th>Service</th>
+          <th>Source</th>
+          <th>Submitted</th>
+          <th>Lead status</th>
+          <th>Routing &amp; availability</th>
+          <th>Eligible callers</th>
+          <th>Claimed caller &amp; time</th>
+          <th>Latest call</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lead in records %}
+        <tr>
+          <td>
+            <strong>{{ lead.name }}</strong>
+            <small style="display: block; color: var(--muted); margin-top: 3px;">
+              {{ lead.phone }}{% if lead.email %} · {{ lead.email }}{% endif %}
+            </small>
+          </td>
+          <td>
+            {% if lead.service_type %}
+            <span class="pill violet"><strong>{{ lead.service_type.code }}</strong></span>
+            {% elif lead.service %}
+            <span class="pill">{{ lead.service }}</span>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <small>{{ lead.source|default:"Website" }}</small>
+            {% if lead.campaign %}
+            <small style="display: block; color: var(--muted);">{{ lead.campaign }}</small>
+            {% endif %}
+          </td>
+          <td>
+            <small>{{ lead.created_at|date:"d M H:i" }}</small>
+          </td>
+          <td>
+            <span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span>
+          </td>
+          <td>
+            {% with d=lead.diagnosis %}
+            <span class="{{ d.badge_class }}">
+              {{ d.reason_label }}
+            </span>
+            <small style="display: block; color: var(--muted); margin-top: 3px; font-size: 10px;">
+              {{ d.reason_detail }}
+            </small>
+            {% endwith %}
+          </td>
+          <td>
+            {% with d=lead.diagnosis %}
+            {% if d.eligible_count > 0 %}
+            <div style="font-size: 11px;">
+              {% for caller in d.eligible_callers %}
+              <span class="accent">{{ caller|user_name }}</span>{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="badge busy">No callers</span>
+            {% endif %}
+            {% endwith %}
+          </td>
+          <td>
+            {% with d=lead.diagnosis %}
+            {% if d.claimed_caller %}
+            <strong>{{ d.claimed_caller|user_name }}</strong>
+            {% if d.claim_time %}
+            <small style="display: block; color: var(--muted); font-size: 10px;">
+              {{ d.claim_time|date:"d M H:i" }}
+            </small>
+            {% endif %}
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+            {% endwith %}
+          </td>
+          <td>
+            {% with d=lead.diagnosis %}
+            {% if d.latest_call %}
+            <span class="badge {{ d.latest_call.outcome|lower }}">{{ d.latest_call.get_outcome_display }}</span>
+            <small style="display: block; color: var(--muted); font-size: 10px;">
+              {{ d.latest_call.started_at|date:"d M H:i" }}
+            </small>
+            {% else %}
+            <span class="muted">Not called</span>
+            {% endif %}
+            {% endwith %}
+          </td>
+          <td>
+            <a class="text-link" href="{% url 'web:lead-detail' lead.pk %}">View ↗</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10" class="empty">No leads found matching the selected routing criteria.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include 'web/pagination.html' %}
+</section>
+
+{% else %}
+<!-- Caller Workload View -->
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Caller workload &amp; queue capacity</h2>
+      <p>Live summary of available queues, claimed leads, follow-ups, and calls per caller.</p>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Team member</th>
+          <th>Designation</th>
+          <th>Status</th>
+          <th>Assigned services</th>
+          <th>Available queue</th>
+          <th>Claimed / active leads</th>
+          <th>Pending follow-ups</th>
+          <th>Completed calls</th>
+          <th>Leads by service</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in workloads %}
+        <tr>
+          <td>
+            <div class="person">
+              <span class="avatar subtle">{{ item.caller|user_name|first|upper }}</span>
+              <span>
+                <strong>{{ item.caller|user_name }}</strong>
+                <small>{{ item.caller.email|default:item.caller.username }}</small>
+              </span>
+            </div>
+          </td>
+          <td>
+            <span style="font-weight: 550;">{{ item.designation }}</span>
+          </td>
+          <td>
+            {% if item.is_active %}
+            <span class="badge interested">Active</span>
+            {% else %}
+            <span class="badge not_interested">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.assigned_services %}
+            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+              {% for s in item.assigned_services %}
+              <span class="pill violet">{{ s.code }}</span>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="badge busy">No services</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if item.is_active and item.available_leads_count > 0 %}
+            <strong class="accent">{{ item.available_leads_count }}</strong>
+            {% else %}
+            <span class="muted">0</span>
+            {% endif %}
+          </td>
+          <td>
+            <strong>{{ item.claimed_active_leads_count }}</strong>
+          </td>
+          <td>
+            {% if item.followups_count > 0 %}
+            <span class="badge call_back">{{ item.followups_count }}</span>
+            {% else %}
+            <span class="muted">0</span>
+            {% endif %}
+          </td>
+          <td>
+            <strong class="accent">{{ item.completed_calls_count }}</strong>
+          </td>
+          <td>
+            <small style="color: var(--muted);">
+              {% for s in item.service_breakdown %}
+              {{ s }}{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            </small>
+          </td>
+          <td>
+            <a class="button" href="{% url 'web:caller-service-edit' item.caller.pk %}">Configure</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10" class="empty">No callers registered.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
