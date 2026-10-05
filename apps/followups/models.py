@@ -29,6 +29,7 @@ class FollowUp(models.Model):
 
     scheduled_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True, editable=False)
+    alert_sent_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     status = models.CharField(
         max_length=20,
@@ -45,11 +46,29 @@ class FollowUp(models.Model):
 
     def save(self, *args, **kwargs):
         from django.utils import timezone
+        update_fields = kwargs.get("update_fields")
+        update_fields = set(update_fields) if update_fields is not None else None
         if self.status == self.Status.COMPLETED and not self.completed_at:
             self.completed_at = timezone.now()
-            if kwargs.get('update_fields') is not None:
-                kwargs['update_fields'] = set(kwargs['update_fields']) | {'completed_at'}
-        super().save(*args, **kwargs)
+            if update_fields is not None:
+                update_fields.add("completed_at")
+        if self.pk and self.status == self.Status.PENDING and self.alert_sent_at:
+            old_scheduled_at = (
+                FollowUp.objects.filter(pk=self.pk)
+                .values_list("scheduled_at", flat=True)
+                .first()
+            )
+            if (
+                old_scheduled_at is not None
+                and self.scheduled_at != old_scheduled_at
+                and self.scheduled_at > timezone.now()
+            ):
+                self.alert_sent_at = None
+                if update_fields is not None:
+                    update_fields.add("alert_sent_at")
+        if update_fields is not None:
+            kwargs["update_fields"] = update_fields
+        super().save(**kwargs)
 
     def __str__(self):
         return f"{self.lead.name if self.lead_id else self.phone_number} - {self.scheduled_at}"

@@ -3,6 +3,7 @@ from rest_framework import serializers
 from apps.calls.models import Call
 from apps.calls.phone import normalize_phone
 from apps.leads.models import Lead
+from apps.leads.courses import validate_course, BLOCKED_CONTACT_OUTCOMES
 
 
 class ResolvePhoneSerializer(serializers.Serializer):
@@ -16,6 +17,10 @@ class ResolvePhoneSerializer(serializers.Serializer):
 
 
 class CallSerializer(serializers.ModelSerializer):
+    outcome_points = serializers.IntegerField(read_only=True)
+    selected_course_label = serializers.CharField(read_only=True)
+    expected_admission_year = serializers.IntegerField(required=False, allow_null=True, min_value=1, max_value=9999)
+
     lead_name = serializers.CharField(source="lead.name", read_only=True, default=None)
     lead_phone = serializers.CharField(source="lead.phone", read_only=True, default=None)
     is_external = serializers.SerializerMethodField()
@@ -39,6 +44,9 @@ class CallSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "client_event_id",
+            "selected_course", "selected_course_custom", "expected_admission_year",
+            "course_classification", "selected_course_label", "outcome_points",
+            "whatsapp_message", "whatsapp_template",
             "lead",
             "phone_number",
             "is_external",
@@ -57,7 +65,7 @@ class CallSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-        read_only_fields = [
+        read_only_fields = ["course_classification", "outcome_points", "selected_course_label",
             "id",
             "caller",
             "caller_name",
@@ -107,15 +115,25 @@ class CallSerializer(serializers.ModelSerializer):
                 }
             )
 
-        if outcome != Call.Outcome.CALL_BACK and callback_at:
-            raise serializers.ValidationError(
-                {
-                    "callback_at": (
-                        "Callback date and time can only be "
-                        "provided for Call Back outcome."
-                    )
-                }
-            )
+        if outcome in BLOCKED_CONTACT_OUTCOMES:
+            if callback_at:
+                raise serializers.ValidationError({'callback_at': 'Follow-up is not allowed for this outcome.'})
+            if attrs.get('whatsapp_message') or attrs.get('whatsapp_template'):
+                raise serializers.ValidationError({'whatsapp_message': 'WhatsApp is not allowed for this outcome.'})
+        if outcome == Call.Outcome.INTERESTED and not (self.context.get('legacy_replay') and not attrs.get('selected_course')):
+            try:
+                attrs['selected_course'], attrs['selected_course_custom'] = validate_course(
+                    attrs.get('selected_course'), attrs.get('selected_course_custom', ''))
+            except ValueError as exc:
+                raise serializers.ValidationError({'selected_course': str(exc)})
+            if not attrs.get('expected_admission_year'):
+                raise serializers.ValidationError({'expected_admission_year': 'Enter a valid admission year (1-9999).'})
+        elif outcome != Call.Outcome.INTERESTED and (attrs.get('selected_course') or attrs.get('selected_course_custom') or attrs.get('expected_admission_year')):
+            raise serializers.ValidationError({'selected_course': 'Course and admission year are only allowed for Interested.'})
+        template = attrs.get('whatsapp_template')
+        request = self.context.get('request')
+        if template and (not template.is_active or (template.owner_id and (not request or template.owner_id != request.user.pk))):
+            raise serializers.ValidationError({'whatsapp_template': 'Template is not available.'})
 
         return attrs
 

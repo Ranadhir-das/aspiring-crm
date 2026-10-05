@@ -6,7 +6,7 @@ from .claim_views import (
     ReleaseWebsiteLeadClaimView,
 )
 from .whatsapp_views import (
-    WhatsAppTemplateListView,
+    WhatsAppTemplateListView, WhatsAppTemplateDetailView,
     WhatsAppInitiateView,
 )
 
@@ -20,6 +20,7 @@ from .mobile_views import (
 )
 
 urlpatterns = [
+    path("whatsapp/templates/<int:pk>/", WhatsAppTemplateDetailView.as_view(), name="whatsapp-template-detail"),
     path('leads/available/', AvailableWebsiteLeadsView.as_view(), name='mobile-available-leads'),
     path('leads/<int:id>/claim/', ClaimWebsiteLeadView.as_view(), name='mobile-claim-lead'),
     path('leads/<int:id>/call-started/', MarkWebsiteLeadCallStartedView.as_view(), name='mobile-mark-call-started'),

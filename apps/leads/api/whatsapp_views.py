@@ -1,3 +1,5 @@
+from django.db.models import Q
+from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.authentication import SessionAuthentication
@@ -9,7 +11,6 @@ from rest_framework.views import APIView
 from apps.accounts.api.authentication import VerifiedSessionAuthentication
 from apps.leads.models import Lead, WhatsAppTemplate
 from apps.leads.whatsapp_service import (
-    normalize_phone_for_whatsapp,
     record_whatsapp_initiated,
     user_can_access_lead,
 )
@@ -18,7 +19,8 @@ from apps.leads.whatsapp_service import (
 class WhatsAppTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = WhatsAppTemplate
-        fields = ['id', 'title', 'message']
+        fields = ['id', 'title', 'message', 'owner']
+        read_only_fields = ['id', 'owner']
 
 
 class WhatsAppTemplateListView(APIView):
@@ -26,8 +28,26 @@ class WhatsAppTemplateListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        templates = WhatsAppTemplate.objects.filter(is_active=True).order_by('title')
+        templates = WhatsAppTemplate.objects.filter(Q(owner=request.user) | Q(owner__isnull=True), is_active=True).order_by('title')
         return Response(WhatsAppTemplateSerializer(templates, many=True).data)
+
+    def post(self, request):
+        serializer = WhatsAppTemplateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(owner=request.user, created_by=request.user, updated_by=request.user)
+        return Response(serializer.data, status=201)
+
+
+class WhatsAppTemplateDetailView(RetrieveUpdateDestroyAPIView):
+    authentication_classes = (SessionAuthentication, VerifiedSessionAuthentication)
+    permission_classes = [IsAuthenticated]
+    serializer_class = WhatsAppTemplateSerializer
+
+    def get_queryset(self):
+        return WhatsAppTemplate.objects.filter(owner=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(updated_by=self.request.user)
 
 
 class WhatsAppInitiateSerializer(serializers.Serializer):
@@ -45,6 +65,9 @@ class WhatsAppInitiateView(APIView):
         if not user_can_access_lead(request.user, lead):
             raise PermissionDenied("You are not authorized to access this lead.")
 
+        from apps.leads.courses import BLOCKED_CONTACT_OUTCOMES
+        if lead.status in BLOCKED_CONTACT_OUTCOMES:
+            raise ValidationError({'detail': 'WhatsApp is not allowed for this outcome.'})
         serializer = WhatsAppInitiateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -52,7 +75,7 @@ class WhatsAppInitiateView(APIView):
         template = None
         if template_id:
             try:
-                template = WhatsAppTemplate.objects.get(pk=template_id, is_active=True)
+                template = WhatsAppTemplate.objects.filter(Q(owner=request.user) | Q(owner__isnull=True)).get(pk=template_id, is_active=True)
             except WhatsAppTemplate.DoesNotExist:
                 raise ValidationError({"template_id": "Invalid or inactive template."})
 

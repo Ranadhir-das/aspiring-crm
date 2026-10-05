@@ -5,6 +5,9 @@ from django.db import models
 class Notification(models.Model):
     class Type(models.TextChoices):
         LEAD_ASSIGNED = 'LEAD_ASSIGNED', 'Lead assigned'
+        TEAM_CHAT = 'TEAM_CHAT', 'Team chat message'
+        NOTICE = 'NOTICE', 'Notice published'
+        FOLLOWUP_DUE = 'FOLLOWUP_DUE', 'Follow-up due'
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                   related_name='notifications')

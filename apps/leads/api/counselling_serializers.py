@@ -1,4 +1,6 @@
+import re
 from rest_framework import serializers
+from apps.leads.utils import normalize_phone
 from django.utils import timezone
 from apps.leads.models import Counselling, Lead
 
@@ -19,6 +21,9 @@ class CounsellingItemSerializer(serializers.ModelSerializer):
             "lead_id",
             "lead_name",
             "lead_phone",
+            "visitor_name",
+            "visitor_phone",
+            "visitor_email",
             "caller_id",
             "caller_name",
             "counselling_type",
@@ -36,10 +41,10 @@ class CounsellingItemSerializer(serializers.ModelSerializer):
         return obj.lead_id
 
     def get_lead_name(self, obj):
-        return obj.lead.name if obj.lead else ""
+        return obj.lead.name if obj.lead else obj.visitor_name
 
     def get_lead_phone(self, obj):
-        return obj.lead.phone if obj.lead else ""
+        return obj.lead.phone if obj.lead else obj.visitor_phone
 
     def get_caller_id(self, obj):
         return obj.caller_id
@@ -56,7 +61,10 @@ class CounsellingItemSerializer(serializers.ModelSerializer):
 
 
 class CreateCounsellingSerializer(serializers.Serializer):
-    lead_id = serializers.IntegerField(required=True)
+    lead_id = serializers.IntegerField(required=False, min_value=1)
+    visitor_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    visitor_phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    visitor_email = serializers.EmailField(required=False, allow_blank=True)
     counselling_type = serializers.ChoiceField(
         choices=Counselling.CounsellingType.choices,
         default=Counselling.CounsellingType.WALK_IN,
@@ -66,3 +74,17 @@ class CreateCounsellingSerializer(serializers.Serializer):
     course = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
     conducted_at = serializers.DateTimeField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate(self, data):
+        if data.get('lead_id'):
+            if any(data.get(field) for field in ('visitor_name', 'visitor_phone', 'visitor_email')):
+                raise serializers.ValidationError('Select an existing lead OR enter a new visitor, not both.')
+        else:
+            if not data.get('visitor_name'):
+                raise serializers.ValidationError({'visitor_name': 'Enter the visitor name.'})
+            raw = data.get('visitor_phone', '')
+            phone = normalize_phone(raw)
+            if not re.fullmatch(r'\+?[0-9 ()\-.]+', raw) or not 7 <= len(phone) <= 15 or len(set(phone)) == 1:
+                raise serializers.ValidationError({'visitor_phone': 'Enter a valid phone number with 7 to 15 digits.'})
+            data['visitor_phone'] = phone
+        return data

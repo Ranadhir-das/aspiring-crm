@@ -83,7 +83,7 @@ class DirectDialerAndExternalCallTests(TestCase):
             'started_at': (now - timedelta(seconds=45)).isoformat(),
             'ended_at': now.isoformat(),
             'duration_seconds': 45,
-            'outcome': 'INTERESTED',
+            'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027,
             'notes': 'Spoke with student',
         }, format='json')
         self.assertEqual(response.status_code, 201)
@@ -139,7 +139,7 @@ class DirectDialerAndExternalCallTests(TestCase):
             'started_at': (now - timedelta(seconds=20)).isoformat(),
             'ended_at': now.isoformat(),
             'duration_seconds': 20,
-            'outcome': 'INTERESTED',
+            'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027,
         }, format='json')
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['lead'], self.lead1.pk)
@@ -152,7 +152,7 @@ class DirectDialerAndExternalCallTests(TestCase):
         response = self.api.post('/api/v1/calls/', {
             'phone_number': self.lead2.phone,
             'started_at': now.isoformat(),
-            'outcome': 'INTERESTED',
+            'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027,
         }, format='json')
         self.assertEqual(response.status_code, 403)
 
@@ -162,7 +162,7 @@ class DirectDialerAndExternalCallTests(TestCase):
         response = self.api.post('/api/v1/calls/', {
             'lead': self.lead2.pk,
             'started_at': now.isoformat(),
-            'outcome': 'INTERESTED',
+            'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027,
         }, format='json')
         self.assertEqual(response.status_code, 404)
 
@@ -173,7 +173,7 @@ class DirectDialerAndExternalCallTests(TestCase):
             res = self.api.post('/api/v1/calls/', {
                 'lead': self.lead1.pk,
                 'started_at': now.isoformat(),
-                'outcome': 'INTERESTED',
+                'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027,
             }, format='json')
             self.assertEqual(res.status_code, 201)
 

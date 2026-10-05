@@ -6,7 +6,7 @@ from apps.leads.models import Lead, Admission, Counselling
 from apps.web.models import AuditEvent
 from .models import LeadMilestone, PointsAdjustment, PointsEntry
 from .services import (
-    award,
+    award, WEIGHTS,
     score_call,
     score_counselling,
     score_admission,
@@ -52,7 +52,7 @@ def admission_points(sender, instance, created, raw=False, **kwargs):
 @receiver(post_save, sender=LeadMilestone)
 def milestone_points(sender, instance, created, raw=False, **kwargs):
     if created and not raw:
-        pts = 100 if instance.event in {'ADMISSION', 'VERIFIED_ADMISSION'} else 5 if instance.event in {'COUNSELLING', 'COUNSELLING_COMPLETED'} else -5 if instance.event == 'FALSE_STATUS' else 0
+        pts = WEIGHTS.get(instance.event, 0)
         award(
             caller_id=instance.caller_id,
             event=instance.event,

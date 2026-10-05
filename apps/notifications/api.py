@@ -35,9 +35,18 @@ class NotificationListView(OwnedNotifications, ListAPIView):
     serializer_class = NotificationSerializer
     pagination_class = NotificationPagination
 
+    def get_queryset(self):
+        if getattr(self.request.user, 'role', None) == 'CALLER':
+            from apps.followups.notifications import check_and_notify_due_followups
+            check_and_notify_due_followups(caller=self.request.user)
+        return super().get_queryset()
+
 
 class UnreadCountView(OwnedNotifications, APIView):
     def get(self, request):
+        if getattr(request.user, 'role', None) == 'CALLER':
+            from apps.followups.notifications import check_and_notify_due_followups
+            check_and_notify_due_followups(caller=request.user)
         return Response({'unread_count': self.get_queryset().filter(is_read=False).count()})
 
 

@@ -42,6 +42,8 @@ class WebsiteOutcomeTests(TestCase):
         data = {'lead': (lead or self.lead).pk, 'client_event_id': str(uuid4()),
                 'started_at': now.isoformat(), 'ended_at': now.isoformat(),
                 'duration_seconds': 0, 'outcome': outcome, 'notes': 'Call notes'}
+        if outcome == 'INTERESTED':
+            data.update(selected_course='MBBS', expected_admission_year=2027)
         if outcome == 'CALL_BACK':
             data['callback_at'] = (now + timedelta(hours=2)).isoformat()
         return data

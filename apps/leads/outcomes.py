@@ -10,7 +10,7 @@ from .models import LeadAvailability, LeadAssignmentHistory
 logger = logging.getLogger('apps.leads')
 
 
-def apply_website_outcome(lead, call):
+def apply_website_outcome(lead, call, *, callback_at=None):
     """Called inside CallCreateView's transaction with its Lead row locked.
 
     The assignment timestamp distinguishes the current explicit website claim
@@ -35,7 +35,7 @@ def apply_website_outcome(lead, call):
         'BUSY': settings.WEBSITE_LEAD_BUSY_RETRY_SECONDS,
         'NO_ANSWER': settings.WEBSITE_LEAD_NO_ANSWER_RETRY_SECONDS,
     }.get(call.outcome)
-    if delay is None:
+    if delay is None or callback_at is not None:
         # INTERESTED, NOT_INTERESTED, WRONG_NUMBER and CALL_BACK retain ownership.
         # Other legacy outcomes retain it too; no additional routing policy inferred.
         logger.info(

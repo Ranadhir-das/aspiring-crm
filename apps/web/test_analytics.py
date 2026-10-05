@@ -218,7 +218,7 @@ class AnalyticsDashboardTests(TestCase):
 
         alice_row = next((r for r in scoreboard if r['username'] == 'caller_alice'), None)
         self.assertIsNotNone(alice_row)
-        self.assertEqual(alice_row['performance_points'], 135)
+        self.assertEqual(alice_row['performance_points'], 600)
         self.assertEqual(alice_row['peer_appreciation_score'], 9.0)
         self.assertEqual(alice_row['peer_appreciation_count'], 1)
 

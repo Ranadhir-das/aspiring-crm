@@ -73,6 +73,8 @@ def metrics(caller, window):
     stats = calls.aggregate(calls=Count('pk'), connected_calls=Count('pk', filter=connected_q()), talk_time=Sum('duration_seconds', filter=connected_q()), avg_duration=Avg('duration_seconds', filter=connected_q()))
     stats = {key: round(value or 0) for key, value in stats.items()}
     stats.update(point_totals(entries))
+    stats['own_course_conversions'] = calls.filter(outcome='INTERESTED', course_classification='OWN').values('lead_id').distinct().count()
+    stats['other_course_conversions'] = calls.filter(outcome='INTERESTED', course_classification='OTHER').values('lead_id').distinct().count()
     stats['lifetime_points'] = PointsEntry.objects.filter(caller=caller).aggregate(n=Sum('points'))['n'] or 0
     stats.update(calendar_points(PointsEntry.objects.filter(caller=caller)))
     events = dict(entries.order_by().values('event').annotate(n=Count('pk')).values_list('event', 'n'))

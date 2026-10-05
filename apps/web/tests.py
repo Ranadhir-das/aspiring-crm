@@ -74,10 +74,10 @@ class WorkspaceTests(TestCase):
         self.client.force_login(self.manager)
         content = b'name,phone\nNew student,9876543299\nDuplicate,9876543210\n'
         before = Lead.objects.count()
-        response = self.client.post('/leads/import/', {'action': 'preview', 'file': SimpleUploadedFile('leads.csv', content)})
+        response = self.client.post('/leads/import/', {'action': 'preview', 'preferred_course': 'BTECH', 'file': SimpleUploadedFile('leads.csv', content)})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Lead.objects.count(), before)
-        self.client.post('/leads/import/', {'action': 'import', 'file': SimpleUploadedFile('leads.csv', content)})
+        self.client.post('/leads/import/', {'action': 'import', 'preferred_course': 'BTECH', 'file': SimpleUploadedFile('leads.csv', content)})
         self.assertEqual(Lead.objects.count(), before + 1)
 
     def test_csrf_is_required_for_writes(self):

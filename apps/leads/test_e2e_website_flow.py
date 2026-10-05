@@ -154,7 +154,7 @@ class WebsiteLeadLifecycleE2ETests(TestCase):
             'started_at': timezone.now().isoformat(),
             'ended_at': timezone.now().isoformat(),
             'duration_seconds': 45,
-            'outcome': 'INTERESTED',
+            'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027,
             'notes': 'Caller 2 trying to intrude',
         }
         call_forbidden = self.api.post(self.calls_url, call_payload, format='json')
@@ -476,7 +476,7 @@ class WebsiteLeadLifecycleE2ETests(TestCase):
             self.api.post(self.calls_url, {
                 'lead': lead_id,
                 'started_at': timezone.now().isoformat(),
-                'outcome': 'INTERESTED',
+                'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027,
             }, format='json')
 
         all_logs = '\n'.join(cm.output)
@@ -522,7 +522,7 @@ class WebsiteLeadLifecycleE2ETests(TestCase):
         call_res = self.api.post(self.calls_url, {
             'lead': batch_lead.pk,
             'started_at': timezone.now().isoformat(),
-            'outcome': 'INTERESTED',
+            'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027,
         }, format='json')
         self.assertEqual(call_res.status_code, 201)
 

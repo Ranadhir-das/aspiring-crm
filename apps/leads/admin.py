@@ -330,6 +330,8 @@ class AdmissionAdmin(admin.ModelAdmin):
 class CounsellingAdmin(admin.ModelAdmin):
     list_display = (
         "lead",
+        "visitor_name",
+        "visitor_phone",
         "counselling_type",
         "caller",
         "college",
@@ -352,6 +354,9 @@ class CounsellingAdmin(admin.ModelAdmin):
         "notes",
     )
     readonly_fields = ("created_at", "updated_at")
+
+    def get_search_fields(self, request):
+        return (*super().get_search_fields(request), 'visitor_name', 'visitor_phone', 'visitor_email')
 
 
 @admin.register(WhatsAppTemplate)

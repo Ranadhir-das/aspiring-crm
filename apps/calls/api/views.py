@@ -26,7 +26,18 @@ class CallCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
-        serializer = CallSerializer(data=request.data, context={"request": request})
+        # Old saved requests must remain replayable after the new required fields ship.
+        # The fingerprint below still rejects changes; this exemption cannot create a new call.
+        from uuid import UUID
+        legacy_replay = False
+        try:
+            event_id = UUID(str(request.data.get('client_event_id')))
+        except (ValueError, TypeError, AttributeError):
+            event_id = None
+        if event_id:
+            legacy_replay = Call.objects.filter(caller=request.user, client_event_id=event_id,
+                                                selected_course__isnull=True).exists()
+        serializer = CallSerializer(data=request.data, context={"request": request, "legacy_replay": legacy_replay})
 
         if not serializer.is_valid():
             return Response(
@@ -41,6 +52,11 @@ class CallCreateView(APIView):
         canonical = {key: str(data.get(key) or '') for key in
                      ['lead', 'phone_number', 'started_at', 'ended_at', 'duration_seconds', 'outcome', 'notes', 'callback_at']}
         canonical['lead'] = data['lead'].pk if data.get('lead') else None
+        # Keep legacy fingerprints identical when new optional fields are absent.
+        for field in ('selected_course', 'selected_course_custom', 'expected_admission_year', 'whatsapp_message', 'whatsapp_template'):
+            if data.get(field):
+                value = data[field]
+                canonical[field] = str(value.pk if field == 'whatsapp_template' else value)
         fingerprint = hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
         if event_id:
             existing = Call.objects.filter(caller=request.user, client_event_id=event_id).first()
@@ -49,7 +65,7 @@ class CallCreateView(APIView):
                     same = existing.submission_fingerprint == fingerprint
                 else:
                     same = all(getattr(existing, field) == data[field] for field in
-                               ['lead', 'phone_number', 'started_at', 'ended_at', 'duration_seconds', 'outcome', 'notes'] if field in data)
+                               ['lead', 'phone_number', 'started_at', 'ended_at', 'duration_seconds', 'outcome', 'notes', 'selected_course', 'selected_course_custom', 'expected_admission_year', 'whatsapp_message', 'whatsapp_template'] if field in data)
                 if not same:
                     return Response({'detail': 'This client_event_id was already used with different call data.'}, status=409)
                 return Response(CallSerializer(existing).data, status=200)
@@ -57,6 +73,9 @@ class CallCreateView(APIView):
             existing = Call.objects.filter(caller=request.user, submission_fingerprint=fingerprint).first()
             if existing:
                 return Response(CallSerializer(existing).data, status=status.HTTP_200_OK)
+
+        if legacy_replay and data.get('outcome') == 'INTERESTED' and not data.get('selected_course'):
+            return Response({'selected_course': 'Course is required for a new Interested outcome.'}, status=400)
 
         lead = data.get('lead')
         if lead:
@@ -101,7 +120,9 @@ class CallCreateView(APIView):
             )
 
         # Create the Call
-        call = serializer.save(
+        from apps.leads.courses import classify_course
+        classification = classify_course(lead, data.get('selected_course'), data.get('selected_course_custom', '')) if outcome == 'INTERESTED' else ''
+        call = serializer.save(course_classification=classification,
             caller=request.user, lead=lead, phone_number=phone, submission_fingerprint=fingerprint
         )
         logger.info(
@@ -140,10 +161,10 @@ class CallCreateView(APIView):
                 ]
             )
 
-        apply_website_outcome(lead, call)
+        apply_website_outcome(lead, call, callback_at=callback_at)
 
         # If Call Back → create FollowUp
-        if call.outcome == Call.Outcome.CALL_BACK:
+        if callback_at:
             FollowUp.objects.create(
                 lead=lead,
                 caller=(lead.assigned_caller if lead else None) or request.user,

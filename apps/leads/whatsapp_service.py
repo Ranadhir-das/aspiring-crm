@@ -69,6 +69,14 @@ def build_whatsapp_urls(phone: str, text: str) -> dict:
     }
 
 
+def render_template(message, *, student_name='', course='', year='', caller_name='', phone='', service=''):
+    values = dict(student_name=student_name, name=student_name, course=course,
+                  year=str(year or ''), caller_name=caller_name, phone=phone, service=str(service or ''))
+    # Replace only known tokens, never evaluate user-authored formatting expressions.
+    return re.sub(r'\{\{\s*(\w+)\s*\}\}|\{(\w+)\}',
+                  lambda match: values.get(match.group(1) or match.group(2), match.group(0)), message)
+
+
 def record_whatsapp_initiated(
     lead: Lead,
     user,
@@ -88,16 +96,17 @@ def record_whatsapp_initiated(
     template_name = "Custom"
 
     if template:
+        if template.owner_id and template.owner_id != user.pk:
+            raise PermissionDenied("This template belongs to another user.")
         if not template.is_active:
             raise ValidationError("Selected template is inactive.")
         template_name = template.title
         if not message_body:
             # Interpolate placeholders safely
-            message_body = template.message.format(
-                name=lead.name or "there",
-                phone=lead.phone or "",
-                service=lead.service or "",
-            )
+            message_body = render_template(template.message, student_name=lead.name or 'there',
+                phone=lead.phone, service=lead.service,
+                caller_name=user.get_full_name() or user.username)
+
 
     normalized_phone = normalize_phone_for_whatsapp(lead.phone)
     urls = build_whatsapp_urls(lead.phone, message_body)

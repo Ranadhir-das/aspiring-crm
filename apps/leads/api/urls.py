@@ -24,11 +24,12 @@ from .website_source_views import (
 )
 
 from .whatsapp_views import (
-    WhatsAppTemplateListView,
+    WhatsAppTemplateListView, WhatsAppTemplateDetailView,
     WhatsAppInitiateView,
 )
 
 urlpatterns = [
+    path("whatsapp/templates/<int:pk>/", WhatsAppTemplateDetailView.as_view(), name="whatsapp-template-detail"),
     path("whatsapp/templates/", WhatsAppTemplateListView.as_view(), name="lead-whatsapp-templates"),
     path("<int:lead_id>/whatsapp/initiate/", WhatsAppInitiateView.as_view(), name="lead-whatsapp-initiate"),
     path("website-sources/", WebsiteSourceListCreateView.as_view(), name="admin-website-source-list-create"),

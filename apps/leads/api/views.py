@@ -42,6 +42,7 @@ class LeadImportPreviewView(APIView):
 
         try:
             result = preview_import(file)
+            result.update({k: serializer.validated_data[k] for k in ("preferred_course", "preferred_course_custom")})
 
             return Response(
                 result,
@@ -72,6 +73,8 @@ class LeadImportCommitView(APIView):
             result = commit_import(
                 file=file,
                 imported_by=request.user,
+                preferred_course=serializer.validated_data["preferred_course"],
+                preferred_course_custom=serializer.validated_data["preferred_course_custom"],
             )
 
             return Response(

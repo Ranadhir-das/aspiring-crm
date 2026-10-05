@@ -210,7 +210,7 @@ def lead_detail(request, pk):
     from apps.activity.models import ActivityLog
     from apps.leads.models import WhatsAppTemplate
     website_submissions = list(lead.website_submissions.select_related('website_source', 'service_type').order_by('-submitted_at')[:20])
-    whatsapp_templates = list(WhatsAppTemplate.objects.filter(is_active=True).order_by('title'))
+    whatsapp_templates = list(WhatsAppTemplate.objects.filter(Q(owner__isnull=True) | Q(owner=request.user), is_active=True).order_by('title'))
     return page(request, 'lead_detail', 'leads', lead=lead, form=form, follow_form=follow_form,
                 history=visible_calls(request.user).filter(lead=lead).order_by('-started_at')[:30],
                 followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20],
@@ -245,13 +245,15 @@ def lead_import(request):
         try:
             upload = form.cleaned_data['file']
             if request.POST.get('action') == 'import':
-                result = commit_import(upload, request.user, assigned_caller=form.cleaned_data['caller'])
+                result = commit_import(upload, request.user, assigned_caller=form.cleaned_data['caller'], preferred_course=form.cleaned_data['preferred_course'], preferred_course_custom=form.cleaned_data['preferred_course_custom'])
                 if form.cleaned_data['caller']:
                     messages.success(request, f"Assigned {result['created_count']} new leads to {form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username}.")
                 messages.success(request, f"Imported {result['created_count']} leads; {result['duplicate_count']} duplicates and {result['skipped_count']} invalid rows skipped.")
                 from django.urls import reverse
                 return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
             preview = preview_import(upload)
+            from apps.leads.courses import course_label
+            preview['course_label'] = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
         except (ValueError, UnicodeError, BadZipFile):
             form.add_error('file', 'This file could not be read. Check its format and required name/phone columns.')
     return page(request, 'import', 'import', form=form, preview=preview,

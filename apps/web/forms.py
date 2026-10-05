@@ -48,7 +48,23 @@ class FollowUpForm(forms.Form):
         return value
 
 
+from apps.leads.courses import Course, validate_course
+
+
 class ImportForm(forms.Form):
+    preferred_course = forms.ChoiceField(choices=[('', 'Select a course'), *Course.choices], widget=forms.RadioSelect)
+    preferred_course_custom = forms.CharField(max_length=150, required=False, label='Enter Course Name (Others)')
+
+    def clean(self):
+        data = super().clean()
+        if data.get('preferred_course'):
+            try:
+                data['preferred_course'], data['preferred_course_custom'] = validate_course(
+                    data['preferred_course'], data.get('preferred_course_custom'))
+            except ValueError as exc:
+                self.add_error('preferred_course_custom', str(exc))
+        return data
+
     caller = forms.ModelChoiceField(
         queryset=User.objects.filter(role=User.Role.CALLER, is_active=True),
         required=False, label='Assign imported leads to',

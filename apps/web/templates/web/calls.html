@@ -72,7 +72,7 @@
           <th>Lead</th>
           <th>Caller</th>
           <th>Outcome</th>
-          <th>Started</th>
+          <th>Course / Admission</th><th>Started</th>
           <th>Duration</th>
           <th>Notes</th>
           <th>Recording</th>
@@ -82,7 +82,7 @@
         {% for call in records %}
         {% ifchanged call.lead.import_batch_id %}
         <tr class="batch-heading">
-          <th colspan="7">{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }} <small>• Batch {% if call.lead.import_batch_id %}#{{ call.lead.import_batch_id }}{% else %}—{% endif %}</small></th>
+          <th colspan="8">{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }} <small>• Batch {% if call.lead.import_batch_id %}#{{ call.lead.import_batch_id }}{% else %}—{% endif %}</small></th>
         </tr>
         {% endifchanged %}
         <tr>
@@ -114,6 +114,7 @@
             <span class="badge">Recorded</span>
             {% endif %}
           </td>
+          <td>{% include "web/call_course.html" %}</td>
           <td>{{ call.started_at|date:'d M, H:i' }}</td>
           <td>{{ call.duration_seconds }}s</td>
           <td class="notes-cell">{{ call.notes|default:'—' }}</td>
@@ -121,7 +122,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="empty">
+          <td colspan="8" class="empty">
             <strong>No matching calls found</strong>
             <p>Try another search or clear your filters.</p>
           </td>

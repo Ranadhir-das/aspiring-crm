@@ -33,7 +33,7 @@ class PerformanceProfileTests(TestCase):
         self.assertEqual(sum(p['count'] for p in response.context['profile_chart']['trend']), 1)
         self.assertContains(response, 'September.csv')
         self.assertContains(response, 'Batch lead')
-        self.assertEqual(response.context['stats']['total_points'], 1)
+        self.assertEqual(response.context['stats']['total_points'], 0)
         self.assertContains(response, 'Points ledger')
         self.assertContains(response, '<h2>Activity</h2>', html=True)
 

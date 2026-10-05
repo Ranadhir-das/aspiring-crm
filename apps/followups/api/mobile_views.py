@@ -14,6 +14,10 @@ class MobileFollowUpListView(ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
+        if user.role == User.Role.CALLER:
+            from apps.followups.notifications import check_and_notify_due_followups
+            check_and_notify_due_followups(caller=user)
+
         queryset = (
             FollowUp.objects
             .select_related("lead", "caller")

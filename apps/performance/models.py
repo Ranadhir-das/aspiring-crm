@@ -8,6 +8,9 @@ from django.utils import timezone
 
 
 class PointsEntry(models.Model):
+    # NULL denotes pre-policy ledger entries, which reconciliation must not rewrite.
+    rules_version = models.PositiveSmallIntegerField(null=True, blank=True, editable=False)
+
     class Event(models.TextChoices):
         # Authoritative performance point event types
         CALL_DAILY_BONUS = 'CALL_DAILY_BONUS', 'Daily call bonus'
@@ -102,10 +105,12 @@ class LeadMilestone(models.Model):
 
 class PointsAdjustment(models.Model):
     class AdjustmentReason(models.TextChoices):
-        UNPLANNED_LEAVE = 'UNPLANNED_LEAVE', 'Unplanned leave (-50)'
+        UNPLANNED_LEAVE = 'UNPLANNED_LEAVE', 'Unplanned leave (-100 per day)'
         MORE_THAN_ONE_CONSECUTIVE_HOLIDAY = 'MORE_THAN_ONE_CONSECUTIVE_HOLIDAY', 'More than one consecutive holiday (-2 per holiday)'
         MORE_THAN_THREE_HOLIDAYS_IN_MONTH = 'MORE_THAN_THREE_HOLIDAYS_IN_MONTH', 'More than three holidays in month (-2 per additional holiday)'
-        INDISCIPLINE_WORKPLACE_CONDUCT = 'INDISCIPLINE_WORKPLACE_CONDUCT', 'Indiscipline / workplace conduct (-5 per incident)'
+        INDISCIPLINE_WORKPLACE_CONDUCT = 'INDISCIPLINE_WORKPLACE_CONDUCT', 'Code of conduct / CRM misreporting (-50 per incident)'
+        CONSECUTIVE_UNAPPROVED_LEAVE = 'CONSECUTIVE_UNAPPROVED_LEAVE', 'Consecutive unapproved leave (>2 days, -50 per day)'
+        MANAGEMENT_BONUS = 'MANAGEMENT_BONUS', 'Management spot / Expo bonus (+50 to +200)'
         OTHER = 'OTHER', 'Other (custom reason & points)'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

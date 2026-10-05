@@ -34,7 +34,7 @@ class CallerDataTests(TestCase):
 
     def test_import_assigns_new_only_with_audit_and_mobile_visibility(self):
         self.client.force_login(self.admin)
-        response = self.client.post('/leads/import/', {'file': self.upload(), 'action': 'import', 'caller': self.a.pk})
+        response = self.client.post('/leads/import/', {'file': self.upload(), 'action': 'import', 'preferred_course': 'BTECH', 'caller': self.a.pk})
         self.assertEqual(response.status_code, 302)
         new = Lead.objects.get(phone='9876543211')
         self.assertEqual(new.assigned_caller_id, self.a.pk)
@@ -50,9 +50,9 @@ class CallerDataTests(TestCase):
         self.b.is_active = False
         self.b.save()
         for assignee in [self.b, self.admin]:
-            response = self.client.post('/leads/import/', {'file': self.upload(), 'action': 'import', 'caller': assignee.pk})
+            response = self.client.post('/leads/import/', {'file': self.upload(), 'action': 'import', 'preferred_course': 'BTECH', 'caller': assignee.pk})
             self.assertIn('caller', response.context['form'].errors)
-        self.client.post('/leads/import/', {'file': self.upload(), 'action': 'preview', 'caller': self.a.pk})
+        self.client.post('/leads/import/', {'file': self.upload(), 'action': 'preview', 'preferred_course': 'BTECH', 'caller': self.a.pk})
         self.assertFalse(Lead.objects.filter(phone='9876543211').exists())
         self.client.force_login(self.a)
-        self.assertEqual(self.client.post('/leads/import/', {'file': self.upload(), 'action': 'import', 'caller': self.a.pk}).status_code, 403)
+        self.assertEqual(self.client.post('/leads/import/', {'file': self.upload(), 'action': 'import', 'preferred_course': 'BTECH', 'caller': self.a.pk}).status_code, 403)

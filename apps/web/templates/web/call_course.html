@@ -1,0 +1,1 @@
+{% if call.selected_course %}<div><span class="badge">{{ call.selected_course_label }}</span><p>Admission: {{ call.expected_admission_year }}<br>{{ call.get_course_classification_display|default:'Preferred course unknown' }}<br>{{ call.outcome_points }} outcome points</p></div>{% else %}<span class="muted">Not recorded</span>{% endif %}

@@ -1,7 +1,21 @@
 from rest_framework import serializers
 
 
+from apps.leads.courses import Course, validate_course
+
+
 class LeadImportSerializer(serializers.Serializer):
+    preferred_course = serializers.ChoiceField(choices=Course.choices)
+    preferred_course_custom = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
+
+    def validate(self, attrs):
+        try:
+            attrs['preferred_course'], attrs['preferred_course_custom'] = validate_course(
+                attrs.get('preferred_course'), attrs.get('preferred_course_custom'))
+        except ValueError as exc:
+            raise serializers.ValidationError({'preferred_course_custom': str(exc)})
+        return attrs
+
     file = serializers.FileField()
 
     def validate_file(self, value):
@@ -84,6 +98,7 @@ class LeadSerializer(serializers.ModelSerializer):
             "neet_status",
             "pcb_percentage",
             "preferred_intake",
+            "preferred_course", "preferred_course_custom",
             "source",
             "campaign",
             "status",

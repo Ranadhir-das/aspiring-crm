@@ -375,12 +375,16 @@ def preview_import(file):
     }
 
 
-def commit_import(file, imported_by, assigned_caller=None):
+def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=None, preferred_course_custom=""):
     """
     Import valid, non-duplicate leads into the database.
 
     Returns a summary of the import.
     """
+
+    from .courses import validate_course
+    preferred_course, preferred_course_custom = validate_course(
+        preferred_course, preferred_course_custom, required=False)
 
     headers, rows = read_import_file(file)
 
@@ -448,6 +452,8 @@ def commit_import(file, imported_by, assigned_caller=None):
 
             lead = Lead(
                 import_batch=batch,
+                preferred_course=preferred_course,
+                preferred_course_custom=preferred_course_custom,
                 name=str(
                     row.get("name", "")
                 ).strip(),

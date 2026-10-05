@@ -28,6 +28,8 @@ class ExternalCallTests(TestCase):
                     started_at=(now - timedelta(seconds=75)).isoformat(),
                     ended_at=now.isoformat(), duration_seconds=75, outcome='INTERESTED', notes='Direct feedback')
         data.update(changes)
+        if data['outcome'] == 'INTERESTED':
+            data.update(selected_course='MBBS', expected_admission_year=2027)
         return data
 
     def post(self, data):
@@ -101,6 +103,7 @@ class ExternalCallTests(TestCase):
         self.assertEqual(followup.caller_id, self.caller.pk)
         followup.status = FollowUp.Status.COMPLETED
         followup.save()
+        count += 1  # First on-time completion earns its own +2 ledger entry.
         replay = self.post(data)
         self.assertEqual(replay.status_code, 200, replay.data)
         self.assertEqual(replay.data['id'], first.data['id'])
@@ -112,7 +115,7 @@ class ExternalCallTests(TestCase):
 
     def test_callback_validation_and_zero_duration(self):
         self.assertEqual(self.post(self.payload(outcome='CALL_BACK')).status_code, 400)
-        self.assertEqual(self.post(self.payload(callback_at=timezone.now().isoformat())).status_code, 400)
+        self.assertEqual(self.post(self.payload(outcome="NOT_INTERESTED", callback_at=timezone.now().isoformat())).status_code, 400)
         for outcome in ['NO_ANSWER', 'BUSY', 'DISCONNECTED']:
             data = self.payload(outcome=outcome, duration_seconds=0)
             data['ended_at'] = data['started_at']

@@ -1,4 +1,5 @@
 import os
+from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
@@ -45,6 +46,7 @@ class MobileChatMessageView(MobileChatView):
         page.reverse()
         return Response([m.as_payload() for m in page])
 
+    @transaction.atomic
     def post(self, request, channel_id):
         channel = self._channel(request, channel_id)
         text = (request.data.get('text') or '').strip()

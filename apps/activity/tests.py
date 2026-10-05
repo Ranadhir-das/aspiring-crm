@@ -62,7 +62,7 @@ class ActivityLogTests(TestCase):
         ActivityLog.objects.filter(lead=lead).delete()
         self.api.force_authenticate(self.caller)
         response = self.api.post('/api/v1/calls/', {
-            'lead': lead.pk, 'started_at': timezone.now().isoformat(), 'outcome': 'INTERESTED', 'notes': 'Good chat',
+            'lead': lead.pk, 'started_at': timezone.now().isoformat(), 'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027, 'notes': 'Good chat',
         })
         self.assertEqual(response.status_code, 201, response.data)
         call_entry = ActivityLog.objects.get(lead=lead, verb=ActivityLog.Verb.CALL_LOGGED)

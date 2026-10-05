@@ -1,4 +1,5 @@
 import os
+from django.db import transaction
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse, Http404
@@ -24,6 +25,7 @@ def notices(request):
 
 @require_POST
 @workspace(management=True)
+@transaction.atomic
 def notice_new(request):
     if request.user.role not in ADMIN_ROLES:
         raise PermissionDenied

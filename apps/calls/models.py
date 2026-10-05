@@ -4,6 +4,25 @@ from .recording_storage import recording_storage
 
 
 class Call(models.Model):
+    from apps.leads.courses import Course
+    whatsapp_message = models.TextField(blank=True, max_length=4000)
+    whatsapp_template = models.ForeignKey('leads.WhatsAppTemplate', null=True, blank=True,
+                                         on_delete=models.SET_NULL, related_name='outcome_calls')
+    selected_course = models.CharField(max_length=20, choices=Course.choices, null=True, blank=True)
+    selected_course_custom = models.CharField(max_length=150, blank=True)
+    expected_admission_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    course_classification = models.CharField(max_length=7, blank=True, editable=False,
+        choices=[('OWN', 'Own course'), ('OTHER', 'Other course'), ('UNKNOWN', 'Unknown preferred course')])
+
+    @property
+    def selected_course_label(self):
+        from apps.leads.courses import course_label
+        return course_label(self.selected_course, self.selected_course_custom)
+
+    @property
+    def outcome_points(self):
+        return sum(self.points_entries.filter(event__in=['INTERESTED_LEAD', 'INTERESTED']).values_list('points', flat=True))
+
     client_event_id = models.UUIDField(null=True, blank=True, help_text="Optional idempotency key supplied by the caller app.")
 
     class Meta:

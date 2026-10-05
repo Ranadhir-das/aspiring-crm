@@ -1,7 +1,7 @@
 {% extends 'web/base.html' %}{% load web_tags %}
 {% block title %}{{ caller|user_name }} · Caller Profile{% endblock %}
 {% block breadcrumb %}Caller Activity{% endblock %}
-{% block content %}
+{% block content %}<section class="panel form-panel spaced"><h2>Course conversions</h2><p>Own course: <strong>{{ stats.own_course_conversions|default:0 }}</strong> &middot; Other course: <strong>{{ stats.other_course_conversions|default:0 }}</strong></p><p class="muted">New qualified outcomes earn 15 own-course or 30 other-course points once per lead. Historical ledger values are preserved.</p></section>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:16px;flex-wrap:wrap">
   <a class="button" href="{% url 'web:performance' %}" style="gap:6px">← Back to Performance</a>
   <a class="button primary" href="{% url 'web:leads' %}?owner={{ caller.pk }}">View Assigned Leads ↗</a>

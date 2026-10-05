@@ -397,7 +397,7 @@ class ConcurrentClaimTests(TransactionTestCase):
             api = APIClient()
             api.force_authenticate(self.a)
             return api.post('/api/v1/calls/', {'lead': self.lead.pk,
-                'started_at': timezone.now().isoformat(), 'duration_seconds': 0, 'outcome': 'INTERESTED'},
+                'started_at': timezone.now().isoformat(), 'duration_seconds': 0, 'outcome': 'INTERESTED', 'selected_course': 'MBBS', 'expected_admission_year': 2027},
                 format='json').status_code
         results = self.race([lambda: self.claim(self.a), call])
         self.assertEqual(results[0], 200)

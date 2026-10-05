@@ -13,7 +13,7 @@ class AdjustmentForm(forms.Form):
         required=False
     )
     reason_type = forms.ChoiceField(
-        choices=PointsAdjustment.AdjustmentReason.choices,
+        choices=[item for item in PointsAdjustment.AdjustmentReason.choices if not item[0].startswith('MORE_THAN_')],
         label='Reason',
         initial=PointsAdjustment.AdjustmentReason.UNPLANNED_LEAVE
     )
@@ -27,7 +27,7 @@ class AdjustmentForm(forms.Form):
         min_value=-10000,
         max_value=10000,
         required=False,
-        label='Points (for Other)'
+        label='Points (Other / Management bonus)'
     )
     reason = forms.CharField(
         max_length=2000,

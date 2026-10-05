@@ -122,6 +122,15 @@ class WebsiteSource(models.Model):
 
 
 class Lead(models.Model):
+    from .courses import Course
+    preferred_course = models.CharField(max_length=20, choices=Course.choices, null=True, blank=True)
+    preferred_course_custom = models.CharField(max_length=150, blank=True)
+
+    @property
+    def preferred_course_label(self):
+        from .courses import course_label
+        return course_label(self.preferred_course, self.preferred_course_custom)
+
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
@@ -469,12 +478,18 @@ class Counselling(models.Model):
     class CounsellingType(models.TextChoices):
         WALK_IN = "WALK_IN", "Walk-in Counselling"
         ONLINE = "ONLINE", "Online / Phone Counselling"
+        GOOGLE_MEET = "GOOGLE_MEET", "Google Meet Counselling"
 
     lead = models.ForeignKey(
         Lead,
         on_delete=models.CASCADE,
         related_name="counsellings",
+        null=True,
+        blank=True,
     )
+    visitor_name = models.CharField(max_length=200, blank=True)
+    visitor_phone = models.CharField(max_length=30, blank=True)
+    visitor_email = models.EmailField(blank=True)
     caller = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -505,11 +520,14 @@ class Counselling(models.Model):
         ordering = ["-conducted_at", "-created_at"]
 
     def __str__(self):
-        return f"{self.get_counselling_type_display()} - {self.lead.name} ({self.caller.username})"
+        return f"{self.get_counselling_type_display()} - {self.lead.name if self.lead_id else self.visitor_name} ({self.caller.username})"
 
 
 class WhatsAppTemplate(models.Model):
-    title = models.CharField(max_length=150, unique=True)
+    # NULL retains existing shared templates; deleting a user never exposes private templates.
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                              on_delete=models.CASCADE, related_name='whatsapp_templates')
+    title = models.CharField(max_length=150)
     message = models.TextField(max_length=4000)
     is_active = models.BooleanField(default=True, db_index=True)
     created_by = models.ForeignKey(
@@ -537,12 +555,14 @@ class WhatsAppTemplate(models.Model):
 
 
 class WhatsAppActivity(models.Model):
+    call = models.OneToOneField('calls.Call', null=True, blank=True, on_delete=models.SET_NULL,
+                               related_name='whatsapp_activity')
     class Source(models.TextChoices):
         CALLER = "CALLER", "Caller App"
         CRM = "CRM", "CRM Web"
 
     lead = models.ForeignKey(
-        Lead,
+        Lead, null=True, blank=True,
         on_delete=models.CASCADE,
         related_name="whatsapp_activities",
     )
@@ -571,7 +591,7 @@ class WhatsAppActivity(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"WhatsApp initiated for {self.lead.name} by {self.user.username} ({self.source})"
+        return f"WhatsApp initiated for {self.lead.name if self.lead_id else 'External call'} by {self.user.username} ({self.source})"
 
 
 

@@ -13,22 +13,22 @@ from .models import LeadMilestone, PeerAppreciation, PointsAdjustment, PointsEnt
 
 # Authoritative point weights
 WEIGHTS = {
-    'CALL_DAILY_BONUS': 1,
-    'INTERESTED_LEAD': 4,
-    'INTERESTED': 4,
-    'COUNSELLING_COMPLETED': 5,
-    'COUNSELLING': 5,
-    'VERIFIED_ADMISSION': 100,
-    'ADMISSION': 100,
-    'MISSED_FOLLOWUP': -3,
-    'FALSE_STATUS': -5,
+    'CALL_DAILY_BONUS': 25,
+    'INTERESTED_LEAD': 0,
+    'INTERESTED': 0,
+    'COUNSELLING_COMPLETED': 75,
+    'COUNSELLING': 75,
+    'VERIFIED_ADMISSION': 500,
+    'ADMISSION': 500,
+    'MISSED_FOLLOWUP': -10,
+    'FALSE_STATUS': -50,
     'ADMIN_ADJUSTMENT': 0,
     'MANUAL': 0,
     # Zeroed out legacy per-call weights so individual calls do not award separate points
     'DIALED': 0,
     'CONNECTED': 0,
     'DURATION': 0,
-    'FOLLOWUP_COMPLETED': 0,
+    'FOLLOWUP_COMPLETED': 2,
     'APPLICATION': 0,
     'INVALID': 0,
 }
@@ -54,6 +54,7 @@ def award(*, caller_id, event, key, reason, occurred_at, points=None, **links):
         event_key=key,
         defaults=dict(
             caller_id=caller_id,
+            rules_version=2,
             event=event,
             points=pts,
             reason=reason,
@@ -65,20 +66,8 @@ def award(*, caller_id, event, key, reason, occurred_at, points=None, **links):
 
 
 def daily_call_tier(call_count: int) -> int:
-    """
-    Authoritative Daily Call Bonus tiers (one tier only, not cumulative):
-    0 calls/day   = 0 points
-    1–49 calls/day = +1 point
-    50–99 calls/day = +3 points
-    100+ calls/day = +7 points
-    """
-    if call_count >= 100:
-        return 7
-    elif call_count >= 50:
-        return 3
-    elif call_count >= 1:
-        return 1
-    return 0
+    """One daily award: 25 per complete 50 dials, capped at 100."""
+    return min(100, max(0, call_count) // 50 * 25)
 
 
 @transaction.atomic
@@ -91,7 +80,7 @@ def reconcile_daily_calls(caller_id, target_date=None):
     """
     if not caller_id:
         return None
-    caller = User.objects.filter(pk=caller_id).first()
+    caller = User.objects.select_for_update().filter(pk=caller_id).first()
     if not caller or caller.role != 'CALLER':
         return None
 
@@ -115,6 +104,8 @@ def reconcile_daily_calls(caller_id, target_date=None):
     event_key = f'daily_calls:{caller_id}:{target_date.isoformat()}'
 
     entry = PointsEntry.objects.filter(event_key=event_key).first()
+    if entry and entry.rules_version != 2:
+        return entry  # Preserve the pre-upgrade daily award, including the transition day.
     first_call = Call.objects.filter(
         caller_id=caller_id,
         started_at__gte=day_start,
@@ -132,6 +123,7 @@ def reconcile_daily_calls(caller_id, target_date=None):
         else:
             return PointsEntry.objects.create(
                 caller=caller,
+                rules_version=2,
                 event=PointsEntry.Event.CALL_DAILY_BONUS,
                 points=target_points,
                 reason=reason,
@@ -143,7 +135,7 @@ def reconcile_daily_calls(caller_id, target_date=None):
         if entry:
             PointsEntry.objects.filter(pk=entry.pk).update(
                 points=0,
-                reason=f'Daily call count bonus: 0 calls on {target_date.isoformat()} (0 points)'
+                reason=f'Daily call count bonus: {call_count} calls on {target_date.isoformat()} (0 points)'
             )
             entry.refresh_from_db()
             return entry
@@ -154,8 +146,8 @@ def reconcile_daily_calls(caller_id, target_date=None):
 def score_call(call_id):
     """
     Evaluates call records for points:
-    1. Daily call count bonus (+1, +3, +7)
-    2. Interested lead outcome (+4)
+    1. Daily dial volume (25 per 50, maximum 100)
+    2. Course-qualified interested outcome
     """
     call = Call.objects.select_for_update().get(pk=call_id)
     if not call.caller_id or call.caller.role != 'CALLER':
@@ -165,7 +157,7 @@ def score_call(call_id):
     call_date = timezone.localtime(call.started_at).date()
     reconcile_daily_calls(call.caller_id, call_date)
 
-    # 2. Interested lead outcome (+4 points)
+    # 2. Course-qualified interested outcome
     if call.outcome == 'INTERESTED':
         score_interested_lead(
             lead_id=call.lead_id,
@@ -177,44 +169,39 @@ def score_call(call_id):
 
 @transaction.atomic
 def score_interested_lead(lead_id, caller_id, call=None, occurred_at=None):
-    """
-    Awards +4 points when a valid caller call outcome or lead update results in INTERESTED.
-    Idempotent: awarded at most once per lead (or call).
-    """
-    if not caller_id:
+    """Course-based award once per lead. Unknown preferences earn no course points."""
+    if not caller_id or not lead_id or call is None:
         return None
-    key = f'lead:{lead_id}:INTERESTED' if lead_id else f'call:{call.pk}:INTERESTED'
-    lead = Lead.objects.filter(pk=lead_id).first() if lead_id else None
-    reason = f'Interested lead: {lead.name}' if lead else 'Interested call outcome'
-    occ = occurred_at or (call.started_at if call else timezone.now())
-    return award(
-        caller_id=caller_id,
-        event=PointsEntry.Event.INTERESTED_LEAD,
-        key=key,
-        points=4,
-        reason=reason,
-        occurred_at=occ,
-        lead=lead,
-        call=call,
-    )
+    from apps.leads.courses import classify_course
+    lead = Lead.objects.select_for_update().get(pk=lead_id)
+    classification = call.course_classification or classify_course(lead, call.selected_course, call.selected_course_custom)
+    if classification == 'UNKNOWN':
+        return None
+    points = 15 if classification == 'OWN' else 30
+    return award(caller_id=caller_id, event=PointsEntry.Event.INTERESTED_LEAD,
+                 key=f'lead:{lead_id}:INTERESTED', points=points,
+                 reason=f'Interested: {classification.lower()} course {call.selected_course_label}; admission year {call.expected_admission_year}',
+                 occurred_at=occurred_at or call.started_at, lead=lead, call=call)
 
 
 @transaction.atomic
 def score_counselling(counselling_id):
     """
-    Awards +5 points when a valid counselling/demo is completed.
+    Awards +75 points when a valid counselling/demo is completed.
     Idempotent.
     """
     counselling = Counselling.objects.select_related('lead', 'caller').filter(pk=counselling_id).first()
     if not counselling or not counselling.caller_id or counselling.caller.role != 'CALLER':
         return None
+    if counselling.counselling_type not in {'WALK_IN', 'GOOGLE_MEET'}:
+        return None  # Legacy Online / Phone does not establish a direct video session.
     key = f'counselling:{counselling.pk}'
     return award(
         caller_id=counselling.caller_id,
         event=PointsEntry.Event.COUNSELLING_COMPLETED,
         key=key,
-        points=5,
-        reason=f'Counselling completed ({counselling.get_counselling_type_display()}) for lead {counselling.lead.name}',
+        points=WEIGHTS['COUNSELLING_COMPLETED'],
+        reason=f'Counselling completed ({counselling.get_counselling_type_display()}) for {counselling.lead.name if counselling.lead_id else counselling.visitor_name}',
         occurred_at=counselling.conducted_at,
         lead=counselling.lead,
         counselling=counselling,
@@ -224,7 +211,7 @@ def score_counselling(counselling_id):
 @transaction.atomic
 def score_admission(admission_id):
     """
-    Awards +100 points when an admin verifies/confirms an admission.
+    Awards +500 points when an admin verifies/confirms an admission.
     Caller cannot award this directly.
     Responsible caller receives the points.
     Idempotent.
@@ -241,7 +228,7 @@ def score_admission(admission_id):
         caller_id=caller.pk,
         event=PointsEntry.Event.VERIFIED_ADMISSION,
         key=key,
-        points=100,
+        points=WEIGHTS['VERIFIED_ADMISSION'],
         reason=f'Verified admission confirmed for {student_name}',
         occurred_at=timezone.now(),
         lead=admission.lead,
@@ -251,29 +238,26 @@ def score_admission(admission_id):
 
 @transaction.atomic
 def score_followup(followup_id, now=None):
-    """
-    Missed follow-up: -3 points.
-    Completed follow-up: 0 points (not in authoritative points list).
-    Idempotent: same follow-up cannot generate -3 multiple times.
-    """
+    """Reward first on-time completion; penalize >24h pending once per lead."""
     item = FollowUp.objects.select_for_update().get(pk=followup_id)
     now = now or timezone.now()
     if not item.caller_id or item.caller.role != 'CALLER':
         return
-    # Preserve first completion time; later note edits must not create a late penalty.
     completed_at = item.completed_at or item.updated_at
-    missed = item.scheduled_at < now and (item.status == 'PENDING' or (item.status == 'COMPLETED' and completed_at > item.scheduled_at))
-    if missed:
-        award(
-            caller_id=item.caller_id,
-            event=PointsEntry.Event.MISSED_FOLLOWUP,
-            key=f'followup:{item.pk}:MISSED',
-            reason='Follow-up was not completed by its scheduled time',
-            occurred_at=item.scheduled_at,
-            lead=item.lead,
-            followup=item,
-            points=-3
-        )
+    if item.status == 'COMPLETED' and completed_at <= item.scheduled_at:
+        return award(caller_id=item.caller_id, event=PointsEntry.Event.FOLLOWUP_COMPLETED,
+                     key=f'followup:{item.pk}:COMPLETED', reason='Scheduled follow-up completed on time',
+                     occurred_at=completed_at, lead=item.lead, followup=item)
+    if item.status == 'PENDING' and now - item.scheduled_at > timedelta(hours=24):
+        # Respect historical penalties too; do not charge again on policy upgrade.
+        prior = PointsEntry.objects.filter(event=PointsEntry.Event.MISSED_FOLLOWUP)
+        prior = prior.filter(lead_id=item.lead_id) if item.lead_id else prior.filter(followup=item)
+        if prior.exists():
+            return prior.first()
+        return award(caller_id=item.caller_id, event=PointsEntry.Event.MISSED_FOLLOWUP,
+                     key=f'lead:{item.lead_id}:OVERDUE' if item.lead_id else f'followup:{item.pk}:MISSED',
+                     reason='Pending follow-up overdue by more than 24 hours', occurred_at=now,
+                     lead=item.lead, followup=item)
 
 
 def validate_manager(actor, caller, reason):
@@ -287,52 +271,39 @@ def validate_manager(actor, caller, reason):
 
 @transaction.atomic
 def adjust_points(*, actor, caller, reason_type='OTHER', points=None, reason='', units=1, key=None, lead=None):
-    """
-    Admin manually adds or subtracts performance points from an employee.
-    Uses the performance point ledger.
-    Predefined reasons:
-    1. UNPLANNED_LEAVE (-50)
-    2. MORE_THAN_ONE_CONSECUTIVE_HOLIDAY (-2 per holiday)
-    3. MORE_THAN_THREE_HOLIDAYS_IN_MONTH (-2 per additional holiday)
-    4. INDISCIPLINE_WORKPLACE_CONDUCT (-5 per incident)
-    5. OTHER (custom points and reason required)
-    """
+    """Reasoned, idempotent administrator adjustment under the current policy."""
     validate_manager(actor, caller, reason or reason_type)
     key = key or uuid.uuid4()
 
-    # Normalize units
     try:
-        u = max(1, int(units or 1))
+        u = int(1 if units is None else units)
+        if u < 1:
+            raise ValueError
     except (TypeError, ValueError):
-        u = 1
+        raise ValidationError('Units must be a positive whole number.')
 
     if reason_type == PointsAdjustment.AdjustmentReason.UNPLANNED_LEAVE:
-        calc_points = -50
-        desc = 'Unplanned leave (-50)'
-    elif reason_type == PointsAdjustment.AdjustmentReason.MORE_THAN_ONE_CONSECUTIVE_HOLIDAY:
-        calc_points = -2 * u
-        desc = f'More than one consecutive holiday ({u} holiday{"s" if u > 1 else ""}, {calc_points} pts)'
-    elif reason_type == PointsAdjustment.AdjustmentReason.MORE_THAN_THREE_HOLIDAYS_IN_MONTH:
-        calc_points = -2 * u
-        desc = f'More than three holidays in month ({u} additional holiday{"s" if u > 1 else ""}, {calc_points} pts)'
+        calc_points, desc = -100 * u, f'Unplanned leave ({u} days)'
+    elif reason_type == PointsAdjustment.AdjustmentReason.CONSECUTIVE_UNAPPROVED_LEAVE:
+        if u <= 2:
+            raise ValidationError('Consecutive unapproved leave must exceed two days.')
+        calc_points, desc = -50 * u, f'Consecutive unapproved leave ({u} days)'
+    elif reason_type in {'MORE_THAN_ONE_CONSECUTIVE_HOLIDAY', 'MORE_THAN_THREE_HOLIDAYS_IN_MONTH'}:
+        raise ValidationError('This legacy holiday rule is retired. Use consecutive unapproved leave.')
     elif reason_type == PointsAdjustment.AdjustmentReason.INDISCIPLINE_WORKPLACE_CONDUCT:
-        calc_points = -5 * u
-        desc = f'Indiscipline / workplace conduct ({u} incident{"s" if u > 1 else ""}, {calc_points} pts)'
+        calc_points, desc = -50 * u, f'Code of conduct / CRM misreporting ({u} instances)'
+    elif reason_type == PointsAdjustment.AdjustmentReason.MANAGEMENT_BONUS:
+        if points is None or not 50 <= int(points) <= 200:
+            raise ValidationError('Management bonus must be between +50 and +200.')
+        if not str(reason).strip():
+            raise ValidationError('A reason is required for the bonus.')
+        calc_points, desc = int(points), 'Management spot / Expo bonus'
     elif reason_type == PointsAdjustment.AdjustmentReason.OTHER:
-        if points is None or points == 0:
-            raise ValidationError('Adjustment points must be specified and nonzero.')
-        if not str(reason).strip():
-            raise ValidationError('A reason is required for custom adjustments.')
-        calc_points = int(points)
-        desc = reason.strip()
+        if points is None or not int(points) or not str(reason).strip():
+            raise ValidationError('A nonzero adjustment and reason are required.')
+        calc_points, desc = int(points), reason.strip()
     else:
-        # Fallback / legacy support
-        if points is None or points == 0:
-            raise ValidationError('Adjustment must be nonzero.')
-        if not str(reason).strip():
-            raise ValidationError('A reason is required.')
-        calc_points = int(points)
-        desc = reason.strip()
+        raise ValidationError('Select a valid adjustment reason.')
 
     full_reason = f'{desc}: {reason.strip()}' if reason.strip() and reason_type != PointsAdjustment.AdjustmentReason.OTHER else desc
 

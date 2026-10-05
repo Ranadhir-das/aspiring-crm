@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -301,6 +302,8 @@ class MobileCounsellingView(APIView):
             qs = qs.filter(
                 Q(lead__name__icontains=search)
                 | Q(lead__phone__icontains=search)
+                | Q(visitor_name__icontains=search)
+                | Q(visitor_phone__icontains=search)
                 | Q(college__icontains=search)
                 | Q(course__icontains=search)
             )
@@ -311,21 +314,28 @@ class MobileCounsellingView(APIView):
             "counsellings": serializer.data,
         })
 
+    @transaction.atomic
     def post(self, request):
         user = request.user
         serializer = CreateCounsellingSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        lead_id = serializer.validated_data["lead_id"]
-        lead = Lead.objects.filter(pk=lead_id).first()
-        if not lead:
+        lead_id = serializer.validated_data.get("lead_id")
+        lead = Lead.objects.select_for_update().filter(pk=lead_id).first() if lead_id else None
+        if lead_id and not lead:
             return Response({"detail": "Lead not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if user.role == User.Role.CALLER:
+        if not lead:
+            if user.role != User.Role.CALLER:
+                return Response({'detail': 'Only callers can record new visitor counselling.'}, status=403)
+            if user.services.exists() and not user.services.filter(is_active=True).exists():
+                return Response({'detail': 'You have no active services configured.'}, status=403)
+
+        if lead and user.role == User.Role.CALLER:
             if lead.assigned_caller_id != user.id:
                 return Response(
-                    {"detail": "You can only record walk-in counselling for your assigned leads."},
+                    {"detail": "You can only record counselling for your assigned leads."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             if user.services.exists():
@@ -340,7 +350,7 @@ class MobileCounsellingView(APIView):
                         status=status.HTTP_403_FORBIDDEN,
                     )
 
-        college = serializer.validated_data.get("college", "").strip() or lead.college or ""
+        college = serializer.validated_data.get("college", "").strip() or (lead.college if lead else "")
         course = serializer.validated_data.get("course", "").strip()
         notes = serializer.validated_data.get("notes", "").strip()
         conducted_at = serializer.validated_data.get("conducted_at") or timezone.now()
@@ -348,7 +358,10 @@ class MobileCounsellingView(APIView):
 
         counselling = Counselling.objects.create(
             lead=lead,
-            caller=lead.assigned_caller if lead.assigned_caller else user,
+            caller=lead.assigned_caller if lead and lead.assigned_caller else user,
+            visitor_name=serializer.validated_data.get('visitor_name', ''),
+            visitor_phone=serializer.validated_data.get('visitor_phone', ''),
+            visitor_email=serializer.validated_data.get('visitor_email', ''),
             counselling_type=c_type,
             college=college,
             course=course,
@@ -358,22 +371,24 @@ class MobileCounsellingView(APIView):
         )
 
         fields_to_update = ["updated_at"]
-        if notes:
+        counselling_label = counselling.get_counselling_type_display()
+        if lead and notes:
             if lead.notes:
-                lead.notes = f"{lead.notes}\n[Walk-in Counselling] {notes}"
+                lead.notes = f"{lead.notes}\n[{counselling_label}] {notes}"
             else:
-                lead.notes = f"[Walk-in Counselling] {notes}"
+                lead.notes = f"[{counselling_label}] {notes}"
             fields_to_update.append("notes")
-        if college and not lead.college:
+        if lead and college and not lead.college:
             lead.college = college
             fields_to_update.append("college")
-        lead._changed_by = user
-        lead.save(update_fields=fields_to_update)
+        if lead:
+            lead._changed_by = user
+            lead.save(update_fields=fields_to_update)
 
         return Response(
             {
                 "success": True,
-                "message": "Walk-in counselling recorded successfully.",
+                "message": f"{counselling_label} recorded successfully.",
                 "counselling": CounsellingItemSerializer(counselling).data,
             },
             status=status.HTTP_201_CREATED,

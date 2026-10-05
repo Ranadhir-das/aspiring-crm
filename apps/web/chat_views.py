@@ -1,4 +1,5 @@
 import os
+from django.db import transaction
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -45,6 +46,7 @@ def chat_channel(request, channel_id):
 
 @require_POST
 @workspace(employee=True)
+@transaction.atomic
 def chat_send(request, channel_id):
     channel = get_object_or_404(ChatChannel, pk=channel_id)
     if not channel.is_member(request.user):
