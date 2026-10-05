@@ -21,10 +21,10 @@ class WorkspaceTests(TestCase):
         Call.objects.create(lead=cls.lead, caller=cls.caller, started_at=timezone.now(), outcome='INTERESTED')
 
     def test_login_required_and_role_access(self):
-        self.assertRedirects(self.client.get('/'), '/login/?next=/', fetch_redirect_response=False)
+        self.assertRedirects(self.client.get(reverse('web:dashboard')), '/login/?next=/dashboard/', fetch_redirect_response=False)
         denied = User.objects.create_user('editor', password='test-pass', role='VIDEO_EDITOR')
         self.client.force_login(denied)
-        self.assertRedirects(self.client.get('/'), '/employee/', fetch_redirect_response=False)
+        self.assertRedirects(self.client.get(reverse('web:dashboard')), '/employee/', fetch_redirect_response=False)
         self.assertEqual(self.client.get('/leads/').status_code, 403)
 
     def test_pages_render_for_management(self):

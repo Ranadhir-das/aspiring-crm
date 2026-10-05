@@ -425,6 +425,7 @@ class Admission(models.Model):
     class CandidateType(models.TextChoices):
         LEAD = "LEAD", "Online Lead"
         WALK_IN = "WALK_IN", "Walk-in"
+        EXTERNAL = "EXTERNAL", "External Student"
 
     candidate_type = models.CharField(
         max_length=20,
@@ -468,8 +469,24 @@ class Admission(models.Model):
     class Meta:
         ordering = ["-admission_date", "-created_at"]
 
+    @property
+    def student_name(self):
+        return self.lead.name if self.lead else (self.walk_in_name or "External Student")
+
+    @property
+    def student_phone(self):
+        return self.lead.phone if self.lead else self.walk_in_phone
+
+    @property
+    def student_email(self):
+        return self.lead.email if self.lead else self.walk_in_email
+
+    @property
+    def is_external(self):
+        return self.lead_id is None
+
     def __str__(self):
-        name = self.lead.name if self.lead else (self.walk_in_name or "Walk-in")
+        name = self.student_name
         caller_name = self.caller.username if self.caller else "Unassigned"
         return f"{name} - {self.college or 'Admitted'} ({caller_name})"
 

@@ -46,7 +46,7 @@ class AdmissionItemSerializer(serializers.ModelSerializer):
     def get_lead_name(self, obj):
         if obj.lead and obj.lead.name:
             return obj.lead.name
-        return obj.walk_in_name or "Walk-in Candidate"
+        return obj.walk_in_name or ("External Student" if obj.candidate_type == Admission.CandidateType.EXTERNAL else "Walk-in Candidate")
 
     def get_lead_phone(self, obj):
         if obj.lead and obj.lead.phone:
@@ -68,6 +68,8 @@ class AdmissionItemSerializer(serializers.ModelSerializer):
             return obj.lead.import_batch.filename
         if obj.candidate_type == Admission.CandidateType.WALK_IN:
             return "Walk-in"
+        if obj.candidate_type == Admission.CandidateType.EXTERNAL:
+            return "External Student"
         return "Unbatched leads"
 
     def get_created_by_name(self, obj):
@@ -105,10 +107,10 @@ class CreateAdmissionSerializer(serializers.Serializer):
         if c_type == Admission.CandidateType.LEAD:
             if not attrs.get("lead_id"):
                 raise serializers.ValidationError({"lead_id": "Lead ID is required for online leads."})
-        elif c_type == Admission.CandidateType.WALK_IN:
+        elif c_type in {Admission.CandidateType.WALK_IN, Admission.CandidateType.EXTERNAL}:
             if not attrs.get("lead_id"):
                 if not attrs.get("name", "").strip():
-                    raise serializers.ValidationError({"name": "Candidate name is required for walk-in."})
+                    raise serializers.ValidationError({"name": "Candidate name is required."})
                 if not attrs.get("phone", "").strip():
-                    raise serializers.ValidationError({"phone": "Candidate phone number is required for walk-in."})
+                    raise serializers.ValidationError({"phone": "Candidate phone number is required."})
         return attrs

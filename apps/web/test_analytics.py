@@ -1,5 +1,6 @@
 from datetime import timedelta
 from django.test import Client, TestCase
+from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -264,7 +265,7 @@ class AnalyticsDashboardTests(TestCase):
 
     def test_dashboard_web_view_unauthenticated(self):
         """Verify anonymous user is redirected to login."""
-        response = self.web_client.get('/')
+        response = self.web_client.get(reverse('web:dashboard'))
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response.url)
 

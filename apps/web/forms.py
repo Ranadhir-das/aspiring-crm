@@ -98,23 +98,121 @@ QuickLeadFormSet = forms.formset_factory(QuickLeadForm, extra=10, max_num=1000, 
 
 
 class AdmissionForm(forms.ModelForm):
+    source_type = forms.ChoiceField(
+        choices=[
+            ('existing', 'Existing CRM Lead'),
+            ('external', 'External Student / Direct'),
+        ],
+        initial='existing',
+        required=False,
+    )
+
     class Meta:
         from apps.leads.models import Admission
         model = Admission
-        fields = ['lead', 'caller', 'college', 'course', 'admission_date', 'fees', 'notes']
+        fields = [
+            'lead',
+            'caller',
+            'candidate_type',
+            'country',
+            'walk_in_name',
+            'walk_in_phone',
+            'walk_in_email',
+            'college',
+            'course',
+            'admission_date',
+            'fees',
+            'notes',
+        ]
         widgets = {
             'admission_date': forms.DateInput(attrs={'type': 'date'}),
-            'notes': forms.Textarea(attrs={'rows': 3}),
+            'notes': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Visa status, document verification, fee receipts, or counseling notes...'}),
+            'walk_in_name': forms.TextInput(attrs={'placeholder': 'e.g. Rahul Sharma'}),
+            'walk_in_phone': forms.TextInput(attrs={'placeholder': 'e.g. +91 98765 43210'}),
+            'walk_in_email': forms.EmailInput(attrs={'placeholder': 'e.g. student@example.com'}),
+            'country': forms.TextInput(attrs={'placeholder': 'e.g. India, Georgia, Uzbekistan'}),
+            'college': forms.TextInput(attrs={'placeholder': 'e.g. Tbilisi State Medical University'}),
+            'course': forms.TextInput(attrs={'placeholder': 'e.g. MBBS, BDS, MBA'}),
+            'fees': forms.NumberInput(attrs={'placeholder': 'e.g. 350000', 'step': '0.01'}),
+        }
+        labels = {
+            'walk_in_name': 'Student Full Name',
+            'walk_in_phone': 'Phone Number',
+            'walk_in_email': 'Email Address',
+            'country': 'Country / Location',
+            'college': 'University / College',
+            'course': 'Course / Program',
+            'caller': 'Attributed Caller / Counsellor',
+            'fees': 'Fees / Tuition Amount (₹)',
+            'admission_date': 'Admission Date',
+            'candidate_type': 'Candidate Type',
+            'notes': 'Admission Notes & Remarks',
+        }
+        error_messages = {
+            'caller': {
+                'required': 'Please select the responsible caller for admission attribution.',
+                'null': 'Please select the responsible caller for admission attribution.',
+                'invalid_choice': 'Please select a valid active caller.',
+            }
         }
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        from apps.leads.models import Lead
-        if user and user.role == User.Role.CALLER:
+        from apps.leads.models import Lead, Admission
+        from apps.accounts.models import User
+        if user and getattr(user, 'role', None) == User.Role.CALLER:
             raise forms.ValidationError('Callers are not authorized to create or record admissions.')
-        self.fields['caller'].queryset = User.objects.filter(role=User.Role.CALLER, is_active=True)
-        self.fields['lead'].queryset = Lead.objects.all()
+        self.fields['caller'].queryset = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username')
+        self.fields['caller'].required = True
+        self.fields['lead'].queryset = Lead.objects.select_related('assigned_caller').all()
+        self.fields['lead'].required = False
+        self.fields['candidate_type'].required = False
+        self.fields['walk_in_name'].required = False
+        self.fields['walk_in_phone'].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        from apps.leads.models import Admission
+        source_type = cleaned_data.get('source_type') or 'existing'
+        lead = cleaned_data.get('lead')
+        caller = cleaned_data.get('caller')
+
+        if source_type == 'existing':
+            if not lead:
+                self.add_error('lead', 'Please select an existing lead to record this admission.')
+            cleaned_data['walk_in_name'] = ''
+            cleaned_data['walk_in_phone'] = ''
+            cleaned_data['walk_in_email'] = ''
+            if not cleaned_data.get('candidate_type') or cleaned_data.get('candidate_type') == Admission.CandidateType.EXTERNAL:
+                cleaned_data['candidate_type'] = Admission.CandidateType.LEAD
+            if not cleaned_data.get('country') and lead and lead.location:
+                cleaned_data['country'] = lead.location
+
+        elif source_type == 'external':
+            cleaned_data['lead'] = None
+
+            name = cleaned_data.get('walk_in_name', '').strip()
+            if not name:
+                self.add_error('walk_in_name', 'Student full name is required for external student admissions.')
+            else:
+                cleaned_data['walk_in_name'] = name
+
+            phone = cleaned_data.get('walk_in_phone', '').strip()
+            if not phone:
+                self.add_error('walk_in_phone', 'Phone number is required for external student admissions.')
+            else:
+                from apps.leads.utils import normalize_phone
+                normalized = normalize_phone(phone)
+                if not normalized or len(normalized) < 7:
+                    self.add_error('walk_in_phone', 'Enter a valid phone number with at least 7 digits.')
+                else:
+                    cleaned_data['walk_in_phone'] = phone
+
+            if not cleaned_data.get('candidate_type') or cleaned_data.get('candidate_type') == Admission.CandidateType.LEAD:
+                cleaned_data['candidate_type'] = Admission.CandidateType.EXTERNAL
+
+        return cleaned_data
 
 
 class ServiceForm(forms.ModelForm):

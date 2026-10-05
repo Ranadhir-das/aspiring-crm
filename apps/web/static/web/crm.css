@@ -891,3 +891,309 @@
   }
 }
 
+/* ==========================================================================
+   RECORD ADMISSION WORKSPACE & RESPONSIVE CRM ENHANCEMENTS
+   ========================================================================== */
+
+.admission-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.admission-source-panel {
+  padding: 22px 26px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.source-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.source-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+  user-select: none;
+}
+
+.source-card:hover {
+  border-color: var(--accent);
+  background: rgba(141, 111, 206, 0.05);
+}
+
+.source-card:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.source-card.active {
+  border-color: var(--accent);
+  background: rgba(141, 111, 206, 0.08);
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 14px rgba(0, 0, 0, 0.15);
+}
+
+.source-card-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.source-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-card-body strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.source-card-body p {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.source-indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: all 0.2s ease;
+}
+
+.source-card.active .source-indicator {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--bg);
+}
+
+/* Light Mode Overrides for Source Cards */
+[data-theme=light] .source-card {
+  background: #ffffff;
+  border-color: #dce1ec;
+}
+
+[data-theme=light] .source-card:hover {
+  background: #fbf9ff;
+  border-color: var(--accent);
+}
+
+[data-theme=light] .source-card.active {
+  background: #f6f3fc;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 14px rgba(103, 81, 185, 0.1);
+}
+
+[data-theme=light] .source-card.active .source-indicator {
+  box-shadow: inset 0 0 0 3px #ffffff;
+}
+
+/* Selected Lead Spotlight Card */
+.lead-spotlight-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  padding: 20px 22px;
+}
+
+[data-theme=light] .lead-spotlight-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  border-left-color: var(--accent);
+}
+
+.spotlight-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.spotlight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.spotlight-col small {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.spotlight-col strong {
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+/* Form Section Headers */
+.form-section-header {
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.form-section-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.form-section-header p {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* Performance Attribution Callout */
+.attribution-callout {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: var(--mint);
+  font-size: 11.5px;
+  line-height: 1.45;
+  margin-top: 10px;
+}
+
+[data-theme=light] .attribution-callout {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+/* Shared Mobile & Tablet CRM Responsive Enhancements */
+.table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  display: block;
+}
+
+.table-scroll table {
+  min-width: 680px;
+}
+
+@media (max-width: 768px) {
+  .source-selector-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .admission-source-panel {
+    padding: 18px;
+  }
+
+  .spotlight-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .spotlight-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .form-actions .button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  main {
+    padding: 16px 12px !important;
+  }
+
+  .page-heading {
+    margin-bottom: 16px;
+  }
+
+  .page-heading h1 {
+    font-size: 22px !important;
+  }
+
+  .page-heading .actions {
+    width: 100%;
+  }
+
+  .page-heading .actions .button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .filters {
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+
+  .filters .search-field,
+  .filters select,
+  .filters input[type="date"],
+  .filters .button {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+  }
+
+  .panel {
+    border-radius: 8px;
+  }
+
+  .form-panel {
+    padding: 14px !important;
+  }
+
+  .source-card {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .source-card-icon {
+    font-size: 1.3rem;
+  }
+}

@@ -1,2 +1,169 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}Admissions{% endblock %}{% block breadcrumb %}Admissions{% endblock %}{% block content %}<div class="page-heading"><div><div class="eyebrow">SUCCESSFUL CONVERSIONS</div><h1>Admissions Panel<span class="accent">.</span></h1><p>Verified admissions completed by callers across app and CRM.</p></div>{% if can_manage %}<div class="actions"><a class="button primary" href="{% url 'web:admission-new' %}">+ Record Admission</a></div>{% endif %}</div><section class="panel"><form class="filters" method="get"><label class="search-field"><span>⌕</span><input name="q" aria-label="Search admissions" value="{{ search }}" placeholder="Search student, phone, college or course…"></label>{% if callers %}<select name="caller" aria-label="Filter by caller"><option value="">All callers</option>{% for c in callers %}<option value="{{ c.pk }}" {% if selected_caller == c.pk|stringformat:'s' %}selected{% endif %}>{{ c|user_name }}</option>{% endfor %}</select>{% endif %}<button class="button">Search</button><a class="text-link" href="{% url 'web:admissions' %}">Reset</a></form><div class="table-scroll"><table><thead><tr><th>Student / Lead</th><th>Caller</th><th>College &amp; Course</th><th>Admission Date</th><th>Fees</th><th>Recorded Through</th><th>Notes</th></tr></thead><tbody>{% for adm in records %}<tr><td><a class="person" href="{% url 'web:lead-detail' adm.lead_id %}"><span class="avatar subtle">{{ adm.lead.name|first|upper }}</span><span><strong>{{ adm.lead.name }}</strong><small>{{ adm.lead.phone }}</small></span></a></td><td>{{ adm.caller|user_name }}</td><td><strong>{{ adm.college|default:'—' }}</strong>{% if adm.course %}<br><small>{{ adm.course }}</small>{% endif %}</td><td>{{ adm.admission_date|date:'d M Y' }}</td><td>{% if adm.fees %}₹{{ adm.fees }}{% else %}—{% endif %}</td><td>{% if adm.created_by.role in 'SUPER_ADMIN,ADMIN,MANAGER' %}<span class="badge info">CRM Web</span>{% else %}<span class="badge success">Caller App</span>{% endif %}</td><td class="notes-cell">{{ adm.notes|default:'—' }}</td></tr>{% empty %}<tr><td colspan="7" class="empty">No admissions recorded yet. Admissions created from the caller app or web CRM will appear here.</td></tr>{% endfor %}</tbody></table></div>{% include 'web/pagination.html' %}</section>{% endblock %}
+{% extends 'web/base.html' %}
+{% load web_tags %}
+
+{% block title %}Admissions{% endblock %}
+{% block breadcrumb %}Admissions{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">SUCCESSFUL CONVERSIONS</div>
+    <h1>Admissions Panel<span class="accent">.</span></h1>
+    <p>Verified admissions completed by callers across mobile app and CRM workspace.</p>
+  </div>
+  {% if can_manage %}
+    <div class="actions">
+      <a class="button primary" href="{% url 'web:admission-new' %}">
+        + Record Admission
+      </a>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Admissions Filter & Search Panel -->
+<section class="panel">
+  <form class="filters" method="get">
+    <div class="search-field" style="flex: 2; min-width: 220px;">
+      <span>⌕</span>
+      <input name="q" aria-label="Search admissions" value="{{ search }}" placeholder="Search student name, phone, university or course…">
+    </div>
+
+    <!-- Caller Filter -->
+    {% if callers %}
+      <select name="caller" aria-label="Filter by caller" style="flex: 1; min-width: 140px;">
+        <option value="">All Callers</option>
+        {% for c in callers %}
+          <option value="{{ c.pk }}" {% if selected_caller == c.pk|stringformat:'s' %}selected{% endif %}>
+            {{ c|user_name }}
+          </option>
+        {% endfor %}
+      </select>
+    {% endif %}
+
+    <!-- Channel / Source Type Filter -->
+    <select name="channel" aria-label="Filter by candidate source" style="flex: 1; min-width: 140px;">
+      <option value="">All Candidate Sources</option>
+      <option value="lead" {% if selected_channel == 'lead' %}selected{% endif %}>CRM Leads Only</option>
+      <option value="external" {% if selected_channel == 'external' %}selected{% endif %}>External Students Only</option>
+    </select>
+
+    <!-- Date Range Filters -->
+    <input type="date" name="start_date" value="{{ start_date }}" aria-label="From Date" style="flex: 1; min-width: 130px; font-size: 12px;" title="Admission Date From">
+    <input type="date" name="end_date" value="{{ end_date }}" aria-label="To Date" style="flex: 1; min-width: 130px; font-size: 12px;" title="Admission Date To">
+
+    <button type="submit" class="button">Filter</button>
+    {% if search or selected_caller or selected_channel or start_date or end_date %}
+      <a class="text-link" href="{% url 'web:admissions' %}" style="font-size: 12px;">Reset</a>
+    {% endif %}
+  </form>
+
+  <!-- Table Container with Controlled Scroll -->
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Student / Candidate</th>
+          <th>Attributed Caller</th>
+          <th>University &amp; Course</th>
+          <th>Admission Date</th>
+          <th>Fees</th>
+          <th>Source &amp; Channel</th>
+          <th>Notes / Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for adm in records %}
+          <tr>
+            <!-- Student Info -->
+            <td>
+              {% if adm.lead %}
+                <a class="person" href="{% url 'web:lead-detail' adm.lead_id %}">
+                  <span class="avatar subtle">{{ adm.lead.name|first|upper }}</span>
+                  <span>
+                    <strong>{{ adm.lead.name }}</strong>
+                    <small>{{ adm.lead.phone }}</small>
+                  </span>
+                </a>
+              {% else %}
+                <div class="person">
+                  <span class="avatar subtle" style="background: rgba(139, 92, 246, 0.14); color: #8b5cf6;" title="External Student">🎓</span>
+                  <span>
+                    <strong>{{ adm.walk_in_name|default:'External Student' }}</strong>
+                    <small>
+                      {{ adm.walk_in_phone|default:'—' }} · <span class="badge subtle" style="font-size: 8px; padding: 2px 5px;">External</span>
+                    </small>
+                  </span>
+                </div>
+              {% endif %}
+            </td>
+
+            <!-- Caller Attribution -->
+            <td>
+              <span class="caller-attribution-cell">
+                <strong>{{ adm.caller|user_name }}</strong>
+              </span>
+            </td>
+
+            <!-- College & Course -->
+            <td>
+              <strong>{{ adm.college|default:'—' }}</strong>
+              {% if adm.course %}
+                <br><small class="muted">{{ adm.course }}</small>
+              {% endif %}
+            </td>
+
+            <!-- Admission Date -->
+            <td>
+              <span>{{ adm.admission_date|date:'d M Y' }}</span>
+            </td>
+
+            <!-- Fees -->
+            <td>
+              {% if adm.fees %}
+                <strong>₹{{ adm.fees|floatformat:2 }}</strong>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Source & Channel -->
+            <td>
+              {% if adm.lead %}
+                <span class="badge info">CRM Lead</span>
+              {% else %}
+                <span class="badge" style="background: rgba(139, 92, 246, 0.15); color: #a78bfa;">External Student</span>
+              {% endif %}
+              <div style="margin-top: 4px;">
+                <small class="muted" style="font-size: 9px;">
+                  {% if adm.created_by.role in 'SUPER_ADMIN,ADMIN,MANAGER' %}CRM Web{% else %}Caller App{% endif %}
+                </small>
+              </div>
+            </td>
+
+            <!-- Notes -->
+            <td class="notes-cell">
+              {{ adm.notes|default:'—' }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="empty">
+              <span class="empty-icon">🎓</span>
+              <strong>No admissions found.</strong>
+              <p>Admissions created via CRM or the mobile caller app will appear here.</p>
+              {% if can_manage %}
+                <div style="margin-top: 14px;">
+                  <a class="button primary" href="{% url 'web:admission-new' %}">+ Record Admission</a>
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% include 'web/pagination.html' %}
+</section>
+{% endblock %}
 

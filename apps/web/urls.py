@@ -9,6 +9,7 @@ from . import notice_views
 from . import performance_views
 from . import app_intro_views
 from . import analytics_views
+from . import marketing_views
 from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 from . import views
@@ -77,11 +78,15 @@ urlpatterns = [
     path('invoices/', workforce.invoices, name='invoices'),
     path('invoices/new/', workforce.invoice_new, name='invoice-new'),
     path('invoices/<int:pk>/', workforce.invoice_detail, name='invoice-detail'),
-    path('app/', app_intro_views.app_intro, name='app-intro'),
+    path('app/', marketing_views.product_app_page, name='app-intro'),
     path('app/download/', app_intro_views.download_app, name='app-download'),
+    path('book-demo/', marketing_views.book_demo_view, name='book-demo'),
+    path('robots.txt', marketing_views.robots_txt_view, name='robots-txt'),
+    path('sitemap.xml', marketing_views.sitemap_xml_view, name='sitemap-xml'),
     path('login/', LoginView.as_view(template_name='web/login.html', authentication_form=LoginForm), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
-    path('', analytics_views.dashboard_view, name='dashboard'),
+    path('', marketing_views.landing_page, name='landing'),
+    path('dashboard/', analytics_views.dashboard_view, name='dashboard'),
     path('analytics/overview/', analytics_views.dashboard_view, name='analytics-overview'),
     path('api/v1/analytics/overview/', analytics_views.analytics_overview_api, name='api-analytics-overview'),
     path('services/', service_views.services_list, name='services'),

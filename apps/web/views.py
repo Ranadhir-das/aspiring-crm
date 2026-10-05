@@ -471,17 +471,36 @@ def admissions_view(request):
         except (ValueError, TypeError):
             pass
 
+    channel = request.GET.get('channel') or request.GET.get('type')
+    if channel == 'lead':
+        query = query.filter(lead__isnull=False)
+    elif channel == 'external':
+        query = query.filter(lead__isnull=True)
+
     search = request.GET.get('q', '').strip()
     if search:
         query = query.filter(
             Q(lead__name__icontains=search)
             | Q(lead__phone__icontains=search)
+            | Q(walk_in_name__icontains=search)
+            | Q(walk_in_phone__icontains=search)
             | Q(college__icontains=search)
             | Q(course__icontains=search)
         )
 
     callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if user.role in MANAGEMENT else []
-    return page(request, 'admissions', 'admissions', records=paginate(request, query), search=search, callers=callers, selected_caller=request.GET.get('caller', ''))
+    return page(
+        request,
+        'admissions',
+        'admissions',
+        records=paginate(request, query),
+        search=search,
+        callers=callers,
+        selected_caller=request.GET.get('caller', ''),
+        selected_channel=channel or '',
+        start_date=start_date or '',
+        end_date=end_date or '',
+    )
 
 
 @workspace(management=True)
@@ -489,11 +508,12 @@ def admission_create(request):
     from apps.leads.models import Admission, Lead, Counselling
     from .forms import AdmissionForm
 
+    source_type = request.POST.get('source_type') or request.GET.get('source_type') or ('external' if request.GET.get('mode') == 'external' else 'existing')
     lead_id = request.POST.get('lead') or request.GET.get('lead')
     search_query = request.GET.get('q', '').strip()
     search_results = []
 
-    if search_query:
+    if search_query and source_type == 'existing':
         search_filter = (
             Q(name__icontains=search_query)
             | Q(phone__icontains=search_query)
@@ -509,7 +529,7 @@ def admission_create(request):
         )
 
     selected_lead = None
-    if lead_id and str(lead_id).isdigit():
+    if source_type == 'existing' and lead_id and str(lead_id).isdigit():
         selected_lead = (
             Lead.objects
             .select_related('assigned_caller', 'import_batch', 'service_type')
@@ -518,18 +538,25 @@ def admission_create(request):
             .first()
         )
 
-    initial = {}
+    initial = {
+        'source_type': source_type,
+        'admission_date': timezone.localdate(),
+    }
     if selected_lead:
         initial['lead'] = selected_lead.pk
         if selected_lead.assigned_caller:
             initial['caller'] = selected_lead.assigned_caller_id
         if selected_lead.college:
             initial['college'] = selected_lead.college
+        if selected_lead.location:
+            initial['country'] = selected_lead.location
+        if selected_lead.service_type:
+            initial['course'] = selected_lead.service_type.name
         latest_counselling = selected_lead.counsellings.order_by('-conducted_at', '-created_at').first()
         if latest_counselling:
             if latest_counselling.college and not initial.get('college'):
                 initial['college'] = latest_counselling.college
-            if latest_counselling.course:
+            if latest_counselling.course and not initial.get('course'):
                 initial['course'] = latest_counselling.course
 
     form = AdmissionForm(request.POST or None, initial=initial, user=request.user)
@@ -545,7 +572,9 @@ def admission_create(request):
                 admission.lead.college = admission.college
                 fields_to_update.append('college')
             admission.lead.save(update_fields=fields_to_update)
-        messages.success(request, f"Admission successfully recorded for {admission.lead.name if admission.lead else 'student'}!")
+            messages.success(request, f"Admission successfully recorded for {admission.lead.name}!")
+        else:
+            messages.success(request, f"Admission successfully recorded for {admission.walk_in_name or 'external student'} (External Student)!")
         return redirect('web:admissions')
 
     prior_counsellings = selected_lead.counsellings.select_related('caller').order_by('-conducted_at') if selected_lead else []
@@ -556,6 +585,7 @@ def admission_create(request):
         'admissions',
         form=form,
         title='Record an Admission',
+        source_type=source_type,
         selected_lead=selected_lead,
         prior_counsellings=prior_counsellings,
         search_query=search_query,

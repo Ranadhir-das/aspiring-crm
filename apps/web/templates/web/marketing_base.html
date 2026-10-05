@@ -1,0 +1,262 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ page_title|default:"Vaani CRM | Lead Management, Calling & Sales CRM" }}</title>
+  <meta name="description" content="{{ meta_description|default:'Vaani is an all-in-one CRM for lead management, calling, follow-ups, team performance, WhatsApp communication and admissions.' }}">
+  <link rel="canonical" href="{{ canonical_url|default:request.build_absolute_uri }}">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Vaani CRM">
+  <meta property="og:title" content="{{ page_title|default:'Vaani CRM | Lead Management, Calling & Sales CRM' }}">
+  <meta property="og:description" content="{{ meta_description|default:'Vaani brings lead management, calling, follow-ups, team performance and conversion tracking into one powerful platform.' }}">
+  <meta property="og:url" content="{{ canonical_url|default:request.build_absolute_uri }}">
+  <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'web/vaani-logo.png' %}">
+  <meta property="og:image:alt" content="Vaani CRM Platform">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page_title|default:'Vaani CRM | Lead Management, Calling & Sales CRM' }}">
+  <meta name="twitter:description" content="{{ meta_description|default:'Turn every lead into an opportunity with Vaani CRM and caller management platform.' }}">
+  <meta name="twitter:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'web/vaani-logo.png' %}">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'web/favicon.png' %}?v=1">
+  <link rel="icon" type="image/x-icon" href="{% static 'web/favicon.ico' %}?v=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'web/apple-touch-icon.png' %}?v=1">
+
+  <!-- Theme Fast Init to Prevent FOUC -->
+  <script>
+    (function() {
+      var saved = localStorage.getItem('vaani-theme') || localStorage.getItem('theme');
+      var pref = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', pref);
+      if (pref === 'light') document.documentElement.classList.add('theme-light');
+    })();
+  </script>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="{% static 'web/marketing.css' %}?v=2">
+
+  <!-- JSON-LD Structured Data: Organization & SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "{{ request.scheme }}://{{ request.get_host }}/#organization",
+        "name": "Vaani",
+        "url": "{{ request.scheme }}://{{ request.get_host }}/",
+        "logo": "{{ request.scheme }}://{{ request.get_host }}{% static 'web/vaani-logo.png' %}",
+        "description": "Vaani provides an all-in-one CRM, caller management, and lead conversion platform."
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "{{ request.scheme }}://{{ request.get_host }}/#software",
+        "name": "Vaani CRM",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, Android",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "description": "Integrated CRM with Android caller app, automated lead tracking, follow-up reminders, team performance scoring, and WhatsApp handoff."
+      }
+      {% block jsonld_extra %}{% endblock %}
+    ]
+  }
+  </script>
+</head>
+<body>
+
+  <!-- Ambient Light Backgrounds -->
+  <div class="ambient-glow-top" aria-hidden="true"></div>
+  <div class="ambient-glow-center" aria-hidden="true"></div>
+
+  <!-- Header / Navigation -->
+  <header class="marketing-header" role="banner">
+    <div class="container nav-container">
+      <a href="{% url 'web:landing' %}" class="brand-wrap" aria-label="Vaani CRM Home">
+        <img src="{% static 'web/vaani-logo.png' %}?v=5" alt="Vaani CRM" class="brand-full-logo" height="42">
+      </a>
+
+      <!-- Desktop Nav Links -->
+      <nav class="nav-links" role="navigation" aria-label="Main Navigation">
+        <a href="{% if current_section == 'landing' %}#features{% else %}{% url 'web:landing' %}#features{% endif %}" class="nav-link">Features</a>
+        <a href="{% if current_section == 'landing' %}#how-it-works{% else %}{% url 'web:landing' %}#how-it-works{% endif %}" class="nav-link">How it Works</a>
+        <a href="{% if current_section == 'landing' %}#showcase{% else %}{% url 'web:landing' %}#showcase{% endif %}" class="nav-link">Product</a>
+        <a href="{% url 'web:app-intro' %}" class="nav-link {% if current_section == 'app' %}active{% endif %}">Caller App</a>
+        <a href="{% if current_section == 'landing' %}#faq{% else %}{% url 'web:landing' %}#faq{% endif %}" class="nav-link">FAQ</a>
+      </nav>
+
+      <!-- Desktop Header Actions -->
+      <div class="nav-actions">
+        <!-- Day/Night Sky Capsule Theme Toggle -->
+        <button type="button" class="day-night-toggle" id="theme-toggle-btn" role="switch" aria-checked="false" aria-label="Toggle dark/light theme" title="Toggle theme">
+          <div class="toggle-track">
+            <!-- Day Sky Background & Clouds -->
+            <div class="toggle-day-bg" aria-hidden="true">
+              <div class="halo-circle halo-1"></div>
+              <div class="halo-circle halo-2"></div>
+              <div class="halo-circle halo-3"></div>
+              <div class="clouds-group">
+                <span class="cloud-puff cloud-1"></span>
+                <span class="cloud-puff cloud-2"></span>
+                <span class="cloud-puff cloud-3"></span>
+                <span class="cloud-puff cloud-4"></span>
+              </div>
+            </div>
+
+            <!-- Night Sky Background & Constellation Stars -->
+            <div class="toggle-night-bg" aria-hidden="true">
+              <div class="night-halo halo-1"></div>
+              <div class="night-halo halo-2"></div>
+              <div class="night-halo halo-3"></div>
+              <svg class="stars-constellation" viewBox="0 0 74 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Constellation Line -->
+                <polyline points="18,12 26,10 34,16" stroke="rgba(255,255,255,0.3)" stroke-width="0.75" stroke-dasharray="1.5 1" />
+                <!-- Star 1 (Big Sparkle) -->
+                <path d="M18 8 Q18 12 14 12 Q18 12 18 16 Q18 12 22 12 Q18 12 18 8 Z" fill="#ffffff" />
+                <!-- Star 2 (Small Sparkle) -->
+                <path d="M26 8 Q26 10 24 10 Q26 10 26 12 Q26 10 28 10 Q26 10 26 8 Z" fill="#ffffff" opacity="0.85" />
+                <!-- Star 3 (Medium Sparkle) -->
+                <path d="M34 13 Q34 16 31 16 Q34 16 34 19 Q34 16 37 16 Q34 16 34 13 Z" fill="#ffffff" />
+                <!-- Star 4 (Bottom Sparkle) -->
+                <path d="M22 20 Q22 22 20 22 Q22 22 22 24 Q22 22 24 22 Q22 22 22 20 Z" fill="#ffffff" opacity="0.95" />
+                <!-- Star 5 (Tiny Star Point) -->
+                <circle cx="30" cy="22" r="0.8" fill="#ffffff" opacity="0.7" />
+                <!-- Star 6 (Sparkle Right) -->
+                <path d="M37 23 Q37 24.5 35.5 24.5 Q37 24.5 37 26 Q37 24.5 38.5 24.5 Q37 24.5 37 23 Z" fill="#ffffff" opacity="0.8" />
+                <!-- Star 7 (Top Right Sparkle) -->
+                <path d="M42 12 Q42 13.5 40.5 13.5 Q42 13.5 42 15 Q42 13.5 43.5 13.5 Q42 13.5 42 12 Z" fill="#ffffff" opacity="0.75" />
+                <!-- Star 8 (Bottom near Moon) -->
+                <path d="M46 22 Q46 23.5 44.5 23.5 Q46 23.5 46 25 Q46 23.5 47.5 23.5 Q46 23.5 46 22 Z" fill="#ffffff" opacity="0.8" />
+              </svg>
+            </div>
+
+            <!-- Sliding Disc (Sun / Moon) -->
+            <div class="toggle-thumb" aria-hidden="true">
+              <!-- Sun -->
+              <div class="sun-element">
+                <span class="sun-crescent-highlight"></span>
+              </div>
+              <!-- Moon -->
+              <div class="moon-element">
+                <span class="moon-crescent-highlight"></span>
+                <span class="moon-crater crater-1"></span>
+                <span class="moon-crater crater-2"></span>
+                <span class="moon-crater crater-3"></span>
+              </div>
+            </div>
+          </div>
+        </button>
+
+        {% if user_is_authenticated %}
+          <a href="{% url 'web:dashboard' %}" class="btn btn-secondary btn-sm" title="Go to CRM Dashboard">Dashboard ↗</a>
+        {% else %}
+          <a href="{% url 'web:login' %}" class="btn btn-secondary btn-sm">Login</a>
+        {% endif %}
+
+        <a href="{% if current_section == 'landing' %}#demo{% else %}{% url 'web:landing' %}#demo{% endif %}" class="btn btn-primary btn-sm btn-glow">Book a Free Demo</a>
+
+        <!-- Mobile Hamburger Toggle -->
+        <button type="button" class="mobile-toggle" id="mobile-toggle" aria-label="Open Navigation Menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Drawer Menu -->
+    <div class="mobile-menu" id="mobile-menu">
+      <div class="mobile-menu-inner">
+        <a href="{% url 'web:landing' %}" class="mobile-nav-link">Home</a>
+        <a href="{% if current_section == 'landing' %}#features{% else %}{% url 'web:landing' %}#features{% endif %}" class="mobile-nav-link">Features</a>
+        <a href="{% if current_section == 'landing' %}#how-it-works{% else %}{% url 'web:landing' %}#how-it-works{% endif %}" class="mobile-nav-link">How it Works</a>
+        <a href="{% if current_section == 'landing' %}#showcase{% else %}{% url 'web:landing' %}#showcase{% endif %}" class="mobile-nav-link">Product Showcase</a>
+        <a href="{% url 'web:app-intro' %}" class="mobile-nav-link">Android Caller App</a>
+        <a href="{% if current_section == 'landing' %}#faq{% else %}{% url 'web:landing' %}#faq{% endif %}" class="mobile-nav-link">FAQ</a>
+
+        <div class="mobile-menu-actions">
+          <button type="button" class="btn btn-secondary" id="mobile-theme-toggle-btn">Toggle Theme</button>
+          {% if user_is_authenticated %}
+            <a href="{% url 'web:dashboard' %}" class="btn btn-secondary">Open CRM Dashboard ↗</a>
+          {% else %}
+            <a href="{% url 'web:login' %}" class="btn btn-secondary">Login to Vaani</a>
+          {% endif %}
+          <a href="{% if current_section == 'landing' %}#demo{% else %}{% url 'web:landing' %}#demo{% endif %}" class="btn btn-primary">Book a Free Demo</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Body Content -->
+  <main role="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer class="marketing-footer" role="contentinfo">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand-col">
+          <a href="{% url 'web:landing' %}" class="brand-wrap" aria-label="Vaani CRM Home">
+            <img src="{% static 'web/vaani-logo.png' %}?v=5" alt="Vaani CRM" class="footer-full-logo" height="40">
+          </a>
+          <p class="footer-brand-p">
+            Vaani is an all-in-one CRM and caller management platform that powers lead conversion, automated calling, smart follow-ups, and team performance tracking.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Product</h4>
+          <ul class="footer-links">
+            <li><a href="{% url 'web:landing' %}#features" class="footer-link">Lead Management</a></li>
+            <li><a href="{% url 'web:landing' %}#features" class="footer-link">Smart Calling</a></li>
+            <li><a href="{% url 'web:app-intro' %}" class="footer-link">Android Caller App</a></li>
+            <li><a href="{% url 'web:landing' %}#features" class="footer-link">Performance Engine</a></li>
+            <li><a href="{% url 'web:landing' %}#features" class="footer-link">WhatsApp Workflows</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Solutions</h4>
+          <ul class="footer-links">
+            <li><a href="{% url 'web:landing' %}#audience" class="footer-link">Education Consultants</a></li>
+            <li><a href="{% url 'web:landing' %}#audience" class="footer-link">Admission Teams</a></li>
+            <li><a href="{% url 'web:landing' %}#audience" class="footer-link">Counselling Teams</a></li>
+            <li><a href="{% url 'web:landing' %}#audience" class="footer-link">Sales &amp; Telecalling</a></li>
+            <li><a href="{% url 'web:landing' %}#audience" class="footer-link">Lead Conversion</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Get Started</h4>
+          <ul class="footer-links">
+            <li><a href="{% if current_section == 'landing' %}#demo{% else %}{% url 'web:landing' %}#demo{% endif %}" class="footer-link">Book a Free Demo</a></li>
+            <li><a href="{% url 'web:login' %}" class="footer-link">Sign In to CRM</a></li>
+            <li><a href="{% url 'web:app-intro' %}" class="footer-link">Download Android App</a></li>
+            <li><a href="{% url 'web:landing' %}#faq" class="footer-link">Frequently Asked Questions</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2026 Vaani. All rights reserved.</p>
+        <p class="muted">CRM, Caller Management &amp; Lead Conversion Platform</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Interactive Scripts -->
+  <script src="{% static 'web/marketing.js' %}?v=2"></script>
+</body>
+</html>

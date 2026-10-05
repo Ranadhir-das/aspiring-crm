@@ -1,0 +1,1401 @@
+{% extends 'web/marketing_base.html' %}
+{% load static %}
+
+{% block jsonld_extra %}
+,
+{
+  "@type": "FAQPage",
+  "@id": "{{ request.scheme }}://{{ request.get_host }}/#faq",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is Vaani?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Vaani is a modern all-in-one CRM, caller management, and lead conversion platform designed to streamline lead intake, mobile dialing, follow-up scheduling, team gamification, and conversion analytics."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Who is Vaani for?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Vaani is built for education consultants, admission teams, student counselling cells, high-velocity telecalling teams, and any lead-driven organization that wants to eliminate lost leads."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can Vaani manage callers?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Vaani includes dedicated caller assignment, service eligibility matching, active session tracking, call history with outcome logging, and automated quota distribution."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can Vaani track follow-ups?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Callers can schedule callbacks directly after a call. Vaani sends automated reminders, tracks overdue follow-ups, and prevents callbacks from slipping through the cracks."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can Vaani track team performance?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Vaani features a built-in performance points engine that awards points for completed calls, conversions, peer reviews, and milestones, with real-time manager leaderboards."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does Vaani support mobile calling?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. The companion Vaani Android Caller App connects seamlessly to the CRM, enabling one-tap dialing, automated call state logging, attendance verification, and instant outcome recording."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I book a demo?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Simply submit your contact details through the Book a Free Demo form on this page, and our product team will schedule a tailored walkthrough for your team."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I get started?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Request a demo or log in with your credentials to explore the workspace. You can import leads, invite your callers, install the Android app, and start managing leads immediately."
+      }
+    }
+  ]
+}
+{% endblock %}
+
+{% block content %}
+<!-- ========================================================================
+     1. HERO SECTION (Dynamic 2-Column High-Tech Operations Command)
+     ======================================================================== -->
+<section class="hero-section" id="hero">
+  <!-- Cybernetic Grid & Ambient Light Beams -->
+  <div class="hero-bg-grid" aria-hidden="true"></div>
+  <div class="hero-beam-left" aria-hidden="true"></div>
+  <div class="hero-beam-right" aria-hidden="true"></div>
+
+  <div class="container">
+    <div class="hero-layout-grid">
+      <!-- Left Column: Copy, CTAs, and Social Proof -->
+      <div class="hero-left">
+        <div class="hero-announcement-pill">
+          <span class="pill-badge">THE SMARTER WAY TO MANAGE LEADS</span>
+          <span class="pill-text">Smart Routing &amp; Dynamic Call Outcomes</span>
+          <span class="pill-arrow" aria-hidden="true">→</span>
+        </div>
+
+        <h1 class="hero-headline">
+          Turn Every Lead <br><span class="hero-gradient-text">Into an Opportunity.</span>
+        </h1>
+
+        <p class="lead-text hero-subtext">
+          Vaani brings lead management, calling, follow-ups, team performance and conversion tracking into one powerful platform.
+        </p>
+
+        <div class="hero-actions">
+          <a href="#demo" class="btn btn-primary btn-lg btn-glow">Book a Free Demo</a>
+          <a href="{% url 'web:app-intro' %}" class="btn btn-secondary btn-lg">Explore Vaani ↗</a>
+          <button type="button" class="btn btn-ghost btn-lg" id="hero-watch-tour-btn" aria-label="Watch 39s product tour video">
+            <span class="play-circle-icon">▶</span>
+            <span>Watch 39s Tour</span>
+          </button>
+        </div>
+
+        <div class="hero-trust-bar">
+          <div class="avatar-stack" aria-hidden="true">
+            <div class="avatar av-1" title="Priya K.">PK</div>
+            <div class="avatar av-2" title="Tuhina R.">TR</div>
+            <div class="avatar av-3" title="Amit S.">AS</div>
+            <div class="avatar av-4" title="Rahul M.">RM</div>
+          </div>
+          <div class="trust-text">
+            <div class="trust-stars" aria-label="5 out of 5 stars">★★★★★</div>
+            <div class="trust-caption">Trusted by high-growth counselling &amp; telecalling teams</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Interactive 3D Glass Telecaller Cockpit -->
+      <div class="hero-right">
+        <div class="hero-mockup-wrapper">
+          <!-- Floating Badge 1: Gamified Points -->
+          <div class="floating-badge badge-points">
+            <span class="fb-icon">🏆</span>
+            <div class="fb-content">
+              <strong>+30 Points Earned!</strong>
+              <span>Alternate Course Conversion</span>
+            </div>
+          </div>
+
+          <!-- Floating Badge 2: Automated WhatsApp -->
+          <div class="floating-badge badge-whatsapp">
+            <span class="fb-icon">💬</span>
+            <div class="fb-content">
+              <strong>Brochure Sent</strong>
+              <span>MBBS Fee Structure</span>
+            </div>
+          </div>
+
+          <!-- Floating Badge 3: Smart Callback -->
+          <div class="floating-badge badge-followup">
+            <span class="fb-icon">🔔</span>
+            <div class="fb-content">
+              <strong>Callback in 5m</strong>
+              <span>Dr. Ananya Roy</span>
+            </div>
+          </div>
+
+          <!-- Main Interactive Card -->
+          <div class="hero-main-card">
+            <div class="card-glass-header">
+              <div class="caller-profile">
+                <div class="caller-avatar">
+                  <span>TR</span>
+                  <span class="live-dot" title="Telecaller Online"></span>
+                </div>
+                <div class="caller-meta">
+                  <span class="caller-name">Tuhina Roy</span>
+                  <span class="caller-role">Senior Admission Counsellor</span>
+                </div>
+              </div>
+              <span class="card-header-badge">● ACTIVE CALL</span>
+            </div>
+
+            <div class="active-call-box">
+              <div class="call-lead-info">
+                <span class="call-lead-label">CONNECTED CANDIDATE</span>
+                <span class="call-lead-name">Soumya Mukherjee</span>
+                <span class="call-lead-course">Preference: MBBS 2026 (State Quota)</span>
+              </div>
+              <div class="call-timer-box">
+                <span class="call-timer" id="hero-call-timer">02:47</span>
+                <div class="sound-wave-bars" aria-hidden="true">
+                  <span class="sw-bar"></span>
+                  <span class="sw-bar"></span>
+                  <span class="sw-bar"></span>
+                  <span class="sw-bar"></span>
+                  <span class="sw-bar"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="hero-outcome-preview">
+              <span class="outcome-label">ONE-TAP CALL OUTCOME LOGGING</span>
+              <div class="outcome-tags">
+                <span class="outcome-tag active">⭐ Interested → MBBS</span>
+                <span class="outcome-tag">🔔 Follow Up</span>
+                <span class="outcome-tag">💬 WhatsApp Handoff</span>
+              </div>
+            </div>
+
+            <div class="hero-live-strip">
+              <span class="hls-icon">⚡</span>
+              <span>Syncs live with Android Caller App &amp; CRM Web Leaderboard</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Value Ticker Ribbon -->
+  <div class="hero-ticker-wrap" aria-label="Vaani Key Highlights">
+    <div class="hero-ticker-track">
+      <span class="ticker-item"><span class="ticker-dot">●</span> 1-Tap Mobile Dialing</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Zero Missed Follow-ups</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Instant WhatsApp Handoff</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Course &amp; Year Preference Tracking</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Gamified Leaderboards &amp; Points</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Selfie Attendance Verification</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Intelligent Retry Cooldown</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> 100% Real-time Cloud Sync</span>
+      <!-- Duplicate for seamless continuous ticker loop -->
+      <span class="ticker-item"><span class="ticker-dot">●</span> 1-Tap Mobile Dialing</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Zero Missed Follow-ups</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Instant WhatsApp Handoff</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Course &amp; Year Preference Tracking</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Gamified Leaderboards &amp; Points</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Selfie Attendance Verification</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> Intelligent Retry Cooldown</span>
+      <span class="ticker-item"><span class="ticker-dot">●</span> 100% Real-time Cloud Sync</span>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     2. PRODUCT VIDEO (39-second Vaani Product Overview Video)
+     ======================================================================== -->
+<section class="container video-section" aria-label="Product introduction video">
+  <div class="video-section-header">
+    <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> PLATFORM PREVIEW</span>
+    <h2 class="section-title">Experience Vaani in 39 Seconds</h2>
+    <p class="section-desc">See how telecallers, team leads, and managers convert more inquiries with zero friction.</p>
+  </div>
+
+  <!-- Studio Glass Mac OS Frame -->
+  <div class="video-studio-window">
+    <div class="window-chrome-bar">
+      <div class="window-dots" aria-hidden="true">
+        <span class="w-dot red"></span>
+        <span class="w-dot yellow"></span>
+        <span class="w-dot green"></span>
+      </div>
+      <div class="window-address-bar">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+        <span>https://vaani.app/live-preview</span>
+      </div>
+      <span class="window-status-pill">● LIVE DEMO</span>
+    </div>
+
+    <div class="video-wrapper" id="video-wrapper" tabindex="0" role="region" aria-label="Vaani Product Introduction Video Player">
+      <div class="video-inner">
+        <video
+          id="vaani-video"
+          class="video-element"
+          preload="metadata"
+          playsinline
+          poster="{% static 'web/images/video-poster.svg' %}"
+          aria-label="39-second Vaani Product Overview Video">
+          <source src="{% static 'web/videos/vaani-intro.mp4' %}" type="video/mp4">
+          Your browser does not support HTML5 video playback.
+        </video>
+
+        <!-- Video Play Overlay Button -->
+        <div class="video-overlay" id="video-overlay" role="button" aria-label="Play 39-second product video">
+          <button type="button" class="video-play-btn" id="video-play-overlay-btn" aria-label="Play video">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" aria-hidden="true">
+              <polygon points="6 3 20 12 6 21 6 3"></polygon>
+            </svg>
+          </button>
+          <span class="video-tagline">39s Product Overview · Watch Vaani in Action</span>
+        </div>
+
+        <!-- Custom Accessible Video Controls -->
+        <div class="video-controls" id="video-controls">
+          <button type="button" class="v-btn" id="v-play-btn" aria-label="Play video">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+
+          <div class="v-progress-container" id="v-progress-container" role="progressbar" aria-label="Video scrubber" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="v-progress-bar" id="v-progress-bar"></div>
+          </div>
+
+          <span class="v-time" id="v-time-display">00:00 / 00:39</span>
+
+          <button type="button" class="v-btn" id="v-mute-btn" aria-label="Mute audio">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" aria-hidden="true">
+              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"></path>
+            </svg>
+          </button>
+
+          <button type="button" class="v-btn" id="v-fullscreen-btn" aria-label="Toggle Fullscreen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" aria-hidden="true">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     3. PROBLEM / SOLUTION: THREAT MATRIX vs AUTONOMOUS DEFENSE
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="problem-solution">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> THE REALITY OF LEAD OPERATIONS</span>
+      <h2 class="section-title">Why Conventional Lead Management Breaks Down</h2>
+      <p class="section-desc">Without a synchronized system, high-value inquiries slip away every single hour.</p>
+    </div>
+
+    <div class="problem-solution-wrap">
+      <!-- Problem Card (Threat Matrix) -->
+      <div class="problem-card corner-crosshairs">
+        <div class="ps-header">
+          <span class="ps-badge problem">The Disconnected Reality</span>
+          <span class="telemetry-chip crimson">[VULNERABILITY_MATRIX]</span>
+        </div>
+        <h3 style="margin-bottom: 20px;">Where Leads Get Lost</h3>
+        <ul class="ps-list">
+          <li class="ps-item neg">
+            <span class="ps-item-icon">✕</span>
+            <div><strong>Leads get lost:</strong> Multi-channel submissions sit unattended in inboxes and raw sheets.</div>
+          </li>
+          <li class="ps-item neg">
+            <span class="ps-item-icon">✕</span>
+            <div><strong>Follow-ups get missed:</strong> Callers forget scheduled callback times with zero automated alerts.</div>
+          </li>
+          <li class="ps-item neg">
+            <span class="ps-item-icon">✕</span>
+            <div><strong>Callers lack visibility:</strong> No record of prior touchpoints, candidate course interest, or past notes.</div>
+          </li>
+          <li class="ps-item neg">
+            <span class="ps-item-icon">✕</span>
+            <div><strong>Managers cannot track performance:</strong> Blind spots on daily call durations, attempts, and true conversions.</div>
+          </li>
+          <li class="ps-item neg">
+            <span class="ps-item-icon">✕</span>
+            <div><strong>Communication becomes fragmented:</strong> Disconnected WhatsApp messages, unlogged calls, and isolated silos.</div>
+          </li>
+          <li class="ps-item neg">
+            <span class="ps-item-icon">✕</span>
+            <div><strong>Conversion data is scattered:</strong> No single source of truth connecting lead source to final admission.</div>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Solution Card (Autonomous Defense & Conversion Engine) -->
+      <div class="solution-card corner-crosshairs">
+        <div class="ps-header">
+          <span class="ps-badge solution">The Vaani Platform</span>
+          <span class="telemetry-chip emerald">[AUTONOMOUS_DEFENSE]</span>
+        </div>
+        <h3 style="margin-bottom: 20px;">Vaani Brings Everything Together</h3>
+        <ul class="ps-list">
+          <li class="ps-item pos">
+            <span class="ps-item-icon">✓</span>
+            <div><strong>Instant Smart Routing:</strong> Inbound leads are instantly de-duplicated and assigned to eligible active callers.</div>
+          </li>
+          <li class="ps-item pos">
+            <span class="ps-item-icon">✓</span>
+            <div><strong>Zero-Miss Follow-ups:</strong> Automated callback reminders pop up on the caller's Android phone with exact scheduled time.</div>
+          </li>
+          <li class="ps-item pos">
+            <span class="ps-item-icon">✓</span>
+            <div><strong>Mobile Caller Workspace:</strong> Built-in dialer, automatic call duration logging, and structured outcome capture.</div>
+          </li>
+          <li class="ps-item pos">
+            <span class="ps-item-icon">✓</span>
+            <div><strong>Real-Time Leaderboards:</strong> Gamified performance points engine rewards high-performing callers and conversion drivers.</div>
+          </li>
+          <li class="ps-item pos">
+            <span class="ps-item-icon">✓</span>
+            <div><strong>1-Click WhatsApp Handoff:</strong> Send pre-approved templates and continue conversations seamlessly.</div>
+          </li>
+          <li class="ps-item pos">
+            <span class="ps-item-icon">✓</span>
+            <div><strong>Full-Cycle Admission Tracking:</strong> Follow student journeys from preferred course intake to final verified admission.</div>
+          </li>
+        </ul>
+        <div class="ps-lead-solution">
+          "From first click to enrolled candidate — Vaani is your command center."
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     4. FEATURES SECTION: CYBER BENTO GRID (The Vino Costa Signature)
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="features">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> PLATFORM CAPABILITIES</span>
+      <h2 class="section-title">Engineered for Lead Conversion</h2>
+      <p class="section-desc">Every tool your team needs to capture, dial, nurture, and convert inquiries faster.</p>
+    </div>
+
+    <div class="bento-features-grid">
+      <!-- 1. Lead Management (Bento Hero Span 2) -->
+      <article class="bento-card span-2 corner-crosshairs">
+        <div class="bento-card-header">
+          <div class="feature-icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <span class="telemetry-chip cyan">[RADAR_STREAM: 24/7 ACTIVE]</span>
+        </div>
+
+        <!-- Animated Radar Visualizer -->
+        <div class="bento-radar-wrap" aria-hidden="true">
+          <div class="radar-circle c-1"></div>
+          <div class="radar-circle c-2"></div>
+          <div class="radar-circle c-3"></div>
+          <div class="radar-sweep-line"></div>
+          <div class="radar-blip b-1"></div>
+          <div class="radar-blip b-2"></div>
+          <div class="radar-blip b-3"></div>
+          <div class="radar-stream-tag">⚡ AUTONOMOUS INTAKE · ZERO DUPLICATE ENTRIES · SUB-50MS ALLOCATION</div>
+        </div>
+
+        <h3 class="feature-title">1. Lead Management</h3>
+        <p class="feature-desc">Centralized lead ingestion with intelligent de-duplication, batch CSV imports, service eligibility routing, and comprehensive status pipelines.</p>
+      </article>
+
+      <!-- 2. Smart Calling -->
+      <article class="bento-card corner-crosshairs">
+        <div class="bento-card-header">
+          <div class="feature-icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+          </div>
+          <span class="telemetry-chip emerald">[OFFHOOK_SYNC]</span>
+        </div>
+
+        <div class="mini-dialer-box" aria-hidden="true">
+          <div class="dialer-telemetry">
+            <span class="status-tag">● CONNECTED (OFFHOOK)</span>
+            <span class="candidate-name">Ankit Roy · NEET MBBS</span>
+          </div>
+          <span class="dialer-timer">03:42</span>
+        </div>
+
+        <h3 class="feature-title">2. Smart Calling</h3>
+        <p class="feature-desc">Android dialer integration with automated call duration capture, live off-hook tracking, and structured outcome selection.</p>
+      </article>
+
+      <!-- 3. Follow-up Management -->
+      <article class="bento-card corner-crosshairs">
+        <div class="bento-card-header">
+          <div class="feature-icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <span class="telemetry-chip amber">[ZERO_DROP_GUARD]</span>
+        </div>
+
+        <div class="callback-sentinel-box" aria-hidden="true">
+          <div class="sentinel-label">
+            <span>SCHEDULED CALLBACK</span>
+            <strong>Pooja Verma</strong>
+          </div>
+          <span class="sentinel-countdown">04:12</span>
+        </div>
+
+        <h3 class="feature-title">3. Follow-up Management</h3>
+        <p class="feature-desc">Schedule precise callback times. Automated push notifications alert callers when a follow-up is due, highlighting overdue prospects.</p>
+      </article>
+
+      <!-- 4. WhatsApp Communication -->
+      <article class="bento-card corner-crosshairs">
+        <div class="bento-card-header">
+          <div class="feature-icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+          </div>
+          <span class="telemetry-chip emerald">[1-CLICK_DISPATCH]</span>
+        </div>
+
+        <div class="wa-dispatch-box" aria-hidden="true">
+          <span class="wa-bubble-icon">💬</span>
+          <div class="wa-bubble-meta">
+            <strong>Pre-Approved Templates</strong>
+            <span>Fee Structure · Admission PDF</span>
+          </div>
+        </div>
+
+        <h3 class="feature-title">4. WhatsApp Communication</h3>
+        <p class="feature-desc">Direct WhatsApp handoff with approved templates. Share course brochures, fee structures, and admission forms in one tap.</p>
+      </article>
+
+      <!-- 5. Team Performance (Bento Span 2) -->
+      <article class="bento-card span-2 corner-crosshairs">
+        <div class="bento-card-header">
+          <div class="feature-icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          </div>
+          <span class="telemetry-chip cyan">[GAMIFIED_ENGINE]</span>
+        </div>
+
+        <div class="points-engine-box" aria-hidden="true">
+          <div class="points-pills-wrap">
+            <span class="points-pill p-15">🏆 +15 Points (Preferred Course)</span>
+            <span class="points-pill p-30">🚀 +30 Points (Alternate Conversion)</span>
+          </div>
+          <span class="caller-tier-badge">DIAMOND CALLER · TOP 1%</span>
+        </div>
+
+        <h3 class="feature-title">5. Team Performance</h3>
+        <p class="feature-desc">Gamified performance points engine awarding points for successful calls, course conversions, milestones, and peer appreciation review cycles.</p>
+      </article>
+
+      <!-- 6. Counselling & Admissions -->
+      <article class="bento-card corner-crosshairs">
+        <div class="bento-card-header">
+          <div class="feature-icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>
+          </div>
+          <span class="telemetry-chip cyan">[INTAKE_TRACKER]</span>
+        </div>
+
+        <div class="course-pipeline-pills" aria-hidden="true">
+          <span class="c-pill featured">MBBS</span>
+          <span class="c-pill featured">BDS</span>
+          <span class="c-pill">BTECH</span>
+          <span class="c-pill">NURSING</span>
+          <span class="c-pill">MBA</span>
+        </div>
+
+        <h3 class="feature-title">6. Counselling &amp; Admissions</h3>
+        <p class="feature-desc">Dedicated academic workflows for MBBS, BDS, Engineering, Nursing, and postgraduate admissions with intake tracking.</p>
+      </article>
+
+      <!-- 7. Analytics & Reports -->
+      <article class="bento-card corner-crosshairs">
+        <div class="bento-card-header">
+          <div class="feature-icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+          </div>
+          <span class="telemetry-chip emerald">[REALTIME_BI]</span>
+        </div>
+
+        <div class="mini-chart-box" aria-hidden="true">
+          <div class="chart-bar" style="height: 35%;"></div>
+          <div class="chart-bar" style="height: 55%;"></div>
+          <div class="chart-bar" style="height: 42%;"></div>
+          <div class="chart-bar" style="height: 78%;"></div>
+          <div class="chart-bar" style="height: 60%;"></div>
+          <div class="chart-bar" style="height: 92%;"></div>
+          <div class="chart-bar" style="height: 85%;"></div>
+          <div class="chart-bar" style="height: 100%;"></div>
+        </div>
+
+        <h3 class="feature-title">7. Analytics &amp; Reports</h3>
+        <p class="feature-desc">Live conversion ratios, call volume trends, campaign attribution, and manager visibility dashboards refreshed in real time.</p>
+      </article>
+
+      <!-- 8. Notifications & Alerts -->
+      <article class="bento-card corner-crosshairs">
+        <div class="bento-card-header">
+          <div class="feature-icon-wrap" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          </div>
+          <span class="telemetry-chip cyan">[PUSH_RADAR]</span>
+        </div>
+
+        <div class="notif-beacon-box" aria-hidden="true">
+          <span class="notif-beacon-dot"></span>
+          <span class="notif-beacon-text">INSTANT NOTICES &amp; TEAM CHAT ALERTS</span>
+        </div>
+
+        <h3 class="feature-title">8. Notifications &amp; Alerts</h3>
+        <p class="feature-desc">Multi-channel push notifications, in-app notification center, team chat alerts, and company notice broadcasts delivered instantly.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     CALLER APP STORY: PINNED 3D PHONE MOCKUP EXPERIENCE
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="sticky-story-section" id="caller-app-story">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> NATIVE ANDROID CALLER APP</span>
+      <h2 class="section-title">The Full Telecalling Shift On Your Phone</h2>
+      <p class="section-desc">Experience how an assigned lead transforms into a connected call, outcome classification, and scheduled follow-up.</p>
+    </div>
+
+    <!-- Mobile Stage Tabs -->
+    <div class="stage-tabs-mobile" role="tablist" aria-label="Phone Story Stages">
+      <button type="button" class="stage-tab-btn active" data-stage="1" role="tab" aria-selected="true">[01] Inbound Lead</button>
+      <button type="button" class="stage-tab-btn" data-stage="2" role="tab" aria-selected="false">[02] Active Call</button>
+      <button type="button" class="stage-tab-btn" data-stage="3" role="tab" aria-selected="false">[03] Outcome Dialog</button>
+      <button type="button" class="stage-tab-btn" data-stage="4" role="tab" aria-selected="false">[04] Follow-up &amp; WhatsApp</button>
+    </div>
+
+    <div class="sticky-story-container">
+      <!-- Left Column: Scroll Narrative Steps -->
+      <div class="scroll-text-col">
+        <!-- Step 1 -->
+        <div class="story-step is-active corner-crosshairs" data-stage="1">
+          <div class="story-step-header">
+            <span class="story-step-badge">[STAGE_01 // INTAKE]</span>
+            <span class="telemetry-chip cyan">ELIGIBILITY_MATCHED</span>
+          </div>
+          <h3 class="story-step-title">01. Instant Lead Assignment &amp; Course Matching</h3>
+          <p class="story-step-desc">
+            New inquiries from website campaigns and batch CSVs appear directly in the caller's queue. Callers see preferred course (MBBS, BDS, BTECH), admission year, and student notes before dialing.
+          </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="story-step corner-crosshairs" data-stage="2">
+          <div class="story-step-header">
+            <span class="story-step-badge">[STAGE_02 // OFFHOOK]</span>
+            <span class="telemetry-chip emerald">LIVE_DURATION_SYNC</span>
+          </div>
+          <h3 class="story-step-title">02. 1-Tap Mobile Dialing &amp; Off-Hook Detection</h3>
+          <p class="story-step-desc">
+            Callers tap once to initiate the call via the native phone SIM. Vaani automatically logs the exact call duration, timestamp, and active off-hook state with zero manual timer entry.
+          </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="story-step corner-crosshairs" data-stage="3">
+          <div class="story-step-header">
+            <span class="story-step-badge">[STAGE_03 // OUTCOME]</span>
+            <span class="telemetry-chip violet">AUTO_DISPATCH_PROMPT</span>
+          </div>
+          <h3 class="story-step-title">03. Disconnect &amp; Immediate Outcome Classification</h3>
+          <p class="story-step-desc">
+            The instant the call ends, the outcome modal automatically pops up: Interested, Follow Up, Not Interested, No Candidate, or Wrong Number. Converting to preferred course awards +15 points; alternate course awards +30 points.
+          </p>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="story-step corner-crosshairs" data-stage="4">
+          <div class="story-step-header">
+            <span class="story-step-badge">[STAGE_04 // SENTINEL]</span>
+            <span class="telemetry-chip amber">ZERO_DROP_ALERT</span>
+          </div>
+          <h3 class="story-step-title">04. Zero-Miss Follow-up Sentinel &amp; 1-Tap WhatsApp</h3>
+          <p class="story-step-desc">
+            Schedule callbacks with exact calendar times. Automated push notifications alert callers when due. Dispatch official admission brochures and fee structures via WhatsApp in a single tap.
+          </p>
+        </div>
+      </div>
+
+      <!-- Right Column: Sticky Pinned 3D Phone Mockup -->
+      <div class="sticky-phone-col">
+        <div class="phone-mockup-frame" id="interactive-phone-mockup" data-active-stage="1" aria-label="Interactive 3D Phone Mockup">
+          <!-- Chrome Bar / Speaker / Notch -->
+          <div class="phone-speaker" aria-hidden="true"></div>
+          <div class="phone-notch" aria-hidden="true">
+            <span class="notch-camera"></span>
+            <span class="notch-sensor"></span>
+          </div>
+
+          <!-- Status Bar -->
+          <div class="phone-status-bar" aria-hidden="true">
+            <span>09:41</span>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <span>5G</span>
+              <span>100%</span>
+            </div>
+          </div>
+
+          <!-- Screen Stages -->
+          <div class="phone-screen-content">
+            <!-- Stage 1: Lead Card -->
+            <div class="phone-stage stage-1">
+              <div class="phone-lead-card">
+                <div class="plc-header">
+                  <span class="telemetry-chip cyan" style="font-size: 0.65rem;">AVAILABLE LEAD</span>
+                  <span style="font-size: 0.72rem; color: #94a3b8;">#LD-8491</span>
+                </div>
+                <div class="plc-name">Soumya Mukherjee</div>
+                <div class="plc-course">Preference: MBBS 2026 (State Quota)</div>
+                <div class="plc-phone">+91 98765 43210</div>
+                <div style="font-size: 0.72rem; color: #64748b; margin-top: 4px;">Source: Website Ingestion · Sub-50ms Routing</div>
+                <button type="button" class="plc-btn-call">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  <span>1-Tap Connect</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Stage 2: Live Call -->
+            <div class="phone-stage stage-2">
+              <div class="phone-active-call-view">
+                <span class="card-header-badge" style="background: rgba(0, 245, 160, 0.18); border-color: rgba(0, 245, 160, 0.35); color: #00f5a0;">● OFFHOOK CONNECTED</span>
+                <div class="pac-avatar">SM</div>
+                <div>
+                  <div style="font-weight: 800; font-size: 1.1rem; color: #ffffff;">Soumya Mukherjee</div>
+                  <div style="font-size: 0.78rem; color: #94a3b8;">MBBS 2026 Counselling</div>
+                </div>
+                <div class="pac-timer" id="phone-active-timer">02:47</div>
+                <div class="sound-wave-bars" aria-hidden="true" style="margin: 8px 0;">
+                  <span class="sw-bar"></span>
+                  <span class="sw-bar"></span>
+                  <span class="sw-bar"></span>
+                  <span class="sw-bar"></span>
+                  <span class="sw-bar"></span>
+                </div>
+                <div style="font-size: 0.72rem; color: var(--emerald-neon);">Duration logging active in background</div>
+              </div>
+            </div>
+
+            <!-- Stage 3: Outcome Modal -->
+            <div class="phone-stage stage-3">
+              <div class="phone-outcome-modal">
+                <div class="pom-title">Call Outcome Dialog</div>
+                <div class="pom-choice selected">
+                  <span>⭐ Interested</span>
+                  <span>✓</span>
+                </div>
+                <div class="pom-choice selected" style="margin-left: 12px; background: rgba(0, 242, 254, 0.15); border-color: var(--cyan-neon);">
+                  <span>Course: MBBS</span>
+                  <span>2026 Intake</span>
+                </div>
+                <div class="pom-choice" style="opacity: 0.6;">
+                  <span>🔔 Follow Up</span>
+                  <span>→</span>
+                </div>
+                <div class="pom-choice" style="opacity: 0.6;">
+                  <span>✕ Not Interested</span>
+                  <span>→</span>
+                </div>
+                <div style="padding: 8px 12px; border-radius: 10px; background: rgba(0, 245, 160, 0.15); border: 1px solid rgba(0, 245, 160, 0.35); color: var(--emerald-neon); font-size: 0.78rem; font-weight: 700; text-align: center;">
+                  +15 Performance Points Queued!
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage 4: Follow-up & WhatsApp -->
+            <div class="phone-stage stage-4">
+              <div class="phone-followup-wa-view">
+                <div class="pfw-pill">
+                  <span style="font-size: 1.1rem;">🔔</span>
+                  <div>
+                    <strong>Callback Sentinel Active</strong>
+                    <div style="font-size: 0.72rem; opacity: 0.85;">Scheduled: Today, 04:30 PM</div>
+                  </div>
+                </div>
+                <div class="pfw-wa-card">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <strong style="color: #ffffff;">WhatsApp Handoff</strong>
+                    <span style="color: var(--emerald-neon);">✓✓ Sent</span>
+                  </div>
+                  <div style="font-size: 0.75rem; color: #cbd5e1; margin-top: 4px;">
+                    "Hi Soumya, here is the verified MBBS Fee Structure and Admission Brochure for 2026."
+                  </div>
+                </div>
+                <div style="font-size: 0.7rem; color: #94a3b8; text-align: center; margin-top: 4px;">
+                  1-Click Dispatch from Pre-Approved Templates
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Home Bar -->
+          <div class="phone-home-bar" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     5. HOW VAANI WORKS: CYBER CONVERSION PIPELINE
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="how-it-works">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> HOW VAANI WORKS</span>
+      <h2 class="section-title">The Complete Conversion Workflow</h2>
+      <p class="section-desc">A continuous, closed-loop pipeline from first touchpoint to closed conversion.</p>
+    </div>
+
+    <div class="cyber-pipeline-wrap workflow-wrap">
+      <div class="workflow-step pipeline-node corner-crosshairs">
+        <div class="pipeline-node-header">
+          <div class="workflow-num pipeline-step-code">01</div>
+          <span class="telemetry-chip cyan">[INGEST]</span>
+        </div>
+        <div class="workflow-icon pipeline-icon-circle" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+        </div>
+        <h3 class="workflow-title pipeline-title">Capture Leads</h3>
+        <p class="workflow-text pipeline-desc">Website forms, campaigns, and batch imports stream into one centralized intake queue.</p>
+      </div>
+
+      <div class="workflow-step pipeline-node corner-crosshairs">
+        <div class="pipeline-node-header">
+          <div class="workflow-num pipeline-step-code">02</div>
+          <span class="telemetry-chip cyan">[ROUTE]</span>
+        </div>
+        <div class="workflow-icon pipeline-icon-circle" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        </div>
+        <h3 class="workflow-title pipeline-title">Assign to Team</h3>
+        <p class="workflow-text pipeline-desc">Automated service matching and quota distribution assign leads to eligible active callers.</p>
+      </div>
+
+      <div class="workflow-step pipeline-node corner-crosshairs">
+        <div class="pipeline-node-header">
+          <div class="workflow-num pipeline-step-code">03</div>
+          <span class="telemetry-chip cyan">[DIAL]</span>
+        </div>
+        <div class="workflow-icon pipeline-icon-circle" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+        </div>
+        <h3 class="workflow-title pipeline-title">Call &amp; Follow Up</h3>
+        <p class="workflow-text pipeline-desc">Callers dial from the Android app, log structured outcomes, and schedule precise reminders.</p>
+      </div>
+
+      <div class="workflow-step pipeline-node corner-crosshairs">
+        <div class="pipeline-node-header">
+          <div class="workflow-num pipeline-step-code">04</div>
+          <span class="telemetry-chip cyan">[GAMIFY]</span>
+        </div>
+        <div class="workflow-icon pipeline-icon-circle" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        </div>
+        <h3 class="workflow-title pipeline-title">Track Performance</h3>
+        <p class="workflow-text pipeline-desc">Points engine awards credits for calls and conversions; managers monitor live activity.</p>
+      </div>
+
+      <div class="workflow-step pipeline-node corner-crosshairs">
+        <div class="pipeline-node-header">
+          <div class="workflow-num pipeline-step-code">05</div>
+          <span class="telemetry-chip emerald">[CONVERT]</span>
+        </div>
+        <div class="workflow-icon pipeline-icon-circle" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        </div>
+        <h3 class="workflow-title pipeline-title">Convert</h3>
+        <p class="workflow-text pipeline-desc">Candidate selects preferred course intake, counselling closes, and admission is verified.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     6. PRODUCT SHOWCASE SECTION (Desktop & Mobile)
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="showcase">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> PRODUCT SHOWCASE</span>
+      <h2 class="section-title">Built for High-Velocity Teams</h2>
+      <p class="section-desc">Experience the harmony between desktop management and mobile telecalling.</p>
+    </div>
+
+    <!-- Showcase Tabs -->
+    <div class="showcase-tabs" role="tablist" aria-label="Product Showcase Views">
+      <button type="button" class="showcase-tab active" data-tab="tab-dashboard" role="tab" aria-selected="true">[01] CRM Dashboard</button>
+      <button type="button" class="showcase-tab" data-tab="tab-leads" role="tab" aria-selected="false">[02] Lead Management</button>
+      <button type="button" class="showcase-tab" data-tab="tab-caller-app" role="tab" aria-selected="false">[03] Android Caller App</button>
+      <button type="button" class="showcase-tab" data-tab="tab-analytics" role="tab" aria-selected="false">[04] Performance &amp; Analytics</button>
+    </div>
+
+    <!-- Tab 1: CRM Dashboard -->
+    <div class="showcase-pane active corner-crosshairs" id="tab-dashboard" role="tabpanel">
+      <div class="showcase-display">
+        <div class="showcase-media">
+          <img src="{% static 'web/images/video-poster.svg' %}" alt="Vaani CRM Overview Dashboard" class="showcase-img" loading="lazy">
+        </div>
+        <div class="showcase-info">
+          <div style="margin-bottom: 12px;"><span class="telemetry-chip cyan">[STATION: 24/7 BI COMMAND]</span></div>
+          <h3>Real-Time Operations Command Center</h3>
+          <p>Get a bird's-eye view of your entire organization's sales health. Monitor active callers, pending follow-ups, daily call volumes, and conversion trends on a single glassmorphic canvas.</p>
+          <ul class="showcase-bullets">
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Instant KPI cards: Total Leads, Calls Today, Conversion %</span>
+            </li>
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Sub-50ms live refresh polling loop with zero page flicker</span>
+            </li>
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Interactive 7, 30, and 90-day pipeline trend breakdowns</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Lead Management -->
+    <div class="showcase-pane corner-crosshairs" id="tab-leads" role="tabpanel">
+      <div class="showcase-display">
+        <div class="showcase-media">
+          <img src="{% static 'web/images/tutorial-web.png' %}" alt="Lead Management and Import Pipeline" class="showcase-img" loading="lazy">
+        </div>
+        <div class="showcase-info">
+          <div style="margin-bottom: 12px;"><span class="telemetry-chip emerald">[INTAKE_ENGINE: ACTIVE]</span></div>
+          <h3>Frictionless Lead Routing &amp; Intake</h3>
+          <p>Stop leads from falling through the cracks. Ingest batches from CSV files with automatic preferred course mapping, or stream live website submissions straight into active caller queues.</p>
+          <ul class="showcase-bullets">
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Automatic duplicate phone detection and merge tracking</span>
+            </li>
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Role-based caller isolation (callers only see their assigned leads)</span>
+            </li>
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Course-specific workflows: MBBS, BDS, Engineering, Nursing, etc.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Caller App -->
+    <div class="showcase-pane corner-crosshairs" id="tab-caller-app" role="tabpanel">
+      <div class="showcase-display">
+        <div class="showcase-media">
+          <img src="{% static 'web/images/_preview_v3.png' %}" alt="Vaani Android Caller Application" class="showcase-img" loading="lazy">
+        </div>
+        <div class="showcase-info">
+          <div style="margin-bottom: 12px;"><span class="telemetry-chip cyan">[ANDROID_APP: V2.4]</span></div>
+          <h3>Native Android Caller Workspace</h3>
+          <p>Equip your calling team with an app built for speed. One-touch dialing from the lead card, auto-detected call disconnects, and immediate prompt for outcome classification.</p>
+          <ul class="showcase-bullets">
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Reliable call outcome modal triggered right after call disconnect</span>
+            </li>
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Photo-verified attendance check-in and daily work logging</span>
+            </li>
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Real-time push notifications for chat, notices, and follow-ups</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Performance & Analytics -->
+    <div class="showcase-pane corner-crosshairs" id="tab-analytics" role="tabpanel">
+      <div class="showcase-display">
+        <div class="showcase-media">
+          <img src="{% static 'web/images/video-poster.svg' %}" alt="Performance Analytics and Leaderboards" class="showcase-img" loading="lazy">
+        </div>
+        <div class="showcase-info">
+          <div style="margin-bottom: 12px;"><span class="telemetry-chip amber">[GAMIFIED_LEADERBOARDS]</span></div>
+          <h3>Gamified Points &amp; Peer Appreciation</h3>
+          <p>Motivate your callers with transparent rewards. Track calls, conversions, and monthly peer appreciation reviews that automatically calculate performance bonuses.</p>
+          <ul class="showcase-bullets">
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Conversion bonuses (+15 for preferred course, +30 for alternate)</span>
+            </li>
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Mandatory monthly peer review flows for completed review periods</span>
+            </li>
+            <li class="showcase-bullet">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              <span>Auditable points history and manager adjustment controls</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     GAMIFIED PERFORMANCE & POINTS ENGINE HUD
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="points-hud-section" id="performance-points-hud">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> GAMIFIED REWARDS ENGINE</span>
+      <h2 class="section-title">Incentivize Every High-Value Conversation</h2>
+      <p class="section-desc">Vaani automatically calculates and credits points for calls, preferred course conversions, and streak milestones in real time.</p>
+    </div>
+
+    <div class="points-hud-card corner-crosshairs">
+      <div class="points-hud-grid">
+        <!-- Live Ticker & Rank -->
+        <div class="points-counter-display">
+          <span class="telemetry-chip emerald" style="margin-bottom: 12px;">● LIVE SCORECARD</span>
+          <div class="counter-num-wrap">
+            <span class="counter-plus">+</span>
+            <span class="counter-digits" id="animated-points-total" data-target="620">0</span>
+          </div>
+          <span class="counter-label">Points Earned This Month</span>
+          <div style="margin-top: 18px;">
+            <span class="caller-tier-badge" style="background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.5); color: #e9d5ff; font-size: 0.8rem; font-weight: 800; padding: 6px 14px; border-radius: 9999px;">
+              💎 DIAMOND TIER · TOP 1% NATIONWIDE
+            </span>
+          </div>
+        </div>
+
+        <!-- Breakdown List -->
+        <div class="points-breakdown-list">
+          <div class="pbl-item">
+            <div>
+              <strong style="color: #ffffff; display: block;">Preferred Course Conversion</strong>
+              <span style="font-size: 0.82rem; color: #94a3b8;">Candidate admitted into their initial course inquiry</span>
+            </div>
+            <span class="pbl-badge badge-15">+15 PTS</span>
+          </div>
+
+          <div class="pbl-item">
+            <div>
+              <strong style="color: #ffffff; display: block;">Alternate Course Conversion</strong>
+              <span style="font-size: 0.82rem; color: #94a3b8;">Counsellor successfully converts student to high-value alternate program</span>
+            </div>
+            <span class="pbl-badge badge-30">+30 PTS</span>
+          </div>
+
+          <div class="pbl-item">
+            <div>
+              <strong style="color: #ffffff; display: block;">Zero-Miss Callback Streak</strong>
+              <span style="font-size: 0.82rem; color: #94a3b8;">100% scheduled follow-ups completed on time throughout the day</span>
+            </div>
+            <span class="pbl-badge badge-75">+75 PTS</span>
+          </div>
+
+          <div class="pbl-item">
+            <div>
+              <strong style="color: #ffffff; display: block;">Monthly Diamond Milestone</strong>
+              <span style="font-size: 0.82rem; color: #94a3b8;">Exceeded 50 completed admissions and peer review quality threshold</span>
+            </div>
+            <span class="pbl-badge badge-500">+500 PTS</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     7. PERFORMANCE & WORKFLOW METRICS (Illustrative Examples)
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="metrics">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> WORKFLOW PERFORMANCE</span>
+      <h2 class="section-title">Measurable Impact Across Every Dimension</h2>
+      <p class="section-desc">Key operational workflow concepts supported natively by the Vaani platform.</p>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card corner-crosshairs">
+        <div class="metric-num gradient-text">100%</div>
+        <div class="metric-label">Calls Logged</div>
+      </div>
+      <div class="metric-card corner-crosshairs">
+        <div class="metric-num gradient-text">Zero</div>
+        <div class="metric-label">Missed Follow-ups</div>
+      </div>
+      <div class="metric-card corner-crosshairs">
+        <div class="metric-num gradient-text">1-Tap</div>
+        <div class="metric-label">WhatsApp Handoff</div>
+      </div>
+      <div class="metric-card corner-crosshairs">
+        <div class="metric-num gradient-text">&lt; 50ms</div>
+        <div class="metric-label">Live Overview Sync</div>
+      </div>
+      <div class="metric-card corner-crosshairs">
+        <div class="metric-num gradient-text">10+</div>
+        <div class="metric-label">Course Pathways</div>
+      </div>
+      <div class="metric-card corner-crosshairs">
+        <div class="metric-num gradient-text">100%</div>
+        <div class="metric-label">Caller Isolation</div>
+      </div>
+    </div>
+    <p class="metric-disclaimer">* Illustrative platform workflow capability metrics.</p>
+  </div>
+</section>
+
+<!-- ========================================================================
+     8. WHO IS VAANI FOR?
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="audience">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> BUILT FOR SPECIALIZED TEAMS</span>
+      <h2 class="section-title">Who is Vaani For?</h2>
+      <p class="section-desc">Tailored for organizations that rely on high-touch telecalling and counselling conversion.</p>
+    </div>
+
+    <div class="audience-grid">
+      <div class="audience-card corner-crosshairs">
+        <div class="audience-icon">🎓</div>
+        <h3 class="audience-title">Education Consultants</h3>
+        <p class="audience-text">Manage thousands of student inquiries across multiple course options, track intake deadlines, and ensure persistent follow-up.</p>
+      </div>
+
+      <div class="audience-card corner-crosshairs">
+        <div class="audience-icon">🏛️</div>
+        <h3 class="audience-title">Admission Teams</h3>
+        <p class="audience-text">Verify candidate eligibility, track NEET/PCB qualifications, coordinate document collection, and confirm enrollments.</p>
+      </div>
+
+      <div class="audience-card corner-crosshairs">
+        <div class="audience-icon">🤝</div>
+        <h3 class="audience-title">Counselling Teams</h3>
+        <p class="audience-text">Conduct structured candidate counselling sessions, record personalized advice, and transition interested students to admissions.</p>
+      </div>
+
+      <div class="audience-card corner-crosshairs">
+        <div class="audience-icon">📞</div>
+        <h3 class="audience-title">Sales Teams</h3>
+        <p class="audience-text">Empower telecallers with automated dialing queues, instant outcome logging, and gamified performance scorecards.</p>
+      </div>
+
+      <div class="audience-card corner-crosshairs">
+        <div class="audience-icon">⚡</div>
+        <h3 class="audience-title">Lead-Driven Businesses</h3>
+        <p class="audience-text">Any business capturing high-volume web inquiries that needs zero-leak routing, instant callback alerts, and CRM clarity.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     9. BOOK DEMO SECTION & FORM
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="demo">
+  <div class="container demo-section-wrap">
+    <div>
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> TRANSFORM YOUR TEAM</span>
+      <div style="margin: 12px 0 20px;"><span class="telemetry-chip emerald">● PRODUCT SPECIALISTS ONLINE</span></div>
+      <h2>See Vaani in Action With a Personalized Demo</h2>
+      <p class="lead-text" style="margin-top: 16px; margin-bottom: 24px;">
+        Book a 20-minute product tour tailored to your team's exact lead workflow. Learn how Vaani replaces messy spreadsheets with automated calling, zero-miss follow-ups, and conversion intelligence.
+      </p>
+
+      <ul class="showcase-bullets" style="margin-bottom: 28px;">
+        <li class="showcase-bullet">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+          <span>Live walkthrough of the CRM Dashboard &amp; Android Caller App</span>
+        </li>
+        <li class="showcase-bullet">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+          <span>Custom consultation on your lead routing &amp; course intake rules</span>
+        </li>
+        <li class="showcase-bullet">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+          <span>Immediate rollout roadmap with zero IT complexity</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Booking Form Card -->
+    <div class="demo-form-card corner-crosshairs">
+      <h3 class="demo-form-title">Request a Demo</h3>
+      <p class="demo-form-subtitle">Fill in your details below and our team will get back to you promptly.</p>
+
+      <!-- Success / Error Status Alert -->
+      <div id="demo-form-alert" class="form-status-alert" role="alert"></div>
+
+      <form id="demo-form" action="{% url 'web:book-demo' %}" method="post" novalidate>
+        {% csrf_token %}
+
+        <!-- Honeypot (hidden from human users) -->
+        <input type="text" name="website_url" class="hp-field" tabindex="-1" autocomplete="off">
+
+        <div class="demo-form-fields">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="demo-name" class="form-label">Full Name <span class="req">*</span></label>
+              <input type="text" id="demo-name" name="name" class="form-input" placeholder="e.g. Rahul Sharma" required autocomplete="name">
+              <span id="demo-name-error" class="field-error"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="demo-company" class="form-label">Company / Institution <span class="req">*</span></label>
+              <input type="text" id="demo-company" name="company" class="form-input" placeholder="e.g. Apex Consultants" required autocomplete="organization">
+              <span id="demo-company-error" class="field-error"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="demo-phone" class="form-label">Phone Number <span class="req">*</span></label>
+              <input type="tel" id="demo-phone" name="phone" class="form-input" placeholder="e.g. +91 98765 43210" required autocomplete="tel">
+              <span id="demo-phone-error" class="field-error"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="demo-email" class="form-label">Work Email <span class="req">*</span></label>
+              <input type="email" id="demo-email" name="email" class="form-input" placeholder="e.g. rahul@apex.com" required autocomplete="email">
+              <span id="demo-email-error" class="field-error"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="demo-employees" class="form-label">Number of Employees / Callers <span class="req">*</span></label>
+            <select id="demo-employees" name="employees" class="form-select" required>
+              <option value="" disabled selected>Select organization size</option>
+              <option value="1-10">1 - 10 Callers</option>
+              <option value="11-50">11 - 50 Callers</option>
+              <option value="51-200">51 - 200 Callers</option>
+              <option value="201+">200+ Enterprise Callers</option>
+            </select>
+            <span id="demo-employees-error" class="field-error"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="demo-message" class="form-label">How can we help? (Optional)</label>
+            <textarea id="demo-message" name="message" class="form-textarea" placeholder="Tell us about your team's current challenges or volume..."></textarea>
+          </div>
+
+          <button type="submit" id="demo-submit-btn" class="btn btn-primary btn-lg btn-glow" style="width: 100%;">
+            Request a Demo
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     10. FAQ ACCORDION (8 Specified Questions)
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="faq">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow"><span class="pulse-dot" aria-hidden="true"></span> COMMON QUESTIONS</span>
+      <h2 class="section-title">Frequently Asked Questions</h2>
+      <p class="section-desc">Everything you need to know about the Vaani platform and deployment.</p>
+    </div>
+
+    <div class="faq-list">
+      <!-- 1 -->
+      <div class="faq-item active corner-crosshairs">
+        <button type="button" class="faq-trigger" aria-expanded="true">
+          <span>What is Vaani?</span>
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-panel">
+          <div class="faq-content">
+            Vaani is a modern all-in-one CRM, caller management, and lead conversion platform. It unifies lead intake, automated Android mobile dialing, follow-up scheduling, gamified performance points, WhatsApp communication, and admissions tracking in one cohesive platform.
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 -->
+      <div class="faq-item corner-crosshairs">
+        <button type="button" class="faq-trigger" aria-expanded="false">
+          <span>Who is Vaani for?</span>
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-panel">
+          <div class="faq-content">
+            Vaani is designed for education consultants, admission offices, counselling centers, high-velocity telecalling teams, and any lead-driven organization looking to stop lead leaks and accelerate conversion cycles.
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 -->
+      <div class="faq-item corner-crosshairs">
+        <button type="button" class="faq-trigger" aria-expanded="false">
+          <span>Can Vaani manage callers?</span>
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-panel">
+          <div class="faq-content">
+            Yes. Managers can assign leads by service eligibility, track live caller sessions, monitor call attempts, review detailed call logs, and verify caller attendance with live photo challenges.
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 -->
+      <div class="faq-item corner-crosshairs">
+        <button type="button" class="faq-trigger" aria-expanded="false">
+          <span>Can Vaani track follow-ups?</span>
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-panel">
+          <div class="faq-content">
+            Yes. When a caller marks an outcome as Follow Up, they select a target date and time. Vaani automatically tracks upcoming callbacks, delivers timely push notifications, and highlights overdue tasks on the dashboard.
+          </div>
+        </div>
+      </div>
+
+      <!-- 5 -->
+      <div class="faq-item corner-crosshairs">
+        <button type="button" class="faq-trigger" aria-expanded="false">
+          <span>Can Vaani track team performance?</span>
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-panel">
+          <div class="faq-content">
+            Yes. Vaani includes an advanced Points Engine that rewards callers for completed calls, admissions, and milestone achievements. It also enforces structured monthly peer reviews to foster healthy team collaboration.
+          </div>
+        </div>
+      </div>
+
+      <!-- 6 -->
+      <div class="faq-item corner-crosshairs">
+        <button type="button" class="faq-trigger" aria-expanded="false">
+          <span>Does Vaani support mobile calling?</span>
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-panel">
+          <div class="faq-content">
+            Yes. Vaani includes a companion Android Caller Application that allows callers to make calls directly from their smartphone while automatically logging call duration and triggering the call outcome dialog immediately upon call disconnect.
+          </div>
+        </div>
+      </div>
+
+      <!-- 7 -->
+      <div class="faq-item corner-crosshairs">
+        <button type="button" class="faq-trigger" aria-expanded="false">
+          <span>Can I book a demo?</span>
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-panel">
+          <div class="faq-content">
+            Yes. You can book a free demo using the form above. Our product specialists will prepare a live personalized walkthrough showcasing how Vaani fits into your specific lead workflows.
+          </div>
+        </div>
+      </div>
+
+      <!-- 8 -->
+      <div class="faq-item corner-crosshairs">
+        <button type="button" class="faq-trigger" aria-expanded="false">
+          <span>How do I get started?</span>
+          <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="faq-panel">
+          <div class="faq-content">
+            Request a demo or sign in to your workspace. Once your team members are registered and have installed the Android caller app, you can import your existing leads via CSV and begin calling immediately.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================================
+     11. THE VAULT: CYBER VORTEX FINAL CTA
+     ======================================================================== -->
+<div class="cyber-laser-divider" aria-hidden="true"></div>
+
+<section class="section-padding" id="final-cta">
+  <div class="container">
+    <div class="final-cta-card corner-crosshairs">
+      <div style="margin-bottom: 20px;">
+        <span class="eyebrow" style="background: rgba(0, 242, 254, 0.15); border-color: rgba(0, 242, 254, 0.4);"><span class="pulse-dot" aria-hidden="true"></span> ACCELERATE YOUR REVENUE</span>
+      </div>
+      <h2 class="final-cta-title">Ready to turn more leads into conversions?</h2>
+      <p class="final-cta-desc">
+        Equip your team with the modern CRM platform that automates dialing, eliminates missed callbacks, and tracks real results.
+      </p>
+      <div class="final-cta-btns">
+        <a href="#demo" class="btn btn-primary btn-lg btn-glow">Book a Free Demo</a>
+        <a href="{% url 'web:login' %}" class="btn btn-secondary btn-lg">Login to Vaani</a>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

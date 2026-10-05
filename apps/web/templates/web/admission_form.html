@@ -4,185 +4,459 @@
 {% block breadcrumb %}Record Admission{% endblock %}
 
 {% block content %}
-<div class="page-heading">
-  <div>
-    <a class="text-link" href="{% url 'web:admissions' %}">← Admissions</a>
-    <h1>{{ title }}<span class="accent">.</span></h1>
-    <p>Search, inspect student details and counselling history, and confirm admission.</p>
-  </div>
-</div>
-
-<!-- Step 1: Lead Search -->
-<section class="panel spaced">
-  <div class="panel-heading">
+<div class="admission-container">
+  <!-- Page Header -->
+  <div class="page-heading">
     <div>
-      <h2>1. Search and Select Lead</h2>
-      <p>Search existing leads by Student Name, Phone, Email, or Lead ID</p>
-    </div>
-  </div>
-  <form method="get" class="filters" style="margin-bottom: 0;">
-    <label class="search-field" style="flex: 1;">
-      <span>⌕</span>
-      <input type="text" name="q" value="{{ search_query }}" placeholder="Enter student name, phone, email, or lead ID…" aria-label="Search lead">
-    </label>
-    <button type="submit" class="button primary">Search</button>
-    {% if search_query %}
-      <a class="text-link" href="{% url 'web:admission-new' %}">Clear</a>
-    {% endif %}
-  </form>
-
-  {% if search_results %}
-    <div class="table-scroll" style="margin-top: 16px;">
-      <table>
-        <thead>
-          <tr>
-            <th>Student</th>
-            <th>Phone &amp; Email</th>
-            <th>Batch</th>
-            <th>Assigned Caller</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for res in search_results %}
-            <tr {% if selected_lead and selected_lead.pk == res.pk %}style="background: rgba(37,99,235,0.08);"{% endif %}>
-              <td><strong>{{ res.name }}</strong></td>
-              <td>{{ res.phone }}<br><small>{{ res.email|default:'—' }}</small></td>
-              <td><small>{{ res.import_batch.filename|default:'Manual / Direct' }}</small></td>
-              <td>{{ res.assigned_caller|user_name }}</td>
-              <td><span class="badge {{ res.status|lower }}">{{ res.get_status_display }}</span></td>
-              <td>
-                <a class="button subtle" href="{% url 'web:admission-new' %}?lead={{ res.pk }}{% if search_query %}&q={{ search_query }}{% endif %}">
-                  Select Lead →
-                </a>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% elif search_query %}
-    <p class="empty" style="margin-top: 16px;">No leads matching "{{ search_query }}" were found.</p>
-  {% endif %}
-</section>
-
-<!-- Step 2: Selected Lead Inspection & Counselling History -->
-{% if selected_lead %}
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>2. Student Profile &amp; History</h2>
-      <p>Verify lead details and prior counselling before recording admission</p>
-    </div>
-    <span class="badge {{ selected_lead.status|lower }}">{{ selected_lead.get_status_display }}</span>
-  </div>
-
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
-    <div style="padding: 12px 16px; background: rgba(0,0,0,0.03); border-radius: 8px;">
-      <small style="color: #64748b; display: block; margin-bottom: 4px;">STUDENT NAME</small>
-      <strong>{{ selected_lead.name }}</strong> <small>(ID: #{{ selected_lead.pk }})</small>
-    </div>
-    <div style="padding: 12px 16px; background: rgba(0,0,0,0.03); border-radius: 8px;">
-      <small style="color: #64748b; display: block; margin-bottom: 4px;">PHONE / EMAIL</small>
-      <div>{{ selected_lead.phone }}</div>
-      <small style="color: #64748b;">{{ selected_lead.email|default:'No email' }}</small>
-    </div>
-    <div style="padding: 12px 16px; background: rgba(0,0,0,0.03); border-radius: 8px;">
-      <small style="color: #64748b; display: block; margin-bottom: 4px;">BATCH / SOURCE</small>
-      <div>{{ selected_lead.import_batch.filename|default:'Direct / Website' }}</div>
-      <small style="color: #64748b;">{{ selected_lead.location|default:selected_lead.source }}</small>
-    </div>
-    <div style="padding: 12px 16px; background: rgba(0,0,0,0.03); border-radius: 8px;">
-      <small style="color: #64748b; display: block; margin-bottom: 4px;">ASSIGNED CALLER</small>
-      <strong>{{ selected_lead.assigned_caller|user_name }}</strong>
+      <a class="text-link" href="{% url 'web:admissions' %}" style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 8px;">
+        <span>â†</span> Back to Admissions
+      </a>
+      <h1>{{ title }}<span class="accent">.</span></h1>
+      <p>Record and verify a confirmed student admission with caller attribution and performance tracking.</p>
     </div>
   </div>
 
-  <div class="panel-heading" style="margin-top: 12px;">
-    <div>
-      <h3>Prior Counselling Sessions</h3>
-      <p>Walk-in counselling and consultation notes recorded for this student</p>
-    </div>
-  </div>
-
-  {% if prior_counsellings %}
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>Date / Time</th>
-            <th>Counselling Type</th>
-            <th>Counsellor</th>
-            <th>College / Course Discussed</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for c in prior_counsellings %}
-            <tr>
-              <td><strong>{{ c.conducted_at|date:'d M Y, H:i' }}</strong></td>
-              <td><span class="badge info">{{ c.get_counselling_type_display }}</span></td>
-              <td>{{ c.caller|user_name }}</td>
-              <td>
-                <strong>{{ c.college|default:'—' }}</strong>
-                {% if c.course %}<br><small>{{ c.course }}</small>{% endif %}
-              </td>
-              <td class="notes-cell">{{ c.notes|default:'—' }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  {% else %}
-    <p class="empty">No prior counselling sessions recorded for this lead.</p>
-  {% endif %}
-</section>
-{% endif %}
-
-<!-- Step 3: Admission Form -->
-<section class="panel form-panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>{% if selected_lead %}3. Enter Admission Details{% else %}Admission Details{% endif %}</h2>
-      <p>{% if selected_lead %}Confirm admission for <strong>{{ selected_lead.name }}</strong> (Lead #{{ selected_lead.pk }}){% else %}Select a lead above or choose from the list below{% endif %}</p>
-    </div>
-  </div>
-
-  <form method="post">
+  <form method="post" id="record-admission-form" novalidate>
     {% csrf_token %}
-    {% if selected_lead %}
-      <input type="hidden" name="lead" value="{{ selected_lead.pk }}">
+
+    <!-- Global Form Errors -->
+    {% if form.non_field_errors %}
+      <div class="notice error" role="alert" style="margin-bottom: 22px;">
+        {% for err in form.non_field_errors %}
+          <p>{{ err }}</p>
+        {% endfor %}
+      </div>
     {% endif %}
 
-    {% for field in form %}
-      {% if field.name == 'lead' and selected_lead %}
-        {# Lead is already selected and inspected above #}
-      {% else %}
-        <div class="form-row">
-          <label for="{{ field.id_for_label }}">
-            {{ field.label }}
-            {% if field.field.required %}<span class="accent">*</span>{% endif %}
-          </label>
-          {{ field }}
-          {% if field.help_text %}
-            <small class="help-text">{{ field.help_text }}</small>
-          {% endif %}
-          {% if field.errors %}
-            <div class="field-errors">
-              {% for error in field.errors %}
-                <p class="error">{{ error }}</p>
-              {% endfor %}
-            </div>
-          {% endif %}
+    <!-- ======================================================================
+         SECTION 1: STUDENT SOURCE SELECTOR (Segmented Radio-Cards)
+         ====================================================================== -->
+    <section class="panel spaced admission-source-panel">
+      <div class="form-section-header">
+        <h3>1. Student Source</h3>
+        <p>Choose whether this admission is for an existing CRM lead or an external direct student.</p>
+      </div>
+
+      <div class="source-selector-grid" role="radiogroup" aria-label="Student Source Selection">
+        <!-- Option 1: Existing CRM Lead -->
+        <label class="source-card {% if source_type == 'existing' or not source_type %}active{% endif %}" id="card-source-existing">
+          <input type="radio" name="source_type" value="existing" {% if source_type == 'existing' or not source_type %}checked{% endif %} class="sr-only source-radio" id="source-existing-radio">
+          <div class="source-card-icon" aria-hidden="true">ðŸ‘¤</div>
+          <div class="source-card-body">
+            <strong>Existing CRM Lead</strong>
+            <p>Link admission to a lead already in the CRM database. Automatically updates lead status to Admitted.</p>
+          </div>
+          <div class="source-indicator" aria-hidden="true"></div>
+        </label>
+
+        <!-- Option 2: External Student -->
+        <label class="source-card {% if source_type == 'external' %}active{% endif %}" id="card-source-external">
+          <input type="radio" name="source_type" value="external" {% if source_type == 'external' %}checked{% endif %} class="sr-only source-radio" id="source-external-radio">
+          <div class="source-card-icon" aria-hidden="true">ðŸŽ“</div>
+          <div class="source-card-body">
+            <strong>External Student / Direct</strong>
+            <p>Direct admission for an external candidate without creating a duplicate CRM lead record.</p>
+          </div>
+          <div class="source-indicator" aria-hidden="true"></div>
+        </label>
+      </div>
+      {% if form.source_type.errors %}
+        <div class="field-errors" style="margin-top: 8px;">
+          {% for error in form.source_type.errors %}<p class="error">{{ error }}</p>{% endfor %}
         </div>
       {% endif %}
-    {% endfor %}
+    </section>
 
-    <div class="form-actions">
+    <!-- ======================================================================
+         SECTION 2A: EXISTING LEAD WORKFLOW (Search, Select, Inspect)
+         ====================================================================== -->
+    <div id="section-existing-flow" style="{% if source_type == 'external' %}display: none;{% endif %}">
+      <!-- Search Panel -->
+      <section class="panel spaced">
+        <div class="form-section-header">
+          <h3>2. Search &amp; Select Existing Lead</h3>
+          <p>Find candidate by student name, phone number, email address, or lead ID.</p>
+        </div>
+
+        <div class="filters" style="margin-bottom: 0; padding: 0;">
+          <div class="search-field" style="flex: 1;">
+            <span>âŒ•</span>
+            <input type="text" id="lead-search-box" name="q" value="{{ search_query }}" placeholder="Enter student name, phone, email, or lead ID..." aria-label="Search existing lead">
+          </div>
+          <button type="button" class="button primary" id="lead-search-btn">Search Leads</button>
+          {% if search_query %}
+            <a class="button subtle" href="{% url 'web:admission-new' %}?source_type=existing">Clear</a>
+          {% endif %}
+        </div>
+
+        <!-- Search Results Table -->
+        {% if search_results %}
+          <div class="table-scroll" style="margin-top: 16px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Student Name</th>
+                  <th>Phone &amp; Email</th>
+                  <th>Batch / Source</th>
+                  <th>Assigned Caller</th>
+                  <th>Current Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for res in search_results %}
+                  <tr {% if selected_lead and selected_lead.pk == res.pk %}style="background: rgba(141, 111, 206, 0.12);"{% endif %}>
+                    <td><strong>{{ res.name }}</strong></td>
+                    <td>{{ res.phone }}<br><small class="muted">{{ res.email|default:'â€”' }}</small></td>
+                    <td><small>{{ res.import_batch.filename|default:'Direct / Website' }}</small></td>
+                    <td>{{ res.assigned_caller|user_name }}</td>
+                    <td><span class="badge {{ res.status|lower }}">{{ res.get_status_display }}</span></td>
+                    <td>
+                      <a class="button subtle" href="{% url 'web:admission-new' %}?source_type=existing&lead={{ res.pk }}{% if search_query %}&q={{ search_query }}{% endif %}">
+                        Select Lead â†’
+                      </a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% elif search_query %}
+          <p class="empty" style="margin-top: 16px;">No leads matching "{{ search_query }}" were found.</p>
+        {% endif %}
+      </section>
+
+      <!-- Selected Lead Profile & History -->
+      {% if selected_lead %}
+        <section class="panel spaced">
+          <div class="lead-spotlight-card">
+            <div class="spotlight-header">
+              <div>
+                <span class="badge subtle" style="margin-bottom: 6px; display: inline-block;">SELECTED CANDIDATE</span>
+                <h3 style="margin: 0; font-size: 17px; color: var(--text);">{{ selected_lead.name }} <span class="muted" style="font-size: 13px; font-weight: normal;">(#{{ selected_lead.pk }})</span></h3>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="badge {{ selected_lead.status|lower }}">{{ selected_lead.get_status_display }}</span>
+                <a class="button subtle" style="padding: 4px 10px; font-size: 11px;" href="{% url 'web:admission-new' %}?source_type=existing{% if search_query %}&q={{ search_query }}{% endif %}">Change Lead</a>
+              </div>
+            </div>
+
+            <div class="spotlight-grid">
+              <div class="spotlight-col">
+                <small>PHONE / CONTACT</small>
+                <strong>{{ selected_lead.phone }}</strong>
+                {% if selected_lead.email %}<div class="muted" style="font-size: 11px;">{{ selected_lead.email }}</div>{% endif %}
+              </div>
+              <div class="spotlight-col">
+                <small>ASSIGNED CALLER</small>
+                <strong>{{ selected_lead.assigned_caller|user_name }}</strong>
+              </div>
+              <div class="spotlight-col">
+                <small>COURSE / PREFERENCE</small>
+                <strong>{{ selected_lead.preferred_course|default:selected_lead.service_type.name|default:'General Inquiry' }}</strong>
+              </div>
+              <div class="spotlight-col">
+                <small>BATCH / LOCATION</small>
+                <div>{{ selected_lead.import_batch.filename|default:'Direct Intake' }}</div>
+                <small class="muted">{{ selected_lead.location|default:selected_lead.source }}</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Prior Counselling History -->
+          {% if prior_counsellings %}
+            <div class="form-section-header" style="margin-top: 18px;">
+              <h3>Prior Counselling History</h3>
+              <p>Consultation sessions and notes previously logged for this candidate.</p>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date / Time</th>
+                    <th>Type</th>
+                    <th>Counsellor</th>
+                    <th>College / Course Discussed</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for c in prior_counsellings %}
+                    <tr>
+                      <td><strong>{{ c.conducted_at|date:'d M Y, H:i' }}</strong></td>
+                      <td><span class="badge info">{{ c.get_counselling_type_display }}</span></td>
+                      <td>{{ c.caller|user_name }}</td>
+                      <td>
+                        <strong>{{ c.college|default:'â€”' }}</strong>
+                        {% if c.course %}<br><small>{{ c.course }}</small>{% endif %}
+                      </td>
+                      <td class="notes-cell">{{ c.notes|default:'â€”' }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+        </section>
+        <input type="hidden" name="lead" id="id_lead_hidden" value="{{ selected_lead.pk }}">
+      {% else %}
+        <div class="notice" style="margin-top: 14px; background: rgba(141, 111, 206, 0.08); border-color: rgba(141, 111, 206, 0.25); color: var(--text);">
+          â„¹ï¸ <strong>Select a student:</strong> Search and click "Select Lead â†’" above to attach this admission to an active CRM candidate.
+        </div>
+        {% if form.lead.errors %}
+          <div class="field-errors" style="margin-top: 8px;">
+            {% for error in form.lead.errors %}<p class="error">{{ error }}</p>{% endfor %}
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <!-- ======================================================================
+         SECTION 2B: EXTERNAL STUDENT INFORMATION (When External is Selected)
+         ====================================================================== -->
+    <div id="section-external-flow" style="{% if source_type != 'external' %}display: none;{% endif %}">
+      <section class="panel spaced">
+        <div class="form-section-header">
+          <h3>2. External Student Information</h3>
+          <p>Enter the direct candidate details. This student will NOT be added to the standard CRM lead queues.</p>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="id_walk_in_name">Student Full Name <span class="accent">*</span></label>
+            {{ form.walk_in_name }}
+            {% if form.walk_in_name.errors %}
+              <div class="field-errors">{% for error in form.walk_in_name.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+            {% endif %}
+          </div>
+
+          <div class="field">
+            <label for="id_walk_in_phone">Phone Number <span class="accent">*</span></label>
+            {{ form.walk_in_phone }}
+            <small class="muted" style="font-size: 11px; display: block; margin-top: 4px;">Direct WhatsApp/calling contact number (e.g. +91 98765 43210)</small>
+            {% if form.walk_in_phone.errors %}
+              <div class="field-errors">{% for error in form.walk_in_phone.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+            {% endif %}
+          </div>
+
+          <div class="field">
+            <label for="id_walk_in_email">Email Address <span class="muted">(Optional)</span></label>
+            {{ form.walk_in_email }}
+            {% if form.walk_in_email.errors %}
+              <div class="field-errors">{% for error in form.walk_in_email.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+            {% endif %}
+          </div>
+
+          <div class="field">
+            <label for="id_country">Country / State of Residence <span class="muted">(Optional)</span></label>
+            {{ form.country }}
+            {% if form.country.errors %}
+              <div class="field-errors">{% for error in form.country.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ======================================================================
+         SECTION 3: ADMISSION DETAILS (College, Course, Date, Fees)
+         ====================================================================== -->
+    <section class="panel spaced">
+      <div class="form-section-header">
+        <h3>3. Admission Details</h3>
+        <p>Specify the university, program, enrollment date, and tuition structure.</p>
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="id_college">University / College Name <span class="accent">*</span></label>
+          {{ form.college }}
+          {% if form.college.errors %}
+            <div class="field-errors">{% for error in form.college.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+          {% endif %}
+        </div>
+
+        <div class="field">
+          <label for="id_course">Course / Degree Program</label>
+          {{ form.course }}
+          {% if form.course.errors %}
+            <div class="field-errors">{% for error in form.course.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+          {% endif %}
+        </div>
+
+        <div class="field">
+          <label for="id_admission_date">Admission Confirmation Date <span class="accent">*</span></label>
+          {{ form.admission_date }}
+          {% if form.admission_date.errors %}
+            <div class="field-errors">{% for error in form.admission_date.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+          {% endif %}
+        </div>
+
+        <div class="field">
+          <label for="id_fees">Fees / Tuition Amount (â‚¹) <span class="muted">(Optional)</span></label>
+          {{ form.fees }}
+          {% if form.fees.errors %}
+            <div class="field-errors">{% for error in form.fees.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+          {% endif %}
+        </div>
+
+        <div class="field span-two">
+          <label for="id_candidate_type">Candidate Intake Type</label>
+          {{ form.candidate_type }}
+          <small class="muted" style="font-size: 11px; display: block; margin-top: 4px;">Identifies how the candidate joined (Online Lead, Walk-in, or External Student).</small>
+          {% if form.candidate_type.errors %}
+            <div class="field-errors">{% for error in form.candidate_type.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SECTION 4: OWNERSHIP & CALLER ATTRIBUTION
+         ====================================================================== -->
+    <section class="panel spaced">
+      <div class="form-section-header">
+        <h3>4. Attribution &amp; Performance Ownership</h3>
+        <p>Assign credit to the telecaller or admission counsellor who converted this student.</p>
+      </div>
+
+      <div class="form-grid">
+        <div class="field span-two">
+          <label for="id_caller">Responsible Telecaller / Counsellor <span class="accent">*</span></label>
+          {{ form.caller }}
+          {% if form.caller.errors %}
+            <div class="field-errors">{% for error in form.caller.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+          {% endif %}
+
+          <div class="attribution-callout">
+            <span style="font-size: 1.2rem;">ðŸ†</span>
+            <div>
+              <strong>+500 Performance Points Awarded:</strong> The selected caller receives +500 verified admission milestone points on their performance profile upon confirmation.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SECTION 5: ADDITIONAL NOTES & REMARKS
+         ====================================================================== -->
+    <section class="panel spaced">
+      <div class="form-section-header">
+        <h3>5. Documentation &amp; Remarks</h3>
+        <p>Record visa status, documents verified, admission letter ID, or internal remarks.</p>
+      </div>
+
+      <div class="field">
+        <label for="id_notes">Verification Notes &amp; Remarks</label>
+        {{ form.notes }}
+        {% if form.notes.errors %}
+          <div class="field-errors">{% for error in form.notes.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
+        {% endif %}
+      </div>
+    </section>
+
+    <!-- ======================================================================
+         SECTION 6: SUBMISSION ACTIONS
+         ====================================================================== -->
+    <div class="form-actions" style="margin-top: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap;">
       <a class="button" href="{% url 'web:admissions' %}">Cancel</a>
-      <button class="button primary">Save Admission ↗</button>
+      <button type="submit" class="button primary" id="submit-admission-btn" style="min-width: 220px; font-weight: 600;">
+        Confirm &amp; Record Admission â†—
+      </button>
     </div>
   </form>
-</section>
+</div>
+
+<!-- ==========================================================================
+     CLIENT-SIDE INTERACTIVITY FOR SOURCE TOGGLE & LEAD SEARCH
+     ========================================================================== -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const cardExisting = document.getElementById('card-source-existing');
+  const cardExternal = document.getElementById('card-source-external');
+  const radioExisting = document.getElementById('source-existing-radio');
+  const radioExternal = document.getElementById('source-external-radio');
+  const sectionExisting = document.getElementById('section-existing-flow');
+  const sectionExternal = document.getElementById('section-external-flow');
+  const searchBox = document.getElementById('lead-search-box');
+  const searchBtn = document.getElementById('lead-search-btn');
+  const leadHidden = document.getElementById('id_lead_hidden');
+
+  function setMode(mode) {
+    if (mode === 'external') {
+      cardExternal.classList.add('active');
+      cardExisting.classList.remove('active');
+      radioExternal.checked = true;
+      radioExisting.checked = false;
+      sectionExternal.style.display = 'block';
+      sectionExisting.style.display = 'none';
+
+      // Set candidate type to EXTERNAL if present
+      const candidateTypeSelect = document.getElementById('id_candidate_type');
+      if (candidateTypeSelect) {
+        for (let i = 0; i < candidateTypeSelect.options.length; i++) {
+          if (candidateTypeSelect.options[i].value === 'EXTERNAL' || candidateTypeSelect.options[i].value === 'WALK_IN') {
+            candidateTypeSelect.selectedIndex = i;
+            break;
+          }
+        }
+      }
+    } else {
+      cardExisting.classList.add('active');
+      cardExternal.classList.remove('active');
+      radioExisting.checked = true;
+      radioExternal.checked = false;
+      sectionExisting.style.display = 'block';
+      sectionExternal.style.display = 'none';
+
+      // Set candidate type to LEAD if present
+      const candidateTypeSelect = document.getElementById('id_candidate_type');
+      if (candidateTypeSelect) {
+        for (let i = 0; i < candidateTypeSelect.options.length; i++) {
+          if (candidateTypeSelect.options[i].value === 'LEAD') {
+            candidateTypeSelect.selectedIndex = i;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  cardExisting?.addEventListener('click', function(e) {
+    setMode('existing');
+  });
+
+  cardExternal?.addEventListener('click', function(e) {
+    setMode('external');
+  });
+
+  radioExisting?.addEventListener('change', function() {
+    if (this.checked) setMode('existing');
+  });
+
+  radioExternal?.addEventListener('change', function() {
+    if (this.checked) setMode('external');
+  });
+
+  // Handle Enter key inside search box without submitting the main admission form
+  searchBox?.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      executeSearch();
+    }
+  });
+
+  searchBtn?.addEventListener('click', function(e) {
+    e.preventDefault();
+    executeSearch();
+  });
+
+  function executeSearch() {
+    const q = searchBox ? searchBox.value.trim() : '';
+    const baseUrl = "{% url 'web:admission-new' %}";
+    window.location.href = baseUrl + '?source_type=existing&q=' + encodeURIComponent(q);
+  }
+});
+</script>
 {% endblock %}

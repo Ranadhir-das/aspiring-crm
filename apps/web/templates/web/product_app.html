@@ -1,0 +1,382 @@
+{% extends 'web/marketing_base.html' %}
+{% load static %}
+
+{% block content %}
+<!-- ========================================================================
+     HERO: VAANI CRM + VAANI CALLER APP
+     ======================================================================== -->
+<section class="hero-section app-hero-section" id="app-hero">
+  <div class="container hero-content app-hero-content">
+    <div class="eyebrow">
+      <span class="pulse-dot" aria-hidden="true"></span>
+      <span>THE COMPLETE CRM &amp; CALLING ECOSYSTEM</span>
+    </div>
+
+    <h1 class="hero-title">
+      Your Leads. Your Team.<br><span class="gradient-text">One Powerful Platform.</span>
+    </h1>
+
+    <p class="lead-text hero-description">
+      Vaani unites a powerful desktop CRM command center with an Android caller app. Seamlessly track every inbound lead, automate dialing, schedule zero-miss follow-ups, and elevate conversion rates.
+    </p>
+
+    <!-- Synergy Badge: CRM + Mobile App -->
+    <div class="app-synergy-pill">
+      <div class="asp-item">
+        <span class="asp-icon">💻</span>
+        <strong>Vaani CRM</strong>
+        <span class="asp-sub">(Desktop Operations)</span>
+      </div>
+      <span class="asp-plus" aria-hidden="true">+</span>
+      <div class="asp-item">
+        <span class="asp-icon">📱</span>
+        <strong>Vaani Caller App</strong>
+        <span class="asp-sub">(Android Native)</span>
+      </div>
+    </div>
+
+    <div class="hero-cta-group">
+      {% if apk.available %}
+        <a href="{% url 'web:app-download' %}" class="btn btn-primary btn-lg btn-glow">
+          <span>⭳</span> Download Caller APK ({{ apk.size_mb }} MB)
+        </a>
+      {% else %}
+        <a href="#demo" class="btn btn-primary btn-lg btn-glow">Book a Free Demo</a>
+      {% endif %}
+      <a href="#demo" class="btn btn-secondary btn-lg">Schedule a Demo</a>
+      {% if not user_is_authenticated %}
+        <a href="{% url 'web:login' %}" class="btn btn-secondary btn-lg">Sign In to CRM ↗</a>
+      {% endif %}
+    </div>
+
+    {% if apk.available %}
+      <p class="apk-build-caption">
+        Latest Build: {{ apk.built_at|date:'d M Y' }} · Requires Android 8.0+ · Optimized for Caller Workspaces
+      </p>
+    {% endif %}
+  </div>
+</section>
+
+<!-- ========================================================================
+     PRODUCT DEEP DIVE: 10 SECTIONS
+     ======================================================================== -->
+<section class="section-padding app-deepdive-section">
+  <div class="container app-deepdive-container">
+
+    <!-- 1. CRM Dashboard -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-media">
+        <img src="{% static 'web/images/video-poster.svg' %}" alt="CRM Dashboard Overview" class="showcase-img" loading="lazy">
+      </div>
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">01. DESKTOP WORKSPACE</span>
+        <h3>1. Real-Time CRM Dashboard</h3>
+        <p>A centralized headquarters for managers, admins, and operational leads. Watch incoming website inquiries stream into queues, track team caller capacity, and analyze conversion velocity in real time.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Live KPI counters: Total Leads, Calls Today, Overdue Callbacks</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Lead status pipeline: Pending, Interested, Call Back, Admission Done</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 2. Lead Management -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">02. INTAKE &amp; ROUTING</span>
+        <h3>2. Intelligent Lead Management</h3>
+        <p>Eliminate lead leaks and spreadsheet chaos. Ingest bulk leads through CSV imports with course-specific intake mapping, or accept automated API submissions with origin verification.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Strict duplicate prevention and phone number normalization</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Service eligibility matching (callers only dial authorized services)</span>
+          </li>
+        </ul>
+      </div>
+      <div class="showcase-media">
+        <img src="{% static 'web/images/tutorial-web.png' %}" alt="Lead Management" class="showcase-img" loading="lazy">
+      </div>
+    </div>
+
+    <!-- 3. Caller App -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-media">
+        <img src="{% static 'web/images/_preview_v3.png' %}" alt="Native Caller App" class="showcase-img" loading="lazy">
+      </div>
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">03. MOBILE WORKSPACE</span>
+        <h3>3. Native Android Caller App</h3>
+        <p>Built specifically for fast-paced telecalling. The Android app connects directly to the CRM, providing callers with their personal queue of assigned and claimable website leads.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Photo-verified selfie attendance check-in for shift security</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Clean separation between Available Website Leads and Assigned Leads</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 4. Calling & Call History -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">04. TELEPHONY &amp; LOGGING</span>
+        <h3>4. Automated Calling &amp; Call History</h3>
+        <p>No manual number copying. Callers tap to dial directly from the app. Upon call disconnect, the app automatically triggers the Call Outcome prompt, ensuring zero unlogged interactions.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Outcomes: Interested, Follow Up, Not Interested, No Candidate, etc.</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Auto-recorded call duration and timestamp tracking</span>
+          </li>
+        </ul>
+      </div>
+      <div class="showcase-media">
+        <img src="{% static 'web/images/video-poster.svg' %}" alt="Call History" class="showcase-img" loading="lazy">
+      </div>
+    </div>
+
+    <!-- 5. Follow-ups -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-media">
+        <img src="{% static 'web/images/tutorial-web.png' %}" alt="Follow-up Tracking" class="showcase-img" loading="lazy">
+      </div>
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">05. CALLBACK AUTOMATION</span>
+        <h3>5. Scheduled Follow-ups &amp; Push Alerts</h3>
+        <p>Ensure promised callbacks happen on time. Select date, time, and custom callback notes. When the time arrives, high-priority push notifications alert the caller immediately.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Overdue callback badges on caller and manager dashboards</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>1-click completion and outcome update flow</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 6. WhatsApp -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">06. MESSAGING INTEGRATION</span>
+        <h3>6. 1-Click WhatsApp Communication</h3>
+        <p>Bridge the gap between voice and text. Directly dispatch pre-formatted WhatsApp brochures, admission checklists, and fee structures from the lead detail view or mobile caller app.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Configurable pre-approved WhatsApp templates</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Activity audit log tracking every WhatsApp message dispatch</span>
+          </li>
+        </ul>
+      </div>
+      <div class="showcase-media">
+        <img src="{% static 'web/images/_preview_v3.png' %}" alt="WhatsApp Integration" class="showcase-img" loading="lazy">
+      </div>
+    </div>
+
+    <!-- 7. Team Performance -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-media">
+        <img src="{% static 'web/images/video-poster.svg' %}" alt="Gamified Points Engine" class="showcase-img" loading="lazy">
+      </div>
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">07. GAMIFICATION &amp; RECOGNITION</span>
+        <h3>7. Points Engine &amp; Peer Appreciation</h3>
+        <p>Incentivize high performance with transparent gamification. Points are awarded automatically for calls completed, target conversions, and positive peer appreciation ratings.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>+15 points for preferred course conversions, +30 points for alternate</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Structured monthly review periods calculating peer feedback scores</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 8. Analytics -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">08. CONVERSION INTELLIGENCE</span>
+        <h3>8. Real-Time Conversion Analytics</h3>
+        <p>Identify your most profitable lead sources and highest converting callers. Interactive trend charts display call outcomes, conversion percentages, and peak calling hours.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Fast sub-50ms analytics API for instant live data queries</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Multi-day aggregation filters (7 days, 30 days, 90 days)</span>
+          </li>
+        </ul>
+      </div>
+      <div class="showcase-media">
+        <img src="{% static 'web/images/video-poster.svg' %}" alt="Analytics Dashboard" class="showcase-img" loading="lazy">
+      </div>
+    </div>
+
+    <!-- 9. Counselling & Admissions -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-media">
+        <img src="{% static 'web/images/tutorial-web.png' %}" alt="Admissions Workflow" class="showcase-img" loading="lazy">
+      </div>
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">09. DOMAIN SPECIALIZATION</span>
+        <h3>9. Counselling &amp; Admissions Pipeline</h3>
+        <p>Specifically architected for educational and admission consultants. Seamlessly guide candidates from general inquiry to course selection (MBBS, BDS, BTech, Nursing, Pharmacy, MBA, MD/MS) and verified enrollment.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Target intake year capture (This Year, Next Year, or Custom Year)</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Academic eligibility tracking: NEET status, PCB %, and documents</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 10. Mobile Experience -->
+    <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
+      <div class="showcase-info">
+        <span class="eyebrow" style="margin-bottom: 12px;">10. UNCOMPROMISING MOBILITY</span>
+        <h3>10. Full Shift On Your Phone</h3>
+        <p>The Vaani Android Caller App is not an afterthought — it is a complete mobile workforce platform. Employees submit daily work reports, request leave, chat with team channels, and review company notices directly on mobile.</p>
+        <ul class="showcase-bullets">
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Team chat with channel attachments and real-time push alerts</span>
+          </li>
+          <li class="showcase-bullet">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+            <span>Role-targeted company notices and announcement broadcasts</span>
+          </li>
+        </ul>
+      </div>
+      <div class="showcase-media">
+        <img src="{% static 'web/images/_preview_v3.png' %}" alt="Mobile Experience" class="showcase-img" loading="lazy">
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ========================================================================
+     11. BOOK DEMO SECTION
+     ======================================================================== -->
+<section class="section-padding" id="demo">
+  <div class="container demo-section-wrap">
+    <div>
+      <span class="eyebrow">READY TO DEPLOY?</span>
+      <h2>Get Started With Vaani Today</h2>
+      <p class="lead-text" style="margin-top: 16px; margin-bottom: 24px;">
+        Request a customized demonstration and see how Vaani can transform your team's calling productivity, eliminate missed callbacks, and accelerate admissions.
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 28px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 1.3rem;">🚀</span>
+          <span><strong>Fast Onboarding:</strong> Get your team calling within 24 hours.</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 1.3rem;">🔒</span>
+          <span><strong>Secure &amp; Isolated:</strong> Full role-based caller data protection.</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 1.3rem;">📊</span>
+          <span><strong>Zero Setup Complexity:</strong> Cloud-hosted or self-hosted options.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Booking Form Card -->
+    <div class="demo-form-card">
+      <h3 class="demo-form-title">Request a Demo</h3>
+      <p class="demo-form-subtitle">Fill in your information and our specialists will arrange a tailored demo.</p>
+
+      <div id="demo-form-alert" class="form-status-alert" role="alert"></div>
+
+      <form id="demo-form" action="{% url 'web:book-demo' %}" method="post" novalidate>
+        {% csrf_token %}
+        <input type="text" name="website_url" class="hp-field" tabindex="-1" autocomplete="off">
+
+        <div class="demo-form-fields">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="demo-name" class="form-label">Full Name <span class="req">*</span></label>
+              <input type="text" id="demo-name" name="name" class="form-input" placeholder="e.g. Priya Nair" required autocomplete="name">
+              <span id="demo-name-error" class="field-error"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="demo-company" class="form-label">Company / Institution <span class="req">*</span></label>
+              <input type="text" id="demo-company" name="company" class="form-input" placeholder="e.g. EduSphere Admissions" required autocomplete="organization">
+              <span id="demo-company-error" class="field-error"></span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="demo-phone" class="form-label">Phone Number <span class="req">*</span></label>
+              <input type="tel" id="demo-phone" name="phone" class="form-input" placeholder="e.g. +91 98765 43210" required autocomplete="tel">
+              <span id="demo-phone-error" class="field-error"></span>
+            </div>
+
+            <div class="form-group">
+              <label for="demo-email" class="form-label">Work Email <span class="req">*</span></label>
+              <input type="email" id="demo-email" name="email" class="form-input" placeholder="e.g. priya@edusphere.com" required autocomplete="email">
+              <span id="demo-email-error" class="field-error"></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="demo-employees" class="form-label">Number of Employees / Callers <span class="req">*</span></label>
+            <select id="demo-employees" name="employees" class="form-select" required>
+              <option value="" disabled selected>Select team size</option>
+              <option value="1-10">1 - 10 Callers</option>
+              <option value="11-50">11 - 50 Callers</option>
+              <option value="51-200">51 - 200 Callers</option>
+              <option value="201+">200+ Enterprise Callers</option>
+            </select>
+            <span id="demo-employees-error" class="field-error"></span>
+          </div>
+
+          <div class="form-group">
+            <label for="demo-message" class="form-label">Message / Specific Requirements</label>
+            <textarea id="demo-message" name="message" class="form-textarea" placeholder="Tell us about your team setup or specific course workflows..."></textarea>
+          </div>
+
+          <button type="submit" id="demo-submit-btn" class="btn btn-primary btn-lg btn-glow" style="width: 100%;">
+            Request a Demo
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}
