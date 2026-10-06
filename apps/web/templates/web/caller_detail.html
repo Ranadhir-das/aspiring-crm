@@ -1,13 +1,24 @@
 {% extends 'web/base.html' %}{% load web_tags %}
-{% block title %}{{ caller|user_name }} · Caller Profile{% endblock %}
-{% block breadcrumb %}Caller Activity{% endblock %}
-{% block content %}<section class="panel form-panel spaced"><h2>Course conversions</h2><p>Own course: <strong>{{ stats.own_course_conversions|default:0 }}</strong> &middot; Other course: <strong>{{ stats.other_course_conversions|default:0 }}</strong></p><p class="muted">New qualified outcomes earn 15 own-course or 30 other-course points once per lead. Historical ledger values are preserved.</p></section>
+{% block title %}{{ caller|user_name }} · Activity & Performance{% endblock %}
+{% block breadcrumb %}Employee Activity{% endblock %}
+{% block content %}
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:16px;flex-wrap:wrap">
-  <a class="button" href="{% url 'web:performance' %}" style="gap:6px">← Back to Performance</a>
-  <a class="button primary" href="{% url 'web:leads' %}?owner={{ caller.pk }}">View Assigned Leads ↗</a>
+  <a class="button" href="{% if can_call %}{% url 'web:performance' %}{% else %}{% url 'web:employee-home' %}{% endif %}" style="gap:6px">&larr; Back to workspace</a>
+  {% if can_call %}<a class="button primary" href="{% url 'web:leads' %}?owner={{ caller.pk }}">View Assigned Leads &nearr;</a>{% endif %}
 </div>
 
+<div class="page-heading"><div><h1>{{ caller|user_name }}</h1><p>{{ caller.get_role_display }} &middot; Activity &amp; Performance</p></div></div>
+<section class="metrics employee-summary" aria-label="Employee activity summary">
+{% for label, value in employee_summary.items %}<div class="metric"><div class="metric-top">{{ label }}</div><strong>{{ value }}</strong></div>{% endfor %}
+</section>
 {% include "web/profile_summary.html" %}
+<section class="panel form-panel spaced"><h2>Course conversions</h2><p>Own course: <strong>{{ stats.own_course_conversions|default:0 }}</strong> &middot; Other course: <strong>{{ stats.other_course_conversions|default:0 }}</strong></p><p class="muted">New qualified outcomes earn 15 own-course or 30 other-course points once per lead. Historical ledger values are preserved.</p></section>
+<div class="dashboard-grid spaced">
+{% for title, items in recent_employee_activity %}<section class="panel"><div class="panel-heading"><h2>{{ title }}</h2></div>
+{% for item in items %}<div class="activity-row"><div><strong>{% if item.lead %}{{ item.lead.name }}{% elif item.visitor_name %}{{ item.visitor_name }}{% elif item.walk_in_name %}{{ item.walk_in_name }}{% elif item.phone_number %}{{ item.phone_number }}{% else %}External contact{% endif %}</strong>
+<p>{% if item.started_at %}{{ item.started_at }} &middot; {{ item.get_outcome_display }}{% elif item.scheduled_at %}{{ item.scheduled_at }} &middot; {{ item.get_status_display }}{% elif item.conducted_at %}{{ item.conducted_at }} &middot; {{ item.get_counselling_type_display }}{% else %}{{ item.admission_date }} &middot; {{ item.college }}{% endif %}</p><p>{{ item.notes|truncatechars:200 }}</p></div></div>
+{% empty %}<div class="empty">No records yet.</div>{% endfor %}</section>{% endfor %}
+</div>
 
 <section class="panel spaced">
   <div class="panel-heading">

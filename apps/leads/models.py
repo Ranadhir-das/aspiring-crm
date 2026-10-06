@@ -148,6 +148,8 @@ class Lead(models.Model):
         ALL_WAITING = "ALL_WAITING", "Call Waiting"
         NOT_REACHABLE = "NOT_REACHABLE", "Not Reachable"
         RINGING = "RINGING", "Ringing"
+        ADMISSION_DONE_BY_OTHER_CONSULTANCY = "ADMISSION_DONE_BY_OTHER_CONSULTANCY", "Admission done by other consultancy"
+        B2B = "B2B", "B2B"
 
     # -------------------------
     # Basic Information
@@ -220,7 +222,7 @@ class Lead(models.Model):
     )
 
     status = models.CharField(
-        max_length=30,
+        max_length=50,
         choices=Status.choices,
         default=Status.PENDING,
         db_index=True,
@@ -507,6 +509,7 @@ class Counselling(models.Model):
     visitor_name = models.CharField(max_length=200, blank=True)
     visitor_phone = models.CharField(max_length=30, blank=True)
     visitor_email = models.EmailField(blank=True)
+    visitor_source = models.CharField(max_length=100, blank=True, default="")
     caller = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -535,6 +538,10 @@ class Counselling(models.Model):
 
     class Meta:
         ordering = ["-conducted_at", "-created_at"]
+
+    @property
+    def source(self):
+        return self.visitor_source or (self.lead.source if self.lead else "")
 
     def __str__(self):
         return f"{self.get_counselling_type_display()} - {self.lead.name if self.lead_id else self.visitor_name} ({self.caller.username})"

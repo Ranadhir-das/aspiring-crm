@@ -483,7 +483,7 @@
           <div class="an-activity-icon">${act.icon || '●'}</div>
           <div class="an-activity-content">
             <div class="an-activity-desc">
-              <strong>${escapeHtml(act.actor)}</strong> ${escapeHtml(act.description)} ${leadLink}
+              <strong>${act.actor_url && act.actor_url.startsWith('/team/') ? `<a class="employee-link" href="${escapeHtml(act.actor_url)}">${escapeHtml(act.actor)}</a>` : escapeHtml(act.actor)}</strong> ${escapeHtml(act.description)} ${leadLink}
             </div>
             <div class="an-activity-meta">
               <span class="an-activity-actor">${escapeHtml(act.type_label || '')}</span>

@@ -1,0 +1,30 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Counselling #{{ record.pk }}{% endblock %}
+{% block breadcrumb %}Counselling / #{{ record.pk }}{% endblock %}
+{% block content %}
+<div class="counselling-workspace">
+  <div class="page-heading"><div>
+    <a class="text-link" href="{% url 'web:counselling' %}">&larr; Back to Counselling</a>
+    <h1>Counselling #{{ record.pk }}<span class="accent">.</span></h1>
+    <p>{{ record.conducted_at|date:'d M Y, H:i' }} · {{ workspace_timezone }}</p>
+  </div><span class="badge">{{ record.get_counselling_type_display }}</span></div>
+  <section class="panel form-panel">
+    <h2>Session details</h2>
+    <dl class="counselling-details">
+      <div><dt>Student / visitor</dt><dd>{% if record.lead_id %}{{ record.lead.name }}{% else %}{{ record.visitor_name|default:'Not recorded' }}{% endif %}</dd></div>
+      <div><dt>Phone</dt><dd>{% if record.lead_id %}{{ record.lead.phone }}{% else %}{{ record.visitor_phone|default:'Not recorded' }}{% endif %}</dd></div>
+      <div><dt>Employee / caller</dt><dd>{% employee_link record.caller %}</dd></div>
+      <div><dt>Record source</dt><dd>{% if record.lead_id %}<a class="text-link" href="{% url 'web:lead-detail' record.lead_id %}">CRM Lead #{{ record.lead_id }}</a>{% else %}External visitor{% if record.visitor_source %} ({{ record.visitor_source }}){% endif %}{% endif %}</dd></div>
+      {% if record.visitor_source %}<div><dt>Visitor source</dt><dd>{{ record.visitor_source }}</dd></div>{% endif %}
+      <div><dt>College</dt><dd>{{ record.college|default:'Not recorded' }}</dd></div>
+      <div><dt>Course</dt><dd>{{ record.course|default:'Not recorded' }}</dd></div>
+    </dl>
+  </section>
+  <section class="panel form-panel spaced"><h2>Notes</h2><p class="counselling-notes">{{ record.notes|default:'No notes recorded.' }}</p></section>
+  <section class="panel form-panel spaced"><h2>Meeting / links</h2>
+    {% for link in meeting_links %}<p class="counselling-link"><a class="text-link" href="{{ link }}" target="_blank" rel="noopener noreferrer">{{ link }}</a></p>
+    {% empty %}<p class="muted">No meeting link recorded.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}

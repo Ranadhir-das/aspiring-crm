@@ -9,7 +9,7 @@
   <div class="page-heading">
     <div>
       <a class="text-link" href="{% url 'web:admissions' %}" style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 8px;">
-        <span>â†</span> Back to Admissions
+        <span>←</span> Back to Admissions
       </a>
       <h1>{{ title }}<span class="accent">.</span></h1>
       <p>Record and verify a confirmed student admission with caller attribution and performance tracking.</p>
@@ -41,7 +41,7 @@
         <!-- Option 1: Existing CRM Lead -->
         <label class="source-card {% if source_type == 'existing' or not source_type %}active{% endif %}" id="card-source-existing">
           <input type="radio" name="source_type" value="existing" {% if source_type == 'existing' or not source_type %}checked{% endif %} class="sr-only source-radio" id="source-existing-radio">
-          <div class="source-card-icon" aria-hidden="true">ðŸ‘¤</div>
+          <div class="source-card-icon" aria-hidden="true">👤</div>
           <div class="source-card-body">
             <strong>Existing CRM Lead</strong>
             <p>Link admission to a lead already in the CRM database. Automatically updates lead status to Admitted.</p>
@@ -52,7 +52,7 @@
         <!-- Option 2: External Student -->
         <label class="source-card {% if source_type == 'external' %}active{% endif %}" id="card-source-external">
           <input type="radio" name="source_type" value="external" {% if source_type == 'external' %}checked{% endif %} class="sr-only source-radio" id="source-external-radio">
-          <div class="source-card-icon" aria-hidden="true">ðŸŽ“</div>
+          <div class="source-card-icon" aria-hidden="true">🎓</div>
           <div class="source-card-body">
             <strong>External Student / Direct</strong>
             <p>Direct admission for an external candidate without creating a duplicate CRM lead record.</p>
@@ -80,7 +80,7 @@
 
         <div class="filters" style="margin-bottom: 0; padding: 0;">
           <div class="search-field" style="flex: 1;">
-            <span>âŒ•</span>
+            <span>⌕</span>
             <input type="text" id="lead-search-box" name="q" value="{{ search_query }}" placeholder="Enter student name, phone, email, or lead ID..." aria-label="Search existing lead">
           </div>
           <button type="button" class="button primary" id="lead-search-btn">Search Leads</button>
@@ -107,13 +107,13 @@
                 {% for res in search_results %}
                   <tr {% if selected_lead and selected_lead.pk == res.pk %}style="background: rgba(141, 111, 206, 0.12);"{% endif %}>
                     <td><strong>{{ res.name }}</strong></td>
-                    <td>{{ res.phone }}<br><small class="muted">{{ res.email|default:'â€”' }}</small></td>
+                    <td>{{ res.phone }}<br><small class="muted">{{ res.email|default:'—' }}</small></td>
                     <td><small>{{ res.import_batch.filename|default:'Direct / Website' }}</small></td>
-                    <td>{{ res.assigned_caller|user_name }}</td>
+                    <td>{% employee_link res.assigned_caller %}</td>
                     <td><span class="badge {{ res.status|lower }}">{{ res.get_status_display }}</span></td>
                     <td>
                       <a class="button subtle" href="{% url 'web:admission-new' %}?source_type=existing&lead={{ res.pk }}{% if search_query %}&q={{ search_query }}{% endif %}">
-                        Select Lead â†’
+                        Select Lead →
                       </a>
                     </td>
                   </tr>
@@ -149,7 +149,7 @@
               </div>
               <div class="spotlight-col">
                 <small>ASSIGNED CALLER</small>
-                <strong>{{ selected_lead.assigned_caller|user_name }}</strong>
+                <strong>{% employee_link selected_lead.assigned_caller %}</strong>
               </div>
               <div class="spotlight-col">
                 <small>COURSE / PREFERENCE</small>
@@ -185,12 +185,12 @@
                     <tr>
                       <td><strong>{{ c.conducted_at|date:'d M Y, H:i' }}</strong></td>
                       <td><span class="badge info">{{ c.get_counselling_type_display }}</span></td>
-                      <td>{{ c.caller|user_name }}</td>
+                      <td>{% employee_link c.caller %}</td>
                       <td>
-                        <strong>{{ c.college|default:'â€”' }}</strong>
+                        <strong>{{ c.college|default:'—' }}</strong>
                         {% if c.course %}<br><small>{{ c.course }}</small>{% endif %}
                       </td>
-                      <td class="notes-cell">{{ c.notes|default:'â€”' }}</td>
+                      <td class="notes-cell">{{ c.notes|default:'—' }}</td>
                     </tr>
                   {% endfor %}
                 </tbody>
@@ -201,7 +201,7 @@
         <input type="hidden" name="lead" id="id_lead_hidden" value="{{ selected_lead.pk }}">
       {% else %}
         <div class="notice" style="margin-top: 14px; background: rgba(141, 111, 206, 0.08); border-color: rgba(141, 111, 206, 0.25); color: var(--text);">
-          â„¹ï¸ <strong>Select a student:</strong> Search and click "Select Lead â†’" above to attach this admission to an active CRM candidate.
+          ℹ️ <strong>Select a student:</strong> Search and click "Select Lead →" above to attach this admission to an active CRM candidate.
         </div>
         {% if form.lead.errors %}
           <div class="field-errors" style="margin-top: 8px;">
@@ -293,7 +293,7 @@
         </div>
 
         <div class="field">
-          <label for="id_fees">Fees / Tuition Amount (â‚¹) <span class="muted">(Optional)</span></label>
+          <label for="id_fees">Fees / Tuition Amount (₹) <span class="muted">(Optional)</span></label>
           {{ form.fees }}
           {% if form.fees.errors %}
             <div class="field-errors">{% for error in form.fees.errors %}<p class="error">{{ error }}</p>{% endfor %}</div>
@@ -329,7 +329,7 @@
           {% endif %}
 
           <div class="attribution-callout">
-            <span style="font-size: 1.2rem;">ðŸ†</span>
+            <span style="font-size: 1.2rem;">🏆</span>
             <div>
               <strong>+500 Performance Points Awarded:</strong> The selected caller receives +500 verified admission milestone points on their performance profile upon confirmation.
             </div>
@@ -362,7 +362,7 @@
     <div class="form-actions" style="margin-top: 28px; display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap;">
       <a class="button" href="{% url 'web:admissions' %}">Cancel</a>
       <button type="submit" class="button primary" id="submit-admission-btn" style="min-width: 220px; font-weight: 600;">
-        Confirm &amp; Record Admission â†—
+        Confirm &amp; Record Admission ↗
       </button>
     </div>
   </form>

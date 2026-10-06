@@ -6,8 +6,8 @@
     <div class="caller-avatar-huge">{{ caller|user_name|first|upper }}</div>
     <div>
       <div class="cyber-badge"><span class="pulse-dot"></span> {{ caller.get_role_display|upper }}</div>
-      <h2>{{ caller|user_name }}</h2>
-      <p>{{ caller.email|default:caller.username }} · Manager: {{ caller.manager|user_name }} · Joined {{ caller.created_at|date:'d M Y' }}</p>
+      <h2>{% employee_link caller %}</h2><span class="badge">{% if caller.is_active %}Active{% else %}Inactive{% endif %}</span>
+      <p>{{ caller.email|default:caller.username }} · Manager: {% employee_link caller.manager %} · Joined {{ caller.created_at|date:'d M Y' }}</p>
     </div>
   </div>
   <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
@@ -278,7 +278,7 @@
           </td>
           <td>{{ entry.lead.name|default:'—' }}</td>
           <td class="notes-cell">{{ entry.reason }}</td>
-          <td>{% if entry.recorded_by %}{{ entry.recorded_by|user_name }}{% else %}System{% endif %}</td>
+          <td>{% if entry.recorded_by %}{% employee_link entry.recorded_by %}{% else %}System{% endif %}</td>
         </tr>
         {% empty %}
         <tr>
@@ -341,7 +341,7 @@
               <td style="font-weight:600; color:{% if adj.points >= 0 %}var(--success){% else %}var(--danger){% endif %};">
                 {{ adj.points|stringformat:"+d" }}
               </td>
-              <td>{{ adj.recorded_by.get_full_name|default:adj.recorded_by.username }}</td>
+              <td>{% employee_link adj.recorded_by %}</td>
             </tr>
             {% endfor %}
           </tbody>

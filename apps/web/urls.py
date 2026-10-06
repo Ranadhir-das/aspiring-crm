@@ -13,6 +13,7 @@ from . import marketing_views
 from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 from . import views
+from . import counselling_views
 from . import workforce_views as workforce
 from .forms import LoginForm
 
@@ -115,6 +116,8 @@ urlpatterns = [
     path('team/', views.team, name='team'),
     path('team/<int:pk>/', views.caller_detail, name='caller-detail'),
     path('performance/', performance_views.performance, name='performance'),
+    path('counselling/', counselling_views.counselling_list, name='counselling'),
+    path('counselling/<int:pk>/', counselling_views.counselling_detail, name='counselling-detail'),
     path('admissions/', views.admissions_view, name='admissions'),
     path('admissions/new/', views.admission_create, name='admission-new'),
 ]

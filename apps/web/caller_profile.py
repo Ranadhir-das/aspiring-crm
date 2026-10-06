@@ -1,7 +1,8 @@
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 from apps.calls.models import Call
-from apps.leads.models import Lead
+from apps.leads.models import Lead, Counselling, Admission
+from apps.followups.models import FollowUp
 from apps.performance.models import PointsEntry
 from apps.performance.reporting import between, metrics, report_window, trend
 
@@ -43,7 +44,27 @@ def profile_data(caller, window=None):
     admissions_verified = Admission.objects.filter(caller=caller).count()
     from apps.performance.services import get_peer_appreciation_summary
     peer_appreciation = get_peer_appreciation_summary(caller.pk)
-    return dict(stats=stats, peer_appreciation=peer_appreciation, total_duration=calls.aggregate(n=Sum('duration_seconds'))['n'] or 0,
+    today = timezone.localdate()
+    all_calls = Call.objects.filter(caller=caller)
+    all_points = PointsEntry.objects.filter(caller=caller)
+    summary = {
+        "Today's calls": all_calls.filter(started_at__date=today).count(),
+        "Today's points": all_points.filter(occurred_at__date=today).aggregate(n=Sum('points'))['n'] or 0,
+        "Monthly points": all_points.filter(occurred_at__date__gte=today.replace(day=1), occurred_at__date__lte=today).aggregate(n=Sum('points'))['n'] or 0,
+        "Total calls": all_calls.count(),
+        "Interested leads": caller.assigned_leads.filter(status='INTERESTED').count(),
+        "Follow-ups completed": caller.followups.filter(status='COMPLETED').count(),
+        "Overdue follow-ups": caller.followups.filter(status='PENDING', scheduled_at__lt=timezone.now()).count(),
+        "Walk-in / Google Meet sessions": Counselling.objects.filter(caller=caller, counselling_type__in=['WALK_IN', 'GOOGLE_MEET']).count(),
+        "Successful admissions": admissions_verified,
+    }
+    recent_activity = [
+        ('Recent calls', all_calls.select_related('lead').order_by('-started_at')[:10]),
+        ('Recent follow-ups', FollowUp.objects.filter(caller=caller).select_related('lead').order_by('-scheduled_at')[:10]),
+        ('Recent counselling', Counselling.objects.filter(caller=caller).select_related('lead').order_by('-conducted_at')[:10]),
+        ('Recent admissions', Admission.objects.filter(caller=caller).select_related('lead').order_by('-created_at')[:10]),
+    ]
+    return dict(employee_summary=summary, recent_employee_activity=recent_activity, stats=stats, peer_appreciation=peer_appreciation, total_duration=calls.aggregate(n=Sum('duration_seconds'))['n'] or 0,
                 average_duration=stats['avg_duration'], app_active_seconds=active,
                 login_seconds=login_seconds, session_count=sessions.count(), active_estimated=estimated,
                 latest_session=caller.app_sessions.order_by('-logged_in_at').first(), last_call=calls.order_by('-started_at').first(),

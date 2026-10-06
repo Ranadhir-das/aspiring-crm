@@ -145,6 +145,8 @@ class CallCreateView(APIView):
             Call.Outcome.ALL_WAITING: Lead.Status.ALL_WAITING,
             Call.Outcome.NOT_REACHABLE: Lead.Status.NOT_REACHABLE,
             Call.Outcome.RINGING: Lead.Status.RINGING,
+            Call.Outcome.ADMISSION_DONE_BY_OTHER_CONSULTANCY: Lead.Status.ADMISSION_DONE_BY_OTHER_CONSULTANCY,
+            Call.Outcome.B2B: Lead.Status.B2B,
         }
 
         new_status = outcome_to_status.get(call.outcome)

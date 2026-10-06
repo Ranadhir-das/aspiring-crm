@@ -130,7 +130,7 @@ def employees(request):
     rows = []
     for user in records:
         can_edit = request.user.role in ADMINS and user.pk != request.user.pk and (request.user.role == 'SUPER_ADMIN' or user.role not in ADMINS)
-        rows.append({'cells': [employee_name(user), user.username, user.email, user.get_role_display(), 'Active' if user.is_active else 'Inactive / awaiting approval'],
+        rows.append({'cells': [user, user.username, user.email, user.get_role_display(), 'Active' if user.is_active else 'Inactive / awaiting approval'],
                      'url': reverse('web:employee-edit', args=[user.pk]) if can_edit else '', 'label': 'Manage'})
     return table_page(request, 'All employees', 'employees', ['Name', 'Username', 'Email', 'Role', 'Account'], rows, records=records,
                       search=True, subtitle='All departments, employee approvals and account roles.')
@@ -204,7 +204,7 @@ def leave_action(request, pk):
 def attendance(request):
     query, filters = filtered(request, scoped(Attendance.objects.select_related('employee'), request.user))
     records = paginate(request, query.order_by('-date', 'employee__username'))
-    rows = [{'cells': [r.date, employee_name(r.employee), r.get_status_display(), r.checked_in or '—', r.checked_out or '—', f'{r.hours} h', r.login_remark or '—']} for r in records]
+    rows = [{'cells': [r.date, r.employee, r.get_status_display(), r.checked_in or '—', r.checked_out or '—', f'{r.hours} h', r.login_remark or '—']} for r in records]
     return table_page(request, 'Attendance', 'attendance', ['Date', 'Employee', 'Status', 'Check-in', 'Check-out', 'Elapsed time', 'Login Remark'], rows,
         records=records, filters=filters, attendance_controls=True,
         subtitle='Elapsed time is measured between check-in and check-out; it is not an estimate of active computer use.')
@@ -325,7 +325,7 @@ def reports(request):
         return response
     records = paginate(request, query.order_by('-date', '-updated_at'))
     missing = User.objects.filter(is_active=True).exclude(work_reports__date=timezone.localdate()) if request.user.role in MANAGEMENT else []
-    rows = [{'cells': [r.date, employee_name(r.employee), r.feedback_total, format_html_join('<br>', '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', ((url, url) for url in r.all_work_links)), r.notes], 'url': reverse('web:report-edit', args=[r.pk]), 'label': 'View / edit'} for r in records]
+    rows = [{'cells': [r.date, r.employee, r.feedback_total, format_html_join('<br>', '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', ((url, url) for url in r.all_work_links)), r.notes], 'url': reverse('web:report-edit', args=[r.pk]), 'label': 'View / edit'} for r in records]
     return table_page(request, 'Work reports', 'reports', ['Date', 'Employee', 'Manual feedback count', 'Work links', 'Notes'], rows, records=records, filters=filters,
         create_url=reverse('web:report-new'), export=True, missing=missing,
         subtitle='One report per employee per day. Manual feedback is kept separate from recorded calls.')
@@ -410,7 +410,7 @@ def feedback(request):
             counts = by_user[employee.pk]
             for key, value in counts.items():
                 totals[key] = totals.get(key, 0) + value
-            rows.append({'name': employee_name(employee), 'counts': [counts.get(k, 0) for k, _ in FEEDBACK], 'total': sum(counts.values()), 'unspecified': counts.get('UNSPECIFIED', 0)})
+            rows.append({'employee': employee, 'name': employee_name(employee), 'counts': [counts.get(k, 0) for k, _ in FEEDBACK], 'total': sum(counts.values()), 'unspecified': counts.get('UNSPECIFIED', 0)})
     total = sum(totals.values())
     stats = [{'label': label, 'count': totals[key], 'percent': round(totals[key] / total * 100, 1) if total else 0} for key, label in FEEDBACK]
     if totals.get('UNSPECIFIED'):
@@ -424,7 +424,7 @@ def expenses(request):
     query, filters = filtered(request, Expense.objects.select_related('employee'), managers=FINANCE)
     total = query.filter(voided=False).aggregate(n=Sum('amount'))['n'] or 0
     records = paginate(request, query.order_by('-date', '-pk'))
-    rows = [{'cells': [r.date, r.category, r.amount, r.description, employee_name(r.employee), 'Voided' if r.voided else 'Recorded'],
+    rows = [{'cells': [r.date, r.category, r.amount, r.description, r.employee, 'Voided' if r.voided else 'Recorded'],
         'post_url': reverse('web:expense-void', args=[r.pk]) if not r.voided else '', 'label': 'Void entry'} for r in records]
     return table_page(request, 'Expenses', 'expenses', ['Date', 'Category', 'Amount', 'Description', 'Recorded by', 'Status'], rows,
         records=records, filters=filters, create_url=reverse('web:expense-new'), subtitle=f'Non-voided expenses in this view: {total}. Entries record expenditure; no money is transferred.')
@@ -515,7 +515,7 @@ def activity_log(request):
         query = query.filter(category=category)
     records = paginate(request, query)
     return table_page(request, 'Activity log', 'audit', ['When', 'Actor', 'Category', 'Action'],
-        [{'cells': [r.created_at, employee_name(r.actor) if r.actor else 'Removed account', r.category, r.description]} for r in records], records=records, filters=filters,
+        [{'cells': [r.created_at, r.actor if r.actor else 'Removed account', r.category, r.description]} for r in records], records=records, filters=filters,
         subtitle='Recorded employee and management actions. Existing mobile API calls remain in Call activity.')
 
 
@@ -541,7 +541,7 @@ def lead_collaboration(request, pk):
 def consultations(request):
     query = LeadCollaboration.objects.filter(consult_admin=True).select_related('lead', 'author').order_by('resolved', '-created_at')
     records = paginate(request, query)
-    rows = [{'cells': [r.lead.name, employee_name(r.author) if r.author else '—', r.note, 'Resolved' if r.resolved else 'Open'],
+    rows = [{'cells': [r.lead.name, r.author if r.author else '—', r.note, 'Resolved' if r.resolved else 'Open'],
              'url': reverse('web:lead-collaboration', args=[r.lead_id]), 'label': 'View lead',
              'post_url': reverse('web:consult-resolve', args=[r.pk]) if not r.resolved else '', 'post_label': 'Resolve'} for r in records]
     return table_page(request, 'Lead consultations', 'consultations', ['Lead', 'Requested by', 'Note', 'Status'], rows, records=records)
@@ -691,7 +691,7 @@ def people_overview(request):
         record = attendance_map.get(employee.pk)
         status = record.get_status_display() if record else 'Leave' if employee.pk in on_leave else 'Holiday' if holiday else 'Not marked'
         summary[status] = summary.get(status, 0) + 1
-        rows.append({'cells': [employee_name(employee), employee.get_role_display(), status, record.hours if record else '—']})
+        rows.append({'cells': [employee, employee.get_role_display(), status, record.hours if record else '—']})
     return table_page(request, 'People overview', 'people-overview', ['Employee', 'Role', 'Today', 'Elapsed hours'], rows,
         subtitle=f'Today: {today}. Unmarked attendance is not automatically classified as absence.',
         metrics=[{'label': k, 'count': v} for k,v in summary.items()],

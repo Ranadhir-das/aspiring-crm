@@ -711,7 +711,7 @@
           <div class="an-activity-icon">{{ act.icon|default:"●" }}</div>
           <div class="an-activity-content">
             <div class="an-activity-desc">
-              <strong>{{ act.actor }}</strong> {{ act.description }}
+              <strong>{% if act.actor_url %}<a class="employee-link" href="{{ act.actor_url }}">{{ act.actor }}</a>{% else %}{{ act.actor }}{% endif %}</strong> {{ act.description }}
               {% if act.lead_id %}
                 <a href="{% url 'web:lead-detail' act.lead_id %}">{% if act.lead_name %}{{ act.lead_name }}{% else %}Lead #{{ act.lead_id }}{% endif %}</a>
               {% endif %}
@@ -740,5 +740,5 @@
 
 <!-- Vendored Chart.js UMD and Analytics Controller -->
 <script src="{% static 'web/vendor/chart.umd.min.js' %}"></script>
-<script src="{% static 'web/analytics.js' %}?v=1"></script>
+<script src="{% static 'web/analytics.js' %}?v=2"></script>
 {% endblock %}

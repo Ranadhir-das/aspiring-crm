@@ -76,7 +76,7 @@
             <div class="person">
               <span class="avatar subtle">{{ caller|user_name|first|upper }}</span>
               <span>
-                <strong>{{ caller|user_name }}</strong>
+                <strong>{% employee_link caller %}</strong>
                 <small>{{ caller.email|default:caller.username }}</small>
               </span>
             </div>

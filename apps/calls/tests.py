@@ -18,7 +18,10 @@ class AdditionalOutcomeTests(TestCase):
         self.api.force_authenticate(self.caller)
 
     def test_new_outcomes_save_and_sync_without_creating_followups(self):
-        outcomes = ['FORWARDED_CALLS', 'NO_CANDIDATE', 'DISCONNECTED', 'ALL_WAITING', 'NOT_REACHABLE', 'RINGING']
+        outcomes = [
+            'FORWARDED_CALLS', 'NO_CANDIDATE', 'DISCONNECTED', 'ALL_WAITING', 'NOT_REACHABLE', 'RINGING',
+            'ADMISSION_DONE_BY_OTHER_CONSULTANCY', 'B2B'
+        ]
         now = timezone.now()
         for outcome in outcomes:
             with self.subTest(outcome=outcome):

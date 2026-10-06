@@ -44,6 +44,8 @@ class Call(models.Model):
         ALL_WAITING = "ALL_WAITING", "Call Waiting"
         NOT_REACHABLE = "NOT_REACHABLE", "Not Reachable"
         RINGING = "RINGING", "Ringing"
+        ADMISSION_DONE_BY_OTHER_CONSULTANCY = "ADMISSION_DONE_BY_OTHER_CONSULTANCY", "Admission done by other consultancy"
+        B2B = "B2B", "B2B"
 
     phone_number = models.CharField(max_length=30, blank=True, db_index=True)
     submission_fingerprint = models.CharField(max_length=64, blank=True, editable=False)
@@ -77,7 +79,7 @@ class Call(models.Model):
     )
 
     outcome = models.CharField(
-        max_length=30,
+        max_length=50,
         choices=Outcome.choices,
         blank=True,
     )

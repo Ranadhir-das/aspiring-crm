@@ -57,7 +57,7 @@
         <span class="filter-indicator">Outcome: <strong>{{ selected_outcome_display }}</strong></span>
       {% endif %}
       {% if selected_caller_user %}
-        <span class="filter-indicator">Caller: <strong>{{ selected_caller_user|user_name }}</strong></span>
+        <span class="filter-indicator">Caller: <strong>{% employee_link selected_caller_user %}</strong></span>
       {% endif %}
     </div>
     {% if selected_outcome or selected_caller or search %}
@@ -98,9 +98,7 @@
           </td>
           <td>
             {% if call.caller %}
-            <a href="{% querystring caller=call.caller_id page=None %}" title="Filter by {{ call.caller|user_name }}" style="text-decoration:none;color:inherit">
-              {{ call.caller|user_name }}
-            </a>
+            {% employee_link call.caller %}
             {% else %}
             <span class="muted">—</span>
             {% endif %}

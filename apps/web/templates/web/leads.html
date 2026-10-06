@@ -79,7 +79,7 @@
         <span class="filter-indicator">Status: <strong>{{ selected_status_display }}</strong></span>
       {% endif %}
       {% if selected_owner_user %}
-        <span class="filter-indicator">Caller: <strong>{{ selected_owner_user|user_name }}</strong></span>
+        <span class="filter-indicator">Caller: <strong>{% employee_link selected_owner_user %}</strong></span>
       {% elif selected_owner == 'unassigned' %}
         <span class="filter-indicator">Caller: <strong>Unassigned</strong></span>
       {% endif %}

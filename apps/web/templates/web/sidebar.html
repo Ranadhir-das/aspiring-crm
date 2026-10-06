@@ -1,3 +1,4 @@
+{% load web_tags %}
 {% load static %}
 <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 <aside class="sidebar" id="navigation">
@@ -136,6 +137,10 @@
           <span class="nav-text">Admissions</span>
         </a>
         {% if can_manage %}
+        <a {% if section == 'counselling' %}aria-current="page"{% endif %} href="{% url 'web:counselling' %}">
+          <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M7 8h10M7 12h6"></path></svg></span>
+          <span class="nav-text">Counselling</span>
+        </a>
         <a {% if section == 'consultations' %}aria-current="page"{% endif %} href="{% url 'web:consultations' %}">
           <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>
           <span class="nav-text">Lead Consultations</span>
@@ -341,7 +346,7 @@
     <div class="account-card">
       <div class="account-avatar">{{ display_name|first|upper }}</div>
       <div class="account-info">
-        <strong>{{ display_name }}</strong>
+        <strong>{% employee_link request.user %}</strong>
         <small>{{ request.user.get_role_display }}</small>
       </div>
       <form action="{% url 'web:logout' %}" method="post" class="logout-form">

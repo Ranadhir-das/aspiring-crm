@@ -187,7 +187,7 @@
             {% if d.eligible_count > 0 %}
             <div style="font-size: 11px;">
               {% for caller in d.eligible_callers %}
-              <span class="accent">{{ caller|user_name }}</span>{% if not forloop.last %}, {% endif %}
+              <span class="accent">{% employee_link caller %}</span>{% if not forloop.last %}, {% endif %}
               {% endfor %}
             </div>
             {% else %}
@@ -198,7 +198,7 @@
           <td>
             {% with d=lead.diagnosis %}
             {% if d.claimed_caller %}
-            <strong>{{ d.claimed_caller|user_name }}</strong>
+            <strong>{% employee_link d.claimed_caller %}</strong>
             {% if d.claim_time %}
             <small style="display: block; color: var(--muted); font-size: 10px;">
               {{ d.claim_time|date:"d M H:i" }}
@@ -270,7 +270,7 @@
             <div class="person">
               <span class="avatar subtle">{{ item.caller|user_name|first|upper }}</span>
               <span>
-                <strong>{{ item.caller|user_name }}</strong>
+                <strong>{% employee_link item.caller %}</strong>
                 <small>{{ item.caller.email|default:item.caller.username }}</small>
               </span>
             </div>

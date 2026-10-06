@@ -347,7 +347,7 @@ def team(request):
     return page(request, 'team', 'team', records=paginate(request, callers))
 
 
-@workspace()
+@workspace(employee=True)
 def caller_detail(request, pk):
     from apps.activity.models import ActivityLog
     from apps.performance.forms import AdjustmentForm, MilestoneForm
@@ -355,14 +355,15 @@ def caller_detail(request, pk):
     from apps.performance.services import adjust_points, can_manage, record_milestone
     from django.core.exceptions import ValidationError
     from .caller_profile import profile_data
-    caller = get_object_or_404(User.objects.select_related('manager').filter(role=User.Role.CALLER), pk=pk)
-    if request.user.role == User.Role.CALLER and caller.pk != request.user.pk:
+    caller = get_object_or_404(User.objects.select_related('manager'), pk=pk)
+    from .employee_links import can_view_employee
+    if not can_view_employee(request.user, caller):
         raise PermissionDenied
     filters, window, valid = report_window(request.GET, days=1)
     adjustment_form = AdjustmentForm(request.POST if request.POST.get('action') == 'adjust' else None, caller=caller, auto_id='adjust_%s')
     milestone_form = MilestoneForm(request.POST if request.POST.get('action') == 'milestone' else None, caller=caller, auto_id='milestone_%s')
     if request.method == 'POST':
-        if not can_manage(request.user):
+        if not can_manage(request.user) or caller.role != User.Role.CALLER:
             raise PermissionDenied
         form = adjustment_form if request.POST.get('action') == 'adjust' else milestone_form
         if form.is_valid():
@@ -391,7 +392,7 @@ def caller_detail(request, pk):
     return page(request, 'caller_detail', 'performance', caller=caller, records=paginate(request, query),
                 filters=filters, window=window, report_valid=valid, ledger=ledger_page,
                 adjustments=adjustments, adjustment_form=adjustment_form, milestone_form=milestone_form,
-                can_adjust=can_manage(request.user), **context)
+                can_adjust=can_manage(request.user) and caller.role == User.Role.CALLER, **context)
 
 
 @workspace(management=True)

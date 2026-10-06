@@ -343,7 +343,12 @@ if (chatThread) {
     const bodyWrap = document.createElement('div');
     bodyWrap.className = 'chat-msg-body';
     if (!mine) {
-      const name = document.createElement('strong');
+      const allowed = chatThread.dataset.canViewEmployees === 'true';
+      const name = document.createElement(allowed ? 'a' : 'strong');
+      if (allowed && /^\d+$/.test(String(message.sender_id))) {
+        name.className = 'employee-link';
+        name.href = chatThread.dataset.profileTemplate.replace('/0/', `/${message.sender_id}/`);
+      }
       name.textContent = message.sender_name;
       bodyWrap.append(name);
     }

@@ -96,7 +96,7 @@
           <td>
             <div style="display:flex;align-items:center;gap:8px;">
               <span class="avatar small">{{ rec.call.caller.first_name|default:rec.call.caller.username|first|upper }}</span>
-              <span>{{ rec.call.caller|user_name }}</span>
+              <span>{% employee_link rec.call.caller %}</span>
             </div>
           </td>
           <td>

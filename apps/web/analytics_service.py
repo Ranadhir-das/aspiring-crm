@@ -8,6 +8,8 @@ from datetime import datetime, time, timedelta
 from django.db.models import Avg, Count, Q, Sum
 from django.db.models.functions import TruncDate, TruncHour
 from django.utils import timezone
+from django.urls import reverse
+from .employee_links import can_view_employee
 
 from apps.accounts.models import User
 from apps.activity.models import ActivityLog
@@ -61,6 +63,8 @@ OUTCOME_COLORS = {
     'ALL_WAITING': '#eab308',
     'NOT_REACHABLE': '#b91c1c',
     'RINGING': '#38bdf8',
+    'ADMISSION_DONE_BY_OTHER_CONSULTANCY': '#94a3b8',
+    'B2B': '#3b82f6',
 }
 
 
@@ -565,7 +569,7 @@ def get_analytics_overview(user, params):
             'peer_appreciation_score': peer_score,
             'peer_appreciation_count': peer_count,
             'peer_appreciation_reviews': peer_count,
-            'url_profile': f"/team/{emp.pk}/",
+            'url_profile': reverse('web:caller-detail', args=[emp.pk]),
             'url_calls': f"/calls/?caller={emp.pk}&{date_qs}",
             'url_interested': f"/leads/?owner={emp.pk}&status=INTERESTED&{date_qs}",
             'url_counselling': f"/consultations/",
@@ -620,6 +624,7 @@ def get_analytics_overview(user, params):
             'type_label': verb_meta['label'],
             'description': log.description,
             'actor': actor_name,
+            'actor_url': reverse('web:caller-detail', args=[log.actor_id]) if can_view_employee(user, log.actor) else None,
             'lead_id': log.lead_id,
             'lead_name': log.lead.name if log.lead else None,
             'timestamp': timezone.localtime(log.created_at).strftime('%H:%M:%S'),

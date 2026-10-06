@@ -16,8 +16,13 @@ class CounsellingVisitorTests(TestCase):
         self.client = authenticated_client(self.caller)
         self.other_client = authenticated_client(self.other)
         self.lead = Lead.objects.create(name='Existing Student', phone='9876504321', assigned_caller=self.caller)
-        self.visitor = {'visitor_name': 'New Visitor', 'visitor_phone': '+91 98765 04322',
-                        'visitor_email': 'visitor@example.com', 'notes': 'Discussed MBA options.'}
+        self.visitor = {
+            'visitor_name': 'New Visitor',
+            'visitor_phone': '+91 98765 04322',
+            'visitor_email': 'visitor@example.com',
+            'visitor_source': 'Walk-in / Direct',
+            'notes': 'Discussed MBA options.',
+        }
 
     def test_walk_in_visitor_is_saved_without_creating_lead_or_admission(self):
         result = self.client.post(self.url, self.visitor, format='json')
@@ -25,10 +30,14 @@ class CounsellingVisitorTests(TestCase):
         record = Counselling.objects.get()
         self.assertIsNone(record.lead_id)
         self.assertEqual(record.visitor_phone, '919876504322')
+        self.assertEqual(record.visitor_source, 'Walk-in / Direct')
+        self.assertEqual(record.source, 'Walk-in / Direct')
         self.assertEqual(record.caller, self.caller)
         self.assertEqual(record.created_by, self.caller)
         self.assertEqual(record.counselling_type, 'WALK_IN')
         self.assertEqual(result.data['counselling']['lead_name'], 'New Visitor')
+        self.assertEqual(result.data['counselling']['visitor_source'], 'Walk-in / Direct')
+        self.assertEqual(result.data['counselling']['source'], 'Walk-in / Direct')
         self.assertEqual(Lead.objects.count(), 1)
         self.assertFalse(Admission.objects.exists())
         self.assertEqual(PointsEntry.objects.get(counselling=record).points, 75)
@@ -68,7 +77,10 @@ class CounsellingVisitorTests(TestCase):
         self.assertEqual(self.client.get(self.url).data['total'], 1)
 
     def test_missing_and_invalid_visitor_details_are_rejected(self):
+        without_source = {k: v for k, v in self.visitor.items() if k != 'visitor_source'}
         for payload in [{}, {'visitor_name': 'Visitor'}, {'visitor_phone': '9876504322'},
+                        without_source,
+                        {**self.visitor, 'visitor_source': '   '},
                         {**self.visitor, 'visitor_phone': 'invalid'},
                         {**self.visitor, 'visitor_phone': '1111111111'},
                         {**self.visitor, 'visitor_email': 'invalid'},
@@ -76,6 +88,16 @@ class CounsellingVisitorTests(TestCase):
             with self.subTest(payload=payload):
                 self.assertEqual(self.client.post(self.url, payload, format='json').status_code, 400)
         self.assertFalse(Counselling.objects.exists())
+
+    def test_source_alias_field_in_payload_is_accepted(self):
+        payload = {k: v for k, v in self.visitor.items() if k != 'visitor_source'}
+        payload['source'] = 'Education Fair'
+        result = self.client.post(self.url, payload, format='json')
+        self.assertEqual(result.status_code, 201)
+        record = Counselling.objects.get(visitor_phone='919876504322')
+        self.assertEqual(record.visitor_source, 'Education Fair')
+        self.assertEqual(result.data['counselling']['visitor_source'], 'Education Fair')
+        self.assertEqual(result.data['counselling']['source'], 'Education Fair')
 
     def test_lead_and_visitor_details_cannot_be_mixed(self):
         result = self.client.post(self.url, {**self.visitor, 'lead_id': self.lead.pk}, format='json')

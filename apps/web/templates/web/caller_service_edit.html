@@ -6,7 +6,7 @@
 <div class="page-heading">
   <div>
     <div class="eyebrow">CALLER SERVICE CONFIGURATION</div>
-    <h1>Configure {{ caller|user_name }}<span class="accent">.</span></h1>
+    <h1>Configure {% employee_link caller %}<span class="accent">.</span></h1>
     <p>Assign services this caller is qualified to handle and update active eligibility.</p>
   </div>
   <a class="button" href="{% url 'web:caller-services' %}">← Back to caller eligibility</a>
@@ -73,7 +73,7 @@
     <div class="person" style="margin-bottom: 20px;">
       <span class="avatar">{{ caller|user_name|first|upper }}</span>
       <span>
-        <strong>{{ caller|user_name }}</strong>
+        <strong>{% employee_link caller %}</strong>
         <small>{{ caller.email|default:caller.username }}</small>
         <small class="accent">{{ caller.designation|default:"Counselor" }}</small>
       </span>

@@ -315,7 +315,7 @@
             <div class="person">
               <span class="avatar subtle">{{ row.employee|user_name|first|upper }}</span>
               <span>
-                <strong>{{ row.employee|user_name }}</strong>
+                <strong>{% employee_link row.employee %}</strong>
                 <small>{{ row.employee.email|default:row.employee.username }}</small>
               </span>
             </div>

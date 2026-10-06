@@ -13,6 +13,7 @@ class CounsellingItemSerializer(serializers.ModelSerializer):
     caller_name = serializers.SerializerMethodField()
     counselling_type_display = serializers.CharField(source="get_counselling_type_display", read_only=True)
     created_by_name = serializers.SerializerMethodField()
+    source = serializers.SerializerMethodField()
 
     class Meta:
         model = Counselling
@@ -24,6 +25,8 @@ class CounsellingItemSerializer(serializers.ModelSerializer):
             "visitor_name",
             "visitor_phone",
             "visitor_email",
+            "visitor_source",
+            "source",
             "caller_id",
             "caller_name",
             "counselling_type",
@@ -46,6 +49,9 @@ class CounsellingItemSerializer(serializers.ModelSerializer):
     def get_lead_phone(self, obj):
         return obj.lead.phone if obj.lead else obj.visitor_phone
 
+    def get_source(self, obj):
+        return obj.visitor_source or (obj.lead.source if obj.lead else "")
+
     def get_caller_id(self, obj):
         return obj.caller_id
 
@@ -65,6 +71,8 @@ class CreateCounsellingSerializer(serializers.Serializer):
     visitor_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
     visitor_phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
     visitor_email = serializers.EmailField(required=False, allow_blank=True)
+    visitor_source = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    source = serializers.CharField(max_length=100, required=False, allow_blank=True)
     counselling_type = serializers.ChoiceField(
         choices=Counselling.CounsellingType.choices,
         default=Counselling.CounsellingType.WALK_IN,
@@ -77,7 +85,7 @@ class CreateCounsellingSerializer(serializers.Serializer):
 
     def validate(self, data):
         if data.get('lead_id'):
-            if any(data.get(field) for field in ('visitor_name', 'visitor_phone', 'visitor_email')):
+            if any(data.get(field) for field in ('visitor_name', 'visitor_phone', 'visitor_email', 'visitor_source', 'source')):
                 raise serializers.ValidationError('Select an existing lead OR enter a new visitor, not both.')
         else:
             if not data.get('visitor_name'):
@@ -87,4 +95,9 @@ class CreateCounsellingSerializer(serializers.Serializer):
             if not re.fullmatch(r'\+?[0-9 ()\-.]+', raw) or not 7 <= len(phone) <= 15 or len(set(phone)) == 1:
                 raise serializers.ValidationError({'visitor_phone': 'Enter a valid phone number with 7 to 15 digits.'})
             data['visitor_phone'] = phone
+
+            source_val = (data.get('visitor_source') or data.get('source') or '').strip()
+            if not source_val:
+                raise serializers.ValidationError({'visitor_source': 'Source is required for new visitor counselling.'})
+            data['visitor_source'] = source_val
         return data

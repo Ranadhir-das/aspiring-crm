@@ -304,6 +304,7 @@ class MobileCounsellingView(APIView):
                 | Q(lead__phone__icontains=search)
                 | Q(visitor_name__icontains=search)
                 | Q(visitor_phone__icontains=search)
+                | Q(visitor_source__icontains=search)
                 | Q(college__icontains=search)
                 | Q(course__icontains=search)
             )
@@ -362,6 +363,7 @@ class MobileCounsellingView(APIView):
             visitor_name=serializer.validated_data.get('visitor_name', ''),
             visitor_phone=serializer.validated_data.get('visitor_phone', ''),
             visitor_email=serializer.validated_data.get('visitor_email', ''),
+            visitor_source=serializer.validated_data.get('visitor_source', ''),
             counselling_type=c_type,
             college=college,
             course=course,
