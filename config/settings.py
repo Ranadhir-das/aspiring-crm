@@ -8,6 +8,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env()
 
 environ.Env.read_env(BASE_DIR / ".env", overwrite=True)
+
+# Publish metadata only after verifying the matching, signed APK on the server.
+# Empty defaults intentionally return 503 rather than advertise an unverified build.
+CALLER_APP_UPDATE = {
+    'latest_version': env('CALLER_APP_LATEST_VERSION', default=''),
+    'version_code': env.int('CALLER_APP_VERSION_CODE', default=0),
+    'minimum_version_code': env.int('CALLER_APP_MINIMUM_VERSION_CODE', default=1),
+    'mandatory': env.bool('CALLER_APP_UPDATE_MANDATORY', default=False),
+    'download_url': env('CALLER_APP_DOWNLOAD_URL', default='https://vaaniapp.co.in/dist/vaani.apk'),
+    'release_notes': env.json('CALLER_APP_RELEASE_NOTES', default=[]),
+}
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
@@ -172,7 +183,11 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(env('MEDIA_ROOT', default=str(BASE_DIR / 'media')))
+try:
+    MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 LOGIN_URL = 'web:login'
 LOGIN_REDIRECT_URL = 'web:dashboard'
 LOGOUT_REDIRECT_URL = 'web:login'

@@ -1,3 +1,4 @@
+import logging
 import os
 from django.db import transaction
 from django.contrib import messages
@@ -10,6 +11,8 @@ from apps.accounts.models import User
 from .attachment_utils import validate_attachment
 from .models import Notice, NoticeAttachment
 from .views import page, workspace
+
+logger = logging.getLogger(__name__)
 
 ADMIN_ROLES = {'ADMIN', 'SUPER_ADMIN'}
 
@@ -41,18 +44,32 @@ def notice_new(request):
 
     uploaded_files = request.FILES.getlist('attachments')
     for f in uploaded_files:
+        clean_name = getattr(f, 'name', 'attachment')
         try:
             clean_name, mime_type, file_size = validate_attachment(f)
-            NoticeAttachment.objects.create(
-                notice=notice,
-                uploaded_by=request.user,
-                file=f,
-                original_filename=clean_name,
-                mime_type=mime_type,
-                file_size=file_size,
-            )
+            # Bound filename stem so storage path never exceeds FileField's 100-char limit
+            stem, ext = os.path.splitext(clean_name)
+            safe_name = f"{stem[:50]}{ext}"
+            f.name = safe_name
+
+            with transaction.atomic():
+                NoticeAttachment.objects.create(
+                    notice=notice,
+                    uploaded_by=request.user,
+                    file=f,
+                    original_filename=clean_name,
+                    mime_type=mime_type,
+                    file_size=file_size,
+                )
         except ValidationError as e:
-            messages.warning(request, f'Attachment "{f.name}" could not be saved: {e.message}')
+            msg = e.message if hasattr(e, 'message') else (', '.join(e.messages) if hasattr(e, 'messages') else str(e))
+            messages.warning(request, f'Attachment "{clean_name}" could not be saved: {msg}')
+        except (OSError, PermissionError) as e:
+            logger.exception('Storage error saving attachment "%s" for notice #%s: %s', clean_name, notice.pk, e)
+            messages.warning(request, f'Attachment "{clean_name}" could not be saved due to a server storage permission issue.')
+        except Exception as e:
+            logger.exception('Unexpected error saving attachment "%s" for notice #%s: %s', clean_name, notice.pk, e)
+            messages.warning(request, f'Attachment "{clean_name}" could not be saved due to an internal server error.')
 
     messages.success(request, 'Notice posted successfully.')
     return redirect('web:notices')
@@ -67,7 +84,10 @@ def notice_delete(request, pk):
     # Delete associated files from storage
     for att in notice.attachments.all():
         if att.file:
-            att.file.delete(save=False)
+            try:
+                att.file.delete(save=False)
+            except OSError:
+                pass
     notice.delete()
     messages.success(request, 'Notice deleted.')
     return redirect('web:notices')
@@ -81,7 +101,10 @@ def notice_attachment_delete(request, notice_pk, pk):
     notice = get_object_or_404(Notice, pk=notice_pk)
     attachment = get_object_or_404(NoticeAttachment, pk=pk, notice=notice)
     if attachment.file:
-        attachment.file.delete(save=False)
+        try:
+            attachment.file.delete(save=False)
+        except OSError:
+            pass
     attachment.delete()
     messages.success(request, f'Attachment {attachment.original_filename} removed.')
     return redirect('web:notices')
@@ -96,7 +119,12 @@ def notice_attachment_download(request, notice_pk, pk):
     if not attachment.file or not os.path.exists(attachment.file.path):
         raise Http404('File not found.')
 
-    response = FileResponse(open(attachment.file.path, 'rb'), content_type=attachment.mime_type)
+    try:
+        f = open(attachment.file.path, 'rb')
+    except OSError:
+        raise Http404('File not accessible.')
+
+    response = FileResponse(f, content_type=attachment.mime_type)
     disposition = 'attachment' if request.GET.get('download') == '1' else 'inline'
     response['Content-Disposition'] = f'{disposition}; filename="{attachment.original_filename}"'
     response['X-Content-Type-Options'] = 'nosniff'

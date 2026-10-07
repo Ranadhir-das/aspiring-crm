@@ -26,14 +26,20 @@ DANGEROUS_EXTENSIONS = {
 }
 
 
-def sanitize_filename(filename: str) -> str:
-    """Strip directory components, null bytes and dangerous chars."""
+def sanitize_filename(filename: str, max_length: int = 200) -> str:
+    """Strip directory components, null bytes and dangerous chars, bounded to max_length."""
     if not filename:
         return 'attachment'
     basename = os.path.basename(filename.replace('\\', '/'))
     basename = re.sub(r'[\x00-\x1f\x7f]', '', basename)
     clean = get_valid_filename(basename)
-    return clean or 'attachment'
+    if not clean:
+        clean = 'attachment'
+    if len(clean) > max_length:
+        stem, ext = os.path.splitext(clean)
+        keep = max_length - len(ext)
+        clean = f"{stem[:keep]}{ext}" if keep > 0 else clean[:max_length]
+    return clean
 
 
 def validate_file_signature(content: bytes, ext: str) -> str:
@@ -60,7 +66,8 @@ def validate_file_signature(content: bytes, ext: str) -> str:
         return 'image/webp'
 
     if ext == '.pdf':
-        if len(content) < 5 or not content.startswith(b'%PDF-'):
+        header = content.lstrip(b'\xef\xbb\xbf\r\n\t ')
+        if len(header) < 5 or not header.startswith(b'%PDF-'):
             raise ValidationError('Invalid PDF file content. File header does not match %PDF.')
         return 'application/pdf'
 

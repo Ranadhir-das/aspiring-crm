@@ -113,6 +113,9 @@ python manage.py migrate
 python manage.py collectstatic --noinput
 python manage.py install_face_models   # downloads + SHA-256-verifies the ONNX models
 python manage.py createsuperuser       # your first admin login
+sudo mkdir -p /opt/vaani/media
+sudo chown -R www-data:www-data /opt/vaani/media
+sudo chmod -R 775 /opt/vaani/media
 ```
 
 ## 6. Daphne as a service
@@ -225,6 +228,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py collectstatic --noinput
+sudo mkdir -p /opt/vaani/media
+sudo chown -R www-data:www-data /opt/vaani/media
+sudo chmod -R 775 /opt/vaani/media
 sudo systemctl restart vaani
 ```
 
