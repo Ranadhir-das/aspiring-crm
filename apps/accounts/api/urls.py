@@ -6,9 +6,11 @@ from .views import MobileLoginView, MobileMeView, MobileSessionView, MobileVerif
 from .registration import MobileSignupView
 from .push_views import PushDeviceView, PushDeviceDetailView
 from apps.leads.api.service_views import CallerServicesView
+from .app_update import AppUpdateView
 
 
 urlpatterns = [
+    path('app-update/', AppUpdateView.as_view(), name='mobile-app-update'),
     path('notifications/', include('apps.notifications.api')),
     path('push-devices/', PushDeviceView.as_view(), name='mobile-push-devices'),
     path('push-devices/<int:pk>/', PushDeviceDetailView.as_view(), name='mobile-push-device-detail'),
