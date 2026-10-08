@@ -37,7 +37,7 @@ class EmployeeHomeView(EmployeeView):
             'projects': list(Project.objects.filter(employee=user).order_by('status', 'due_date').values('id', 'title', 'description', 'due_date', 'status')[:100]),
             'reports': list(WorkReport.objects.filter(employee=user).order_by('-date')
                              .annotate(has_photo=Case(When(photo__isnull=False, then=Value(True)), default=Value(False), output_field=BooleanField()))
-                             .values('id', 'date', 'notes', 'work_link', 'work_links', 'has_photo')[:30]),
+                             .values('id', 'date', 'notes', 'work_link', 'work_links', 'project_reports', 'has_photo')[:30]),
             'holidays': list(Holiday.objects.filter(date__gte=today).order_by('date').values('id', 'name', 'date')[:10]),
         })
 
@@ -81,14 +81,42 @@ class EmployeeProjectView(EmployeeView):
 class EmployeeReportView(EmployeeView):
     @transaction.atomic
     def post(self, request):
+        class ProjectReportItemSerializer(serializers.Serializer):
+            project_name = serializers.CharField(max_length=200)
+            duration = serializers.CharField(max_length=100)
+            status = serializers.ChoiceField(choices=['Completed', 'In Progress', 'Pending'])
+            expected_completion_date = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+            notes = serializers.CharField(max_length=10000, required=False, allow_blank=True, default='')
+
+            def validate(self, attrs):
+                if attrs['status'] == 'Completed':
+                    attrs['expected_completion_date'] = ''
+                else:
+                    value = attrs.get('expected_completion_date')
+                    if not value:
+                        raise serializers.ValidationError({'expected_completion_date': 'Required for pending or in-progress projects.'})
+                    field = serializers.DateField()
+                    try:
+                        attrs['expected_completion_date'] = field.run_validation(value).isoformat()
+                    except serializers.ValidationError as exc:
+                        raise serializers.ValidationError({'expected_completion_date': exc.detail})
+                return attrs
+
         class Input(serializers.Serializer):
             date = serializers.DateField()
-            notes = serializers.CharField(max_length=10000)
+            notes = serializers.CharField(max_length=10000, required=False, allow_blank=True, default='')
             work_link = serializers.URLField(required=False, allow_blank=True, max_length=2000)
             work_links = serializers.ListField(child=serializers.URLField(max_length=2000, validators=[URLValidator(schemes=['http', 'https'])]), required=False, max_length=30)
+            project_reports = serializers.ListField(child=ProjectReportItemSerializer(), required=False, default=list)
             # Optional base64-encoded photo of the work done that day (e.g. a screenshot or
             # site photo). Omitted entirely on a same-day re-save leaves any existing photo as-is.
             photo = serializers.CharField(max_length=4_000_000, required=False, allow_blank=True)
+
+            def validate(self, attrs):
+                if not attrs.get('notes') and not attrs.get('project_reports'):
+                    raise serializers.ValidationError({'notes': 'Work notes or project reports are required.'})
+                return attrs
+
         data = Input(data=request.data)
         data.is_valid(raise_exception=True)
         if data.validated_data['date'] > timezone.localdate():
@@ -102,6 +130,8 @@ class EmployeeReportView(EmployeeView):
             existing = WorkReport.objects.filter(employee=request.user, date=date).first()
             extras = existing.all_work_links[1:] if existing else []
             values['work_links'] = ([values['work_link']] if values['work_link'] else []) + extras
+        if values.get('project_reports') and not values.get('notes'):
+            values['notes'] = "; ".join(f"{p['project_name']} [{p.get('status', '')}] ({p.get('duration', '')})" for p in values['project_reports'])
         photo = values.pop('photo', '')
         if photo:
             values['photo'] = validate_photo(photo)
@@ -150,7 +180,12 @@ class EmployeeNoticeAttachmentDownloadView(EmployeeView):
         if not attachment.file or not os.path.exists(attachment.file.path):
             raise Http404("File not found on server.")
 
-        response = FileResponse(open(attachment.file.path, 'rb'), content_type=attachment.mime_type)
+        try:
+            f = open(attachment.file.path, 'rb')
+        except OSError:
+            raise Http404("File not accessible on server.")
+
+        response = FileResponse(f, content_type=attachment.mime_type)
         disposition = 'attachment' if request.GET.get('download') == '1' else 'inline'
         response['Content-Disposition'] = f'{disposition}; filename="{attachment.original_filename}"'
         response['X-Content-Type-Options'] = 'nosniff'

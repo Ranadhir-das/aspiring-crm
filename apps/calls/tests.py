@@ -58,6 +58,17 @@ class AdditionalOutcomeTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('callback_at', response.data)
 
+    def test_other_consultancy_has_no_followup_or_whatsapp(self):
+        payload = {'lead': self.lead.pk, 'outcome': 'ADMISSION_DONE_BY_OTHER_CONSULTANCY',
+                   'started_at': timezone.now().isoformat()}
+        response = self.api.post('/api/v1/calls/', payload, format='json')
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertFalse(FollowUp.objects.filter(call_id=response.data['id']).exists())
+        for extra in ({'callback_at': (timezone.now() + timedelta(days=1)).isoformat()},
+                      {'whatsapp_message': 'Please contact us'}):
+            rejected = self.api.post('/api/v1/calls/', {**payload, **extra}, format='json')
+            self.assertEqual(rejected.status_code, 400, rejected.data)
+
     def test_dashboard_renders_expanded_status_list(self):
         from django.urls import reverse
         admin = User.objects.create_user('outcome-admin', role='ADMIN', is_staff=True)

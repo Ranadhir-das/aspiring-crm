@@ -1,0 +1,56 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Counselor Desk{% endblock %}
+{% block breadcrumb %}Counselor Desk{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><div class="eyebrow">COUNSELLING</div><h1>Counselor Desk<span class="accent">.</span></h1><p>Counselors, forwarded leads, forwarding history and private counselor notes.</p></div>
+  <a class="button" href="{% url 'web:admission-requests' %}">Admission requests{% if pending_requests %} <span class="badge">{{ pending_requests }}</span>{% endif %}</a>
+</div>
+<section class="panel">
+  <h2>Counselors</h2>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Counselor</th><th>Status</th><th>Availability</th><th>Active leads</th><th>Notes</th></tr></thead>
+    <tbody>{% for counselor in counselors %}<tr>
+      <td>{% employee_link counselor %}</td>
+      <td>{% if counselor.is_active %}<span class="badge">Active</span>{% else %}<span class="badge">Inactive</span>{% endif %}</td>
+      <td>{{ counselor.availability_label }}</td><td>{{ counselor.active_leads }}</td><td>{{ counselor.notes_total }}</td>
+    </tr>{% empty %}<tr><td colspan="5" class="empty">No counselors yet. Create an employee with the Counselor role.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+<section class="panel">
+  <form class="filters" method="get">
+    <select name="view" aria-label="View">
+      <option value="active" {% if view == 'active' %}selected{% endif %}>Active forwarded leads</option>
+      <option value="history" {% if view == 'history' %}selected{% endif %}>Forwarding history</option>
+      <option value="notes" {% if view == 'notes' %}selected{% endif %}>Counselor notes</option>
+    </select>
+    <input name="q" value="{{ search }}" aria-label="Search leads" placeholder="Search lead name or phone">
+    <select name="counselor" aria-label="Counselor"><option value="">All counselors</option>{% for counselor in counselors %}<option value="{{ counselor.pk }}" {% if selected_counselor == counselor.pk|stringformat:'s' %}selected{% endif %}>{{ counselor|user_name }}</option>{% endfor %}</select>
+    <button class="button" type="submit">Filter</button><a class="text-link" href="{% url 'web:counselor-desk' %}">Reset</a>
+  </form>
+  {% if view == 'notes' %}
+  <div class="table-scroll"><table>
+    <thead><tr><th>Lead</th><th>Counselor</th><th>Type</th><th>Note</th><th>Duration</th><th>Created</th></tr></thead>
+    <tbody>{% for note in records %}<tr>
+      <td><a class="text-link" href="{% url 'web:lead-detail' note.lead_id %}">{{ note.lead.name }}</a><br><small>{{ note.lead.phone }}</small></td>
+      <td>{% employee_link note.counselor %}</td><td><span class="badge">{{ note.get_kind_display }}</span></td>
+      <td>{{ note.body|linebreaksbr }}</td><td>{% if note.duration_seconds %}{{ note.duration_seconds }}s{% else %}—{% endif %}</td>
+      <td>{{ note.created_at|date:'d M Y, H:i' }}</td>
+    </tr>{% empty %}<tr><td colspan="6" class="empty">No counselor notes found.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}
+  <div class="table-scroll"><table>
+    <thead><tr><th>Lead</th><th>Course / Year</th><th>Counselor</th><th>Caller</th><th>Forwarded</th><th>State</th></tr></thead>
+    <tbody>{% for item in records %}<tr>
+      <td><a class="text-link" href="{% url 'web:lead-detail' item.lead_id %}">{{ item.lead.name }}</a><br><small>{{ item.lead.phone }} · {{ item.lead.get_status_display }}</small></td>
+      <td>{% if item.source_call %}{{ item.source_call.selected_course_label|default:'—' }} / {{ item.source_call.expected_admission_year|default:'—' }}{% else %}—{% endif %}</td>
+      <td>{% employee_link item.counselor %}</td><td>{% employee_link item.caller %}</td>
+      <td>{{ item.forwarded_at|date:'d M Y, H:i' }}<br><small>by {{ item.forwarded_by|user_name }}</small></td>
+      <td>{% if item.is_active %}<span class="badge">Active</span>{% else %}<span class="badge">{{ item.get_ended_reason_display|default:'Ended' }}</span><br><small>{{ item.ended_at|date:'d M Y, H:i' }}</small>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="6" class="empty">No forwarded leads found.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+  {% include 'web/pagination.html' %}
+</section>
+{% endblock %}

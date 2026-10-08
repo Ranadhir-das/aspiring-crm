@@ -1,0 +1,12 @@
+{% extends 'web/base.html' %}
+{% block title %}Delete Apostille{% endblock %}
+{% block breadcrumb %}Apostille / Delete{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Delete Apostille #{{ record.pk }}<span class="accent">.</span></h1></div></div>
+<section class="panel form-panel">
+  <h2>Are you sure you want to delete this Apostille record?</h2>
+  <p>{{ record.candidate_name }} &middot; {{ record.candidate_phone }} &middot; {{ record.country }}</p>
+  <div class="notice spaced">The {{ record.points }} point contribution will be reversed. The points ledger will retain the award and reversal history.</div>
+  <form method="post" class="actions spaced">{% csrf_token %}<button class="button danger" type="submit">Delete Apostille</button><a class="button" href="{% url 'web:apostille-detail' record.pk %}">Cancel</a></form>
+</section>
+{% endblock %}

@@ -74,6 +74,7 @@ class WorkReport(models.Model):
     date = models.DateField(default=timezone.localdate)
     work_link = models.URLField(blank=True, max_length=2000)
     work_links = models.JSONField(default=list, blank=True)
+    project_reports = models.JSONField(default=list, blank=True)
     notes = models.TextField(blank=True)
     feedback = models.JSONField(default=dict)
     photo = models.BinaryField(null=True, blank=True)

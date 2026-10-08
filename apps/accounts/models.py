@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
+from .location_models import EmployeeLocationPoint
 
 
 class PushDevice(models.Model):
@@ -55,6 +56,7 @@ class User(AbstractUser):
         VIDEO_EDITOR = "VIDEO_EDITOR", "Video Editor"
         ACCOUNTANT = "ACCOUNTANT", "Accountant"
         EMPLOYEE = "EMPLOYEE", "Employee"
+        COUNSELOR = "COUNSELOR", "Counselor"
 
     role = models.CharField(
         max_length=30,
@@ -129,6 +131,10 @@ class CallerSession(models.Model):
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)
     login_remark = models.CharField(max_length=500, blank=True, default='')
+    location_state = models.CharField(max_length=16, default='UNKNOWN', choices=[
+        ('UNKNOWN', 'Not reported'), ('ACTIVE', 'Collecting'),
+        ('UNAVAILABLE', 'Location unavailable'), ('STOPPED', 'Stopped')])
+    location_state_at = models.DateTimeField(null=True, blank=True)
 
     @property
     def active_display(self):

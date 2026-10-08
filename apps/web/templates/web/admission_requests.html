@@ -1,0 +1,38 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Admission Requests{% endblock %}
+{% block breadcrumb %}Admission Requests{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><div class="eyebrow">COUNSELLING</div><h1>Admission Requests<span class="accent">.</span></h1><p>Counselor requests for admission review. Approving a request does not create an admission — use “Create admission” to record it.</p></div>
+  <a class="button" href="{% url 'web:counselor-desk' %}">Counselor Desk</a>
+</div>
+<section class="panel">
+  <form class="filters" method="get">
+    <select name="status" aria-label="Status"><option value="all" {% if not status_filter %}selected{% endif %}>All statuses</option>{% for value, label in statuses %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <button class="button" type="submit">Filter</button>
+  </form>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Lead</th><th>Counselor</th><th>Message</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead>
+    <tbody>{% for item in records %}<tr>
+      <td><a class="text-link" href="{% url 'web:lead-detail' item.lead_id %}">{{ item.lead.name }}</a><br><small>{{ item.lead.phone }} · {{ item.lead.get_status_display }}</small></td>
+      <td>{% employee_link item.counselor %}</td>
+      <td>{{ item.message|default:'—'|linebreaksbr }}</td>
+      <td><span class="badge">{{ item.get_status_display }}</span>{% if item.reviewed_by %}<br><small>by {{ item.reviewed_by|user_name }} · {{ item.reviewed_at|date:'d M Y, H:i' }}</small>{% endif %}{% if item.review_note %}<br><small>{{ item.review_note }}</small>{% endif %}</td>
+      <td>{{ item.created_at|date:'d M Y, H:i' }}</td>
+      <td><div class="actions">
+        {% if item.status == 'PENDING' %}
+        <form method="post" action="{% url 'web:admission-request-review' item.pk %}">{% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <input name="review_note" aria-label="Review note" placeholder="Note (optional)" maxlength="500">
+          <button class="button primary" name="decision" value="approve" type="submit">Approve</button>
+          <button class="button" name="decision" value="reject" type="submit">Reject</button>
+        </form>
+        {% endif %}
+        <a class="text-link" href="{% url 'web:admission-new' %}?lead={{ item.lead_id }}&source_type=existing">Create admission</a>
+      </div></td>
+    </tr>{% empty %}<tr><td colspan="6" class="empty">No admission requests found.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% include 'web/pagination.html' %}
+</section>
+{% endblock %}

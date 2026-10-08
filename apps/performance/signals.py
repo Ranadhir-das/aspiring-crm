@@ -1,8 +1,8 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 from apps.calls.models import Call
 from apps.followups.models import FollowUp
-from apps.leads.models import Lead, Admission, Counselling
+from apps.leads.models import Lead, Admission, Counselling, Apostille
 from apps.web.models import AuditEvent
 from .models import LeadMilestone, PointsAdjustment, PointsEntry
 from .services import (
@@ -13,6 +13,13 @@ from .services import (
     score_followup,
     score_interested_lead,
 )
+
+
+@receiver(pre_delete, sender=Apostille)
+def apostille_points_reversal(sender, instance, **kwargs):
+    from .apostille import reconcile_apostille_points
+    # Collector wraps model and queryset deletion in a transaction; the service locks the row.
+    reconcile_apostille_points(instance, actor=getattr(instance, '_points_actor', None), deleting=True)
 
 
 @receiver(post_save, sender=Call)

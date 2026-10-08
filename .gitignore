@@ -11,3 +11,4 @@ media/
 private-call-recordings/
 face_models/
 *.log
+*.apk

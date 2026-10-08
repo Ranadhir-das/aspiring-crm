@@ -1,0 +1,7 @@
+.location-workspace-grid { display:grid; grid-template-columns:minmax(290px,1fr) minmax(0,2fr); gap:24px; align-items:start; }
+#employee-location-map { height:440px; border:1px solid var(--border); border-radius:12px; isolation:isolate; }
+#employee-location-workspace [hidden] { display:none; }
+#location-detail,#location-route-status { margin-top:12px; line-height:1.6; }
+#location-employees button { background:none; border:0; padding:0; color:var(--accent); text-align:left; text-decoration:underline; }
+#location-employees td { min-width:100px; }
+@media(max-width:1000px) { .location-workspace-grid { grid-template-columns:minmax(0,1fr); } #employee-location-map { height:360px; } }

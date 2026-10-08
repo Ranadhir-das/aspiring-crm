@@ -24,6 +24,9 @@ class ActivityLog(models.Model):
         LOGGED_IN = "LOGGED_IN", "Logged in"
         LOGGED_OUT = "LOGGED_OUT", "Logged out"
         WHATSAPP_INITIATED = "WHATSAPP_INITIATED", "WhatsApp initiated"
+        COUNSELOR_FORWARDED = "COUNSELOR_FORWARDED", "Forwarded to counselor"
+        COUNSELOR_REASSIGNED = "COUNSELOR_REASSIGNED", "Counselor changed"
+        ADMISSION_REQUESTED = "ADMISSION_REQUESTED", "Admission requested"
 
     # The caller/employee this event is attributed to. Null when the actor
     # can't be determined (e.g. a lead created by an unattended import).

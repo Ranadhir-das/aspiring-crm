@@ -274,6 +274,8 @@ class MobileCounsellingView(APIView):
 
     def get(self, request):
         user = request.user
+        if user.role == User.Role.COUNSELOR:
+            return Response({"detail": "Counselors use the counselor workspace."}, status=status.HTTP_403_FORBIDDEN)
         lead_id = request.query_params.get("lead_id") or request.query_params.get("lead")
 
         if lead_id and str(lead_id).isdigit():
@@ -318,6 +320,8 @@ class MobileCounsellingView(APIView):
     @transaction.atomic
     def post(self, request):
         user = request.user
+        if user.role == User.Role.COUNSELOR:
+            return Response({"detail": "Counselors use the counselor workspace."}, status=status.HTTP_403_FORBIDDEN)
         serializer = CreateCounsellingSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -8,6 +8,8 @@ class Notification(models.Model):
         TEAM_CHAT = 'TEAM_CHAT', 'Team chat message'
         NOTICE = 'NOTICE', 'Notice published'
         FOLLOWUP_DUE = 'FOLLOWUP_DUE', 'Follow-up due'
+        COUNSELOR_LEAD_FORWARDED = 'COUNSELOR_LEAD_FORWARDED', 'Lead forwarded to counselor'
+        ADMISSION_REQUESTED = 'ADMISSION_REQUESTED', 'Admission requested'
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                   related_name='notifications')

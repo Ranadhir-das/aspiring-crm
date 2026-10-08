@@ -1,4 +1,5 @@
 from django.utils.html import format_html_join
+from django.template.loader import render_to_string
 import csv
 import calendar
 from datetime import date, timedelta
@@ -325,7 +326,7 @@ def reports(request):
         return response
     records = paginate(request, query.order_by('-date', '-updated_at'))
     missing = User.objects.filter(is_active=True).exclude(work_reports__date=timezone.localdate()) if request.user.role in MANAGEMENT else []
-    rows = [{'cells': [r.date, r.employee, r.feedback_total, format_html_join('<br>', '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', ((url, url) for url in r.all_work_links)), r.notes], 'url': reverse('web:report-edit', args=[r.pk]), 'label': 'View / edit'} for r in records]
+    rows = [{'cells': [r.date, r.employee, r.feedback_total, format_html_join('<br>', '<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', ((url, url) for url in r.all_work_links)), render_to_string('web/project_report_cards.html', {'report': r}) if r.project_reports else r.notes], 'url': reverse('web:report-edit', args=[r.pk]), 'label': 'View / edit'} for r in records]
     return table_page(request, 'Work reports', 'reports', ['Date', 'Employee', 'Manual feedback count', 'Work links', 'Notes'], rows, records=records, filters=filters,
         create_url=reverse('web:report-new'), export=True, missing=missing,
         subtitle='One report per employee per day. Manual feedback is kept separate from recorded calls.')

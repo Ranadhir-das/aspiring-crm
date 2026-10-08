@@ -1,0 +1,35 @@
+{% extends 'web/base.html' %}
+{% load static %}
+{% block title %}{{ title }}{% endblock %}
+{% block breadcrumb %}Apostille / {{ title }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/apostille.css' %}">
+<div class="admission-container">
+  <div class="page-heading"><div><a class="text-link" href="{% url 'web:apostilles' %}">&larr; Back to Apostille</a><h1>{{ title }}<span class="accent">.</span></h1><p>Record documents and the total payment received for one assigned caller.</p></div></div>
+  <form method="post" class="panel form-panel" id="apostille-form" data-preview-url="{% url 'web:apostille-points-preview' %}" data-search-url="{% url 'web:apostille-lead-search' %}">
+    {% csrf_token %}
+    {% if form.errors %}<div class="notice error" role="alert"><strong>Please correct the following:</strong>{{ form.non_field_errors }}{% for field in form %}{% if field.errors %}<p>{{ field.label }}: {{ field.errors|striptags }}</p>{% endif %}{% endfor %}</div>{% endif %}
+    <fieldset class="form-section"><legend class="form-section-header">Candidate type</legend>
+      <div class="source-selector-grid">{% for radio in form.candidate_type %}<label class="source-card">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>{% endfor %}</div>
+    </fieldset>
+    <div id="apostille-external" class="form-grid spaced">
+      <div class="field"><label for="{{ form.name.id_for_label }}">Name *</label>{{ form.name }}</div>
+      <div class="field"><label for="{{ form.phone.id_for_label }}">Phone number *</label>{{ form.phone }}<small>Include the country code when applicable.</small></div>
+    </div>
+    <div id="apostille-lead" class="form-grid spaced">
+      <div class="field"><label for="apostille-lead-query">Search existing leads</label><input id="apostille-lead-query" type="search" value="{{ search }}" placeholder="Name, phone, email or lead ID"><button class="button" type="button" id="apostille-search">Search</button><small id="apostille-search-status" role="status"></small></div>
+      <div class="field"><label for="{{ form.lead.id_for_label }}">Existing lead *</label>{{ form.lead }}</div>
+    </div>
+    <h2 class="form-section-header spaced">Documents and payment</h2>
+    <div class="form-grid">
+      <div class="field"><label for="{{ form.number_of_documents.id_for_label }}">Number of documents *</label>{{ form.number_of_documents }}</div>
+      <div class="field"><label for="{{ form.country.id_for_label }}">Country *</label>{{ form.country }}</div>
+      <div class="field"><label for="{{ form.amount_received.id_for_label }}">Total amount received (INR) *</label>{{ form.amount_received }}</div>
+      <div class="field"><label for="{{ form.caller.id_for_label }}">Assigned caller *</label>{{ form.caller }}</div>
+    </div>
+    <div class="notice spaced" role="status">Points to be awarded: <strong id="apostille-points">Enter an amount</strong><p class="muted">Calculated from the total amount received. Saving an edit adjusts the existing contribution.</p></div>
+    <div class="actions spaced"><button class="button primary" type="submit">Save Apostille</button><a class="button" href="{% url 'web:apostilles' %}">Cancel</a></div>
+  </form>
+</div>
+<script src="{% static 'web/apostille.js' %}" defer></script>
+{% endblock %}

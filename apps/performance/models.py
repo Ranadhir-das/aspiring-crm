@@ -17,6 +17,7 @@ class PointsEntry(models.Model):
         INTERESTED_LEAD = 'INTERESTED_LEAD', 'Interested lead'
         COUNSELLING_COMPLETED = 'COUNSELLING_COMPLETED', 'Counselling / demo completed'
         VERIFIED_ADMISSION = 'VERIFIED_ADMISSION', 'Verified admission'
+        APOSTILLE = 'APOSTILLE', 'Apostille'
         MISSED_FOLLOWUP = 'MISSED_FOLLOWUP', 'Missed follow-up'
         ADMIN_ADJUSTMENT = 'ADMIN_ADJUSTMENT', 'Admin adjustment'
         # Legacy event choices retained for backwards compatibility
@@ -38,6 +39,7 @@ class PointsEntry(models.Model):
     followup = models.ForeignKey('followups.FollowUp', null=True, blank=True, on_delete=models.SET_NULL, related_name='points_entries')
     counselling = models.ForeignKey('leads.Counselling', null=True, blank=True, on_delete=models.SET_NULL, related_name='points_entries')
     admission = models.ForeignKey('leads.Admission', null=True, blank=True, on_delete=models.SET_NULL, related_name='points_entries')
+    apostille = models.ForeignKey('leads.Apostille', null=True, blank=True, on_delete=models.SET_NULL, related_name='points_entries')
     event = models.CharField(max_length=32, choices=Event.choices)
     points = models.IntegerField()
     reason = models.TextField()

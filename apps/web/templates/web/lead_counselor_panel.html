@@ -1,0 +1,30 @@
+{% load web_tags %}
+<section class="panel spaced" aria-label="Counselor workflow">
+  <div class="panel-heading"><div><h2>Counselor</h2><p>Visible to Admin and Manager only. Counselor notes are private.</p></div><a class="text-link" href="{% url 'web:counselor-desk' %}">Counselor Desk</a></div>
+  <h3>Forwarding history</h3>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Counselor</th><th>Forwarded by</th><th>Forwarded</th><th>State</th></tr></thead>
+    <tbody>{% for item in counselor_panel.assignments %}<tr>
+      <td>{% employee_link item.counselor %}</td><td>{{ item.forwarded_by|user_name }}</td>
+      <td>{{ item.forwarded_at|date:'d M Y, H:i' }}</td>
+      <td>{% if item.is_active %}<span class="badge">Active</span>{% else %}<span class="badge">{{ item.get_ended_reason_display|default:'Ended' }}</span> <small>{{ item.ended_at|date:'d M Y, H:i' }}</small>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="4" class="empty">Not forwarded to a counselor.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <h3>Counselor notes</h3>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Counselor</th><th>Type</th><th>Note</th><th>Created</th></tr></thead>
+    <tbody>{% for note in counselor_panel.notes %}<tr>
+      <td>{{ note.counselor|user_name }}</td><td><span class="badge">{{ note.get_kind_display }}</span>{% if note.duration_seconds %} <small>{{ note.duration_seconds|duration }}</small>{% endif %}</td>
+      <td>{{ note.body|linebreaksbr }}</td><td>{{ note.created_at|date:'d M Y, H:i' }}</td>
+    </tr>{% empty %}<tr><td colspan="4" class="empty">No counselor notes.</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <h3>Admission requests</h3>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Counselor</th><th>Message</th><th>Status</th><th>Requested</th></tr></thead>
+    <tbody>{% for item in counselor_panel.admission_requests %}<tr>
+      <td>{{ item.counselor|user_name }}</td><td>{{ item.message|default:'—'|linebreaksbr }}</td>
+      <td><span class="badge">{{ item.get_status_display }}</span>{% if item.reviewed_by %} <small>by {{ item.reviewed_by|user_name }}</small>{% endif %}</td>
+      <td>{{ item.created_at|date:'d M Y, H:i' }}{% if item.status == 'PENDING' %} · <a class="text-link" href="{% url 'web:admission-requests' %}">Review</a>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="4" class="empty">No admission requests.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>

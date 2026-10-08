@@ -1,0 +1,16 @@
+{% if report.project_reports %}
+<div class="project-report-list">
+  {% for project in report.project_reports %}
+  <article class="project-report-card">
+    <div class="project-report-heading"><strong>{{ project.project_name }}</strong>
+      <span class="badge {% if project.status == 'Completed' %}completed{% elif project.status == 'Pending' %}amber{% endif %}">{{ project.status }}</span>
+    </div>
+    <dl class="project-report-meta">
+      <div><dt>Duration</dt><dd>{{ project.duration }}</dd></div>
+      {% if project.expected_completion_date %}<div><dt>Expected completion</dt><dd>{{ project.expected_completion_date }}</dd></div>{% elif project.status != 'Completed' %}<div><dt>Expected completion</dt><dd>Not provided</dd></div>{% endif %}
+    </dl>
+    {% if project.notes %}<p class="project-report-notes">{{ project.notes }}</p>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% endif %}

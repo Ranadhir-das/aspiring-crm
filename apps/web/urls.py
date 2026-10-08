@@ -14,11 +14,26 @@ from django.contrib.auth.views import LoginView, LogoutView
 from django.urls import path
 from . import views
 from . import counselling_views
+from . import apostille_views
+from . import location_views
+from . import counselor_views
 from . import workforce_views as workforce
 from .forms import LoginForm
 
 app_name = 'web'
 urlpatterns = [
+    path('employee-locations/', location_views.employee_locations, name='employee-locations'),
+    path('counselor-desk/', counselor_views.counselor_desk, name='counselor-desk'),
+    path('admission-requests/', counselor_views.admission_requests, name='admission-requests'),
+    path('admission-requests/<int:pk>/review/', counselor_views.admission_request_review,
+         name='admission-request-review'),
+    path('apostilles/', apostille_views.apostilles, name='apostilles'),
+    path('apostilles/new/', apostille_views.apostille_edit, name='apostille-new'),
+    path('apostilles/points-preview/', apostille_views.apostille_points_preview, name='apostille-points-preview'),
+    path('apostilles/leads/', apostille_views.apostille_lead_search, name='apostille-lead-search'),
+    path('apostilles/<int:pk>/', apostille_views.apostille_detail, name='apostille-detail'),
+    path('apostilles/<int:pk>/edit/', apostille_views.apostille_edit, name='apostille-edit'),
+    path('apostilles/<int:pk>/delete/', apostille_views.apostille_delete, name='apostille-delete'),
     path('recordings/', recording_views.call_recordings_list, name='call-recordings'),
     path('calls/<int:call_id>/recording/', recording_views.recording_playback, name='call-recording'),
     path('external-calls/', external_call_views.external_call_list, name='external-calls'),

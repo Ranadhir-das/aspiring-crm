@@ -2,6 +2,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.core.validators import RegexValidator
+from .apostille import Apostille
+from .counselor import AdmissionRequest, CounselorNote, LeadCounselorAssignment
 
 
 class Service(models.Model):

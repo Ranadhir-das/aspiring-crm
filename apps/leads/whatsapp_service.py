@@ -11,6 +11,7 @@ def user_can_access_lead(user, lead: Lead) -> bool:
     Check if the user is authorized to access and interact with the lead.
     - Super admins, Admins, and Managers have access to all visible leads.
     - Callers have access only to leads assigned to them.
+    - Counselors have access only to leads actively forwarded to them.
     """
     if not user or not user.is_authenticated or not user.is_active:
         return False
@@ -18,6 +19,8 @@ def user_can_access_lead(user, lead: Lead) -> bool:
         return True
     if user.role == User.Role.CALLER:
         return lead.assigned_caller_id == user.id
+    if user.role == User.Role.COUNSELOR:
+        return lead.counselor_assignments.filter(counselor=user, is_active=True).exists()
     return False
 
 

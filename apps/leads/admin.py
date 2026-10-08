@@ -382,3 +382,32 @@ class WhatsAppActivityAdmin(admin.ModelAdmin):
 
 
 
+
+from .counselor import AdmissionRequest, CounselorNote, LeadCounselorAssignment  # noqa: E402
+
+
+@admin.register(LeadCounselorAssignment)
+class LeadCounselorAssignmentAdmin(admin.ModelAdmin):
+    list_display = ("lead", "counselor", "caller", "is_active", "forwarded_at", "ended_at", "ended_reason")
+    list_filter = ("is_active", "ended_reason", "forwarded_at")
+    search_fields = ("lead__name", "lead__phone", "counselor__username", "caller__username")
+    raw_id_fields = ("lead", "counselor", "forwarded_by", "caller", "source_call")
+    readonly_fields = ("forwarded_at", "ended_at", "ended_reason")
+
+
+@admin.register(CounselorNote)
+class CounselorNoteAdmin(admin.ModelAdmin):
+    list_display = ("lead", "counselor", "kind", "duration_seconds", "created_at")
+    list_filter = ("kind", "created_at")
+    search_fields = ("lead__name", "lead__phone", "counselor__username")
+    raw_id_fields = ("lead", "assignment", "counselor")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(AdmissionRequest)
+class AdmissionRequestAdmin(admin.ModelAdmin):
+    list_display = ("lead", "counselor", "status", "reviewed_by", "created_at", "reviewed_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("lead__name", "lead__phone", "counselor__username")
+    raw_id_fields = ("lead", "counselor", "assignment", "reviewed_by")
+    readonly_fields = ("created_at",)

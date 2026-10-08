@@ -1,0 +1,19 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Apostille #{{ record.pk }}{% endblock %}
+{% block breadcrumb %}Apostille / #{{ record.pk }}{% endblock %}
+{% block content %}
+<div class="page-heading"><div><a class="text-link" href="{% url 'web:apostilles' %}">&larr; Back to Apostille</a><h1>Apostille #{{ record.pk }}<span class="accent">.</span></h1></div><div class="actions"><a class="button primary" href="{% url 'web:apostille-edit' record.pk %}">Edit</a><a class="button" href="{% url 'web:apostille-delete' record.pk %}">Delete</a></div></div>
+<section class="panel form-panel">
+  <h2>Candidate and payment details</h2>
+  <dl class="counselling-details">
+    <div><dt>Candidate type</dt><dd>{{ record.get_candidate_type_display }}{% if record.lead_id %} &middot; <a class="text-link" href="{% url 'web:lead-detail' record.lead_id %}">Lead #{{ record.lead_id }}</a>{% endif %}</dd></div>
+    <div><dt>Name</dt><dd>{{ record.candidate_name }}</dd></div><div><dt>Phone</dt><dd>{{ record.candidate_phone }}</dd></div>
+    <div><dt>Number of documents</dt><dd>{{ record.number_of_documents }}</dd></div><div><dt>Country</dt><dd>{{ record.country }}</dd></div>
+    <div><dt>Total amount received</dt><dd>INR {{ record.amount_received|floatformat:2 }}</dd></div><div><dt>Assigned caller</dt><dd>{% employee_link record.caller %}</dd></div>
+    <div><dt>Points awarded</dt><dd>{{ record.points }}</dd></div><div><dt>Net ledger contribution</dt><dd>{{ contribution }} points</dd></div>
+    <div><dt>Created</dt><dd>{{ record.created_at|date:'d M Y, H:i' }}</dd></div><div><dt>Updated</dt><dd>{{ record.updated_at|date:'d M Y, H:i' }}</dd></div>
+  </dl>
+</section>
+<section class="panel spaced"><div class="form-panel"><h2>Point history</h2><p class="muted">Adjustments retain the original awards and reversals.</p></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Caller</th><th>Points adjustment</th><th>Reason</th></tr></thead><tbody>{% for entry in entries %}<tr><td>{{ entry.created_at|date:'d M Y, H:i' }}</td><td>{{ entry.caller|user_name }}</td><td>{{ entry.points }}</td><td>{{ entry.reason }}</td></tr>{% empty %}<tr><td colspan="4" class="empty">No points awarded for this amount.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

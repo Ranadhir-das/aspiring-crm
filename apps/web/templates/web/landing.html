@@ -95,8 +95,10 @@
           <span class="pill-arrow" aria-hidden="true">→</span>
         </div>
 
-        <h1 class="hero-headline">
-          Turn Every Lead <br><span class="hero-gradient-text">Into an Opportunity.</span>
+        <h1 class="hero-headline" aria-label="Turn Every Lead Into an Opportunity.">
+          <span class="headline-line line-1" aria-hidden="true">Turn Every Lead</span>
+          <br class="hero-headline-br">
+          <span class="headline-line line-2 hero-gradient-text" aria-hidden="true">Into an Opportunity.</span>
         </h1>
 
         <p class="lead-text hero-subtext">
@@ -129,33 +131,6 @@
       <!-- Right Column: Interactive 3D Glass Telecaller Cockpit -->
       <div class="hero-right">
         <div class="hero-mockup-wrapper">
-          <!-- Floating Badge 1: Gamified Points -->
-          <div class="floating-badge badge-points">
-            <span class="fb-icon">🏆</span>
-            <div class="fb-content">
-              <strong>+30 Points Earned!</strong>
-              <span>Alternate Course Conversion</span>
-            </div>
-          </div>
-
-          <!-- Floating Badge 2: Automated WhatsApp -->
-          <div class="floating-badge badge-whatsapp">
-            <span class="fb-icon">💬</span>
-            <div class="fb-content">
-              <strong>Brochure Sent</strong>
-              <span>MBBS Fee Structure</span>
-            </div>
-          </div>
-
-          <!-- Floating Badge 3: Smart Callback -->
-          <div class="floating-badge badge-followup">
-            <span class="fb-icon">🔔</span>
-            <div class="fb-content">
-              <strong>Callback in 5m</strong>
-              <span>Dr. Ananya Roy</span>
-            </div>
-          </div>
-
           <!-- Main Interactive Card -->
           <div class="hero-main-card">
             <div class="card-glass-header">
@@ -202,6 +177,33 @@
             <div class="hero-live-strip">
               <span class="hls-icon">⚡</span>
               <span>Syncs live with Android Caller App &amp; CRM Web Leaderboard</span>
+            </div>
+          </div>
+
+          <!-- Floating Badge 1: Gamified Points (Always in front) -->
+          <div class="floating-badge badge-points">
+            <span class="fb-icon">🏆</span>
+            <div class="fb-content">
+              <strong>+30 Points Earned!</strong>
+              <span>Alternate Course Conversion</span>
+            </div>
+          </div>
+
+          <!-- Floating Badge 2: Automated WhatsApp (Always in front) -->
+          <div class="floating-badge badge-whatsapp">
+            <span class="fb-icon">💬</span>
+            <div class="fb-content">
+              <strong>Brochure Sent</strong>
+              <span>MBBS Fee Structure</span>
+            </div>
+          </div>
+
+          <!-- Floating Badge 3: Smart Callback (Always in front) -->
+          <div class="floating-badge badge-followup">
+            <span class="fb-icon">🔔</span>
+            <div class="fb-content">
+              <strong>Callback in 5m</strong>
+              <span>Dr. Ananya Roy</span>
             </div>
           </div>
         </div>
@@ -886,7 +888,15 @@
     <div class="showcase-pane active corner-crosshairs" id="tab-dashboard" role="tabpanel">
       <div class="showcase-display">
         <div class="showcase-media">
-          <img src="{% static 'web/images/product-showcase/crm-dashboard.png' %}" alt="Vaani CRM Overview Dashboard" class="showcase-img" loading="lazy">
+          <div class="showcase-desktop-frame">
+            <div class="desktop-frame-header" aria-hidden="true">
+              <span class="df-dot df-red"></span>
+              <span class="df-dot df-yellow"></span>
+              <span class="df-dot df-green"></span>
+              <span class="df-title">Vaani CRM &mdash; Operations Command Center</span>
+            </div>
+            <img src="{% static 'web/images/product-showcase/crm-dashboard.png' %}" alt="Vaani CRM Overview Dashboard" class="showcase-img showcase-img-desktop" loading="lazy">
+          </div>
         </div>
         <div class="showcase-info">
           <div style="margin-bottom: 12px;"><span class="telemetry-chip cyan">[STATION: 24/7 BI COMMAND]</span></div>
@@ -914,7 +924,15 @@
     <div class="showcase-pane corner-crosshairs" id="tab-leads" role="tabpanel">
       <div class="showcase-display">
         <div class="showcase-media">
-          <img src="{% static 'web/images/product-showcase/lead-management.png' %}" alt="Lead Management and Import Pipeline" class="showcase-img" loading="lazy">
+          <div class="showcase-desktop-frame">
+            <div class="desktop-frame-header" aria-hidden="true">
+              <span class="df-dot df-red"></span>
+              <span class="df-dot df-yellow"></span>
+              <span class="df-dot df-green"></span>
+              <span class="df-title">Vaani CRM &mdash; Intake Engine &amp; Lead Routing</span>
+            </div>
+            <img src="{% static 'web/images/product-showcase/lead-management.png' %}" alt="Lead Management and Import Pipeline" class="showcase-img showcase-img-desktop" loading="lazy">
+          </div>
         </div>
         <div class="showcase-info">
           <div style="margin-bottom: 12px;"><span class="telemetry-chip emerald">[INTAKE_ENGINE: ACTIVE]</span></div>
@@ -942,7 +960,15 @@
     <div class="showcase-pane corner-crosshairs" id="tab-caller-app" role="tabpanel">
       <div class="showcase-display">
         <div class="showcase-media">
-          <img src="{% static 'web/images/product-showcase/android-caller-app.png' %}" alt="Vaani Android Caller Application" class="showcase-img" loading="lazy">
+          <div class="showcase-desktop-frame">
+            <div class="desktop-frame-header" aria-hidden="true">
+              <span class="df-dot df-red"></span>
+              <span class="df-dot df-yellow"></span>
+              <span class="df-dot df-green"></span>
+              <span class="df-title">Vaani Android Caller Workspace</span>
+            </div>
+            <img src="{% static 'web/images/product-showcase/android-caller-app.png' %}" alt="Vaani Android Caller Application" class="showcase-img showcase-img-desktop" loading="lazy">
+          </div>
         </div>
         <div class="showcase-info">
           <div style="margin-bottom: 12px;"><span class="telemetry-chip cyan">[ANDROID_APP: V2.4]</span></div>
@@ -970,7 +996,15 @@
     <div class="showcase-pane corner-crosshairs" id="tab-analytics" role="tabpanel">
       <div class="showcase-display">
         <div class="showcase-media">
-          <img src="{% static 'web/images/product-showcase/performance-analytics.png' %}" alt="Performance Analytics and Leaderboards" class="showcase-img" loading="lazy">
+          <div class="showcase-desktop-frame">
+            <div class="desktop-frame-header" aria-hidden="true">
+              <span class="df-dot df-red"></span>
+              <span class="df-dot df-yellow"></span>
+              <span class="df-dot df-green"></span>
+              <span class="df-title">Vaani CRM &mdash; Gamified Points &amp; Analytics</span>
+            </div>
+            <img src="{% static 'web/images/product-showcase/performance-analytics.png' %}" alt="Performance Analytics and Leaderboards" class="showcase-img showcase-img-desktop" loading="lazy">
+          </div>
         </div>
         <div class="showcase-info">
           <div style="margin-bottom: 12px;"><span class="telemetry-chip amber">[GAMIFIED_LEADERBOARDS]</span></div>

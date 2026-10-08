@@ -21,8 +21,13 @@ from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 
 from apps.chat.middleware import TokenOrSessionAuthMiddlewareStack  # noqa: E402
 from apps.chat.routing import websocket_urlpatterns  # noqa: E402
+from channels.security.websocket import AllowedHostsOriginValidator
+from django.urls import path
+from apps.accounts.location_consumer import EmployeeLocationConsumer
 
 application = ProtocolTypeRouter({
     'http': django_asgi_app,
-    'websocket': TokenOrSessionAuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+    'websocket': TokenOrSessionAuthMiddlewareStack(URLRouter(websocket_urlpatterns + [
+        path('ws/employee-locations/', AllowedHostsOriginValidator(EmployeeLocationConsumer.as_asgi())),
+    ])),
 })

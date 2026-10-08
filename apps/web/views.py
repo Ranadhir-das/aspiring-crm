@@ -211,12 +211,20 @@ def lead_detail(request, pk):
     from apps.leads.models import WhatsAppTemplate
     website_submissions = list(lead.website_submissions.select_related('website_source', 'service_type').order_by('-submitted_at')[:20])
     whatsapp_templates = list(WhatsAppTemplate.objects.filter(Q(owner__isnull=True) | Q(owner=request.user), is_active=True).order_by('title'))
+    counselor_panel = None
+    if request.user.role in MANAGEMENT:
+        # Counselor notes are private: only management (and the authoring counselor via the mobile API).
+        counselor_panel = {
+            'assignments': lead.counselor_assignments.select_related('counselor', 'caller', 'forwarded_by')[:20],
+            'notes': lead.counselor_notes.select_related('counselor')[:50],
+            'admission_requests': lead.admission_requests.select_related('counselor', 'reviewed_by')[:20],
+        }
     return page(request, 'lead_detail', 'leads', lead=lead, form=form, follow_form=follow_form,
                 history=visible_calls(request.user).filter(lead=lead).order_by('-started_at')[:30],
                 followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20],
                 activity_log=ActivityLog.objects.filter(lead=lead).select_related('actor').order_by('-created_at')[:50],
                 website_submissions=website_submissions,
-                whatsapp_templates=whatsapp_templates)
+                whatsapp_templates=whatsapp_templates, counselor_panel=counselor_panel)
 
 
 @require_POST

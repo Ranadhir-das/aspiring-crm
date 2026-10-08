@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 from apps.accounts.models import User
-from apps.web.models import Attendance, AttendancePhotoRequest, AttendancePhotoChallenge, Project, LeaveRequest
+from apps.web.models import Attendance, AttendancePhotoRequest, AttendancePhotoChallenge, Project, LeaveRequest, WorkReport
 from apps.accounts.api.face_detection import validate_face_photo
 from rest_framework.exceptions import ValidationError
 
@@ -121,3 +121,76 @@ class EmployeeMobileTests(TestCase):
         self.assertEqual(self.api.post('/api/v1/mobile/login/verify/', {'challenge': str(challenge.pk), 'photo': 'test'}).status_code, 400)
         challenge.refresh_from_db()
         self.assertFalse(challenge.used)
+
+    def test_project_wise_work_report_for_it_and_video_editor(self):
+        today = str(timezone.localdate())
+        projects_payload = [
+            {
+                'project_name': 'CRM Mobile Dialer Refactor',
+                'duration': '3 hours',
+                'status': 'Completed',
+                'expected_completion_date': today,
+                'notes': 'Refactored call state handlers',
+            },
+            {
+                'project_name': 'Video Compressor Pipeline',
+                'duration': '4h 30m',
+                'status': 'In Progress',
+                'expected_completion_date': today,
+                'notes': 'Working on FFmpeg encoder',
+            },
+        ]
+        # 1. IT user can submit multiple project reports
+        response = self.api.post('/api/v1/mobile/employee/reports/', {
+            'date': today,
+            'project_reports': projects_payload,
+        }, format='json')
+        self.assertEqual(response.status_code, 200, response.data)
+        report_id = response.data['id']
+
+        # Verify saved in database
+        report = WorkReport.objects.get(pk=report_id)
+        self.assertEqual(len(report.project_reports), 2)
+        self.assertEqual(report.project_reports[0]['project_name'], 'CRM Mobile Dialer Refactor')
+        self.assertEqual(report.project_reports[1]['status'], 'In Progress')
+        self.assertIn('CRM Mobile Dialer Refactor', report.notes)
+
+        # Verify retrieved via employee home endpoint
+        home_res = self.api.get('/api/v1/mobile/employee/')
+        self.assertEqual(home_res.status_code, 200)
+        reports = home_res.data['reports']
+        saved_entry = next(r for r in reports if r['id'] == report_id)
+        self.assertEqual(len(saved_entry['project_reports']), 2)
+
+        # 2. Video Editor user can also submit multiple projects
+        editor = User.objects.create_user('editor', password='pass', role='VIDEO_EDITOR')
+        self.api.force_authenticate(editor)
+        editor_projects = [
+            {
+                'project_name': 'Student Testimonial Edit',
+                'duration': '5 hours',
+                'status': 'Pending',
+                'expected_completion_date': today,
+                'notes': 'Color grading and subtitles',
+            }
+        ]
+        res_editor = self.api.post('/api/v1/mobile/employee/reports/', {
+            'date': today,
+            'project_reports': editor_projects,
+        }, format='json')
+        self.assertEqual(res_editor.status_code, 200, res_editor.data)
+
+        # 3. Validation: project report with missing required fields fails
+        bad_projects = [
+            {
+                'project_name': '',
+                'duration': '2 hours',
+                'status': 'Pending',
+                'expected_completion_date': today,
+            }
+        ]
+        bad_res = self.api.post('/api/v1/mobile/employee/reports/', {
+            'date': today,
+            'project_reports': bad_projects,
+        }, format='json')
+        self.assertEqual(bad_res.status_code, 400)

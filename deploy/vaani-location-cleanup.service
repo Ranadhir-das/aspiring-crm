@@ -1,0 +1,11 @@
+[Unit]
+Description=Remove Vaani employee location history older than 90 days
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/vaani
+EnvironmentFile=/opt/vaani/.env
+ExecStart=/opt/vaani/venv/bin/python manage.py cleanup_location_history --batch-size 5000

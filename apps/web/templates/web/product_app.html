@@ -66,7 +66,15 @@
     <!-- 1. CRM Dashboard -->
     <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/crm-dashboard.png' %}" alt="CRM Dashboard Overview" class="showcase-img" loading="lazy">
+        <div class="showcase-desktop-frame">
+          <div class="desktop-frame-header" aria-hidden="true">
+            <span class="df-dot df-red"></span>
+            <span class="df-dot df-yellow"></span>
+            <span class="df-dot df-green"></span>
+            <span class="df-title">Vaani CRM &mdash; Operations Command Center</span>
+          </div>
+          <img src="{% static 'web/images/app-showcase/crm-dashboard.png' %}" alt="CRM Dashboard Overview" class="showcase-img showcase-img-desktop" loading="lazy">
+        </div>
       </div>
       <div class="showcase-info">
         <span class="eyebrow" style="margin-bottom: 12px;">01. DESKTOP WORKSPACE</span>
@@ -103,14 +111,30 @@
         </ul>
       </div>
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/lead-management.png' %}" alt="Lead Management" class="showcase-img" loading="lazy">
+        <div class="showcase-desktop-frame">
+          <div class="desktop-frame-header" aria-hidden="true">
+            <span class="df-dot df-red"></span>
+            <span class="df-dot df-yellow"></span>
+            <span class="df-dot df-green"></span>
+            <span class="df-title">Vaani CRM &mdash; Intake Engine &amp; Lead Management</span>
+          </div>
+          <img src="{% static 'web/images/app-showcase/lead-management.png' %}" alt="Lead Management" class="showcase-img showcase-img-desktop" loading="lazy">
+        </div>
       </div>
     </div>
 
     <!-- 3. Caller App -->
     <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/android-caller-app.png' %}" alt="Native Caller App" class="showcase-img" loading="lazy">
+        <div class="showcase-desktop-frame">
+          <div class="desktop-frame-header" aria-hidden="true">
+            <span class="df-dot df-red"></span>
+            <span class="df-dot df-yellow"></span>
+            <span class="df-dot df-green"></span>
+            <span class="df-title">Vaani Android Caller Workspace</span>
+          </div>
+          <img src="{% static 'web/images/app-showcase/android-caller-app.png' %}" alt="Native Caller App" class="showcase-img showcase-img-desktop" loading="lazy">
+        </div>
       </div>
       <div class="showcase-info">
         <span class="eyebrow" style="margin-bottom: 12px;">03. MOBILE WORKSPACE</span>
@@ -147,14 +171,20 @@
         </ul>
       </div>
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/calling-history.png' %}" alt="Call History" class="showcase-img" loading="lazy">
+        <div class="showcase-phone-frame">
+          <div class="phone-frame-notch" aria-hidden="true"><span class="notch-lens"></span></div>
+          <img src="{% static 'web/images/app-showcase/calling-history.png' %}" alt="Call History" class="showcase-img showcase-img-mobile" loading="lazy">
+        </div>
       </div>
     </div>
 
     <!-- 5. Follow-ups -->
     <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/followups-notifications.png' %}" alt="Follow-up Tracking" class="showcase-img" loading="lazy">
+        <div class="showcase-phone-frame">
+          <div class="phone-frame-notch" aria-hidden="true"><span class="notch-lens"></span></div>
+          <img src="{% static 'web/images/app-showcase/followups-notifications.png' %}" alt="Follow-up Tracking" class="showcase-img showcase-img-mobile" loading="lazy">
+        </div>
       </div>
       <div class="showcase-info">
         <span class="eyebrow" style="margin-bottom: 12px;">05. CALLBACK AUTOMATION</span>
@@ -191,14 +221,20 @@
         </ul>
       </div>
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/whatsapp.png' %}" alt="WhatsApp Integration" class="showcase-img" loading="lazy">
+        <div class="showcase-phone-frame">
+          <div class="phone-frame-notch" aria-hidden="true"><span class="notch-lens"></span></div>
+          <img src="{% static 'web/images/app-showcase/whatsapp.png' %}" alt="WhatsApp Integration" class="showcase-img showcase-img-mobile" loading="lazy">
+        </div>
       </div>
     </div>
 
     <!-- 7. Team Performance -->
     <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/points-peer.png' %}" alt="Gamified Points Engine" class="showcase-img" loading="lazy">
+        <div class="showcase-phone-frame">
+          <div class="phone-frame-notch" aria-hidden="true"><span class="notch-lens"></span></div>
+          <img src="{% static 'web/images/app-showcase/points-peer.png' %}" alt="Gamified Points Engine" class="showcase-img showcase-img-mobile" loading="lazy">
+        </div>
       </div>
       <div class="showcase-info">
         <span class="eyebrow" style="margin-bottom: 12px;">07. GAMIFICATION &amp; RECOGNITION</span>
@@ -235,14 +271,20 @@
         </ul>
       </div>
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/conversion-analytics.png' %}" alt="Analytics Dashboard" class="showcase-img" loading="lazy">
+        <div class="showcase-phone-frame">
+          <div class="phone-frame-notch" aria-hidden="true"><span class="notch-lens"></span></div>
+          <img src="{% static 'web/images/app-showcase/conversion-analytics.png' %}" alt="Analytics Dashboard" class="showcase-img showcase-img-mobile" loading="lazy">
+        </div>
       </div>
     </div>
 
     <!-- 9. Counselling & Admissions -->
     <div class="showcase-display" style="border-radius: var(--radius-xl); background: var(--bg-card); border: 1px solid var(--border-subtle); overflow: hidden;">
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/counselling-admissions.png' %}" alt="Admissions Workflow" class="showcase-img" loading="lazy">
+        <div class="showcase-phone-frame">
+          <div class="phone-frame-notch" aria-hidden="true"><span class="notch-lens"></span></div>
+          <img src="{% static 'web/images/app-showcase/counselling-admissions.png' %}" alt="Admissions Workflow" class="showcase-img showcase-img-mobile" loading="lazy">
+        </div>
       </div>
       <div class="showcase-info">
         <span class="eyebrow" style="margin-bottom: 12px;">09. DOMAIN SPECIALIZATION</span>
@@ -279,7 +321,10 @@
         </ul>
       </div>
       <div class="showcase-media">
-        <img src="{% static 'web/images/app-showcase/full-shift-phone.png' %}" alt="Mobile Experience" class="showcase-img" loading="lazy">
+        <div class="showcase-phone-frame">
+          <div class="phone-frame-notch" aria-hidden="true"><span class="notch-lens"></span></div>
+          <img src="{% static 'web/images/app-showcase/full-shift-phone.png' %}" alt="Mobile Experience" class="showcase-img showcase-img-mobile" loading="lazy">
+        </div>
       </div>
     </div>
 

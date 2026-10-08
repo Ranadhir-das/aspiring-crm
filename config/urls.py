@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.urls import include, path
+from apps.accounts.api.location import LiveEmployeeLocations, EmployeeLocationHistory
 
 urlpatterns = [
+    path('api/v1/admin/employee-locations/live/', LiveEmployeeLocations.as_view(), name='employee-locations-live'),
+    path('api/v1/admin/employee-locations/history/', EmployeeLocationHistory.as_view(), name='employee-locations-history'),
     path('api/v1/public/', include('apps.leads.api.public_urls')),
     path('api/v1/points/', include('apps.performance.urls')),
     path('', include('apps.web.urls')),

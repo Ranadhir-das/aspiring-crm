@@ -14,7 +14,10 @@
     initMobileNav();
     initVideoPlayer();
     initHeroTourTrigger();
+    initHeroHeadlineAnimation();
+    initHeroOutcomeTags();
     initHeroParallax();
+    initScrollReveal();
     initStickyPhoneStory();
     initPointsCounter();
     initPipelineProgress();
@@ -579,13 +582,16 @@
       mockup.style.transform = "translate3d(" + currentX.toFixed(2) + "px, " + currentY.toFixed(2) + "px, 0)";
 
       if (badgePoints) {
-        badgePoints.style.transform = "translate3d(" + (currentX * 1.6).toFixed(2) + "px, " + (currentY * 1.6).toFixed(2) + "px, 0)";
+        badgePoints.style.setProperty("--badge-px", (currentX * 1.6).toFixed(2) + "px");
+        badgePoints.style.setProperty("--badge-py", (currentY * 1.6).toFixed(2) + "px");
       }
       if (badgeWa) {
-        badgeWa.style.transform = "translate3d(" + (currentX * 1.3).toFixed(2) + "px, " + (currentY * 1.3).toFixed(2) + "px, 0)";
+        badgeWa.style.setProperty("--badge-px", (currentX * 1.3).toFixed(2) + "px");
+        badgeWa.style.setProperty("--badge-py", (currentY * 1.3).toFixed(2) + "px");
       }
       if (badgeFollowup) {
-        badgeFollowup.style.transform = "translate3d(" + (currentX * 1.5).toFixed(2) + "px, " + (currentY * 1.5).toFixed(2) + "px, 0)";
+        badgeFollowup.style.setProperty("--badge-px", (currentX * 1.5).toFixed(2) + "px");
+        badgeFollowup.style.setProperty("--badge-py", (currentY * 1.5).toFixed(2) + "px");
       }
 
       if (Math.abs(targetX - currentX) > 0.05 || Math.abs(targetY - currentY) > 0.05) {
@@ -790,5 +796,181 @@
       if (heroTimer) heroTimer.textContent = str;
       if (phoneTimer) phoneTimer.textContent = str;
     }, 1000);
+  }
+
+  /* ========================================================================
+     14. HERO HEADLINE LETTER-BY-LETTER TYPEWRITER ANIMATION
+     ======================================================================== */
+  function initHeroHeadlineAnimation() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    var headline = document.querySelector(".hero-headline");
+    if (!headline) return;
+
+    var line1 = headline.querySelector(".line-1");
+    var line2 = headline.querySelector(".line-2");
+    if (!line1 || !line2) return;
+
+    var text1 = line1.textContent.trim() || "Turn Every Lead";
+    var text2 = line2.textContent.trim() || "Into an Opportunity.";
+
+    // Clear initial text for typewriter effect
+    line1.textContent = "";
+    line2.textContent = "";
+
+    // Create glowing neon cursor
+    var cursor = document.createElement("span");
+    cursor.className = "headline-cursor";
+    cursor.setAttribute("aria-hidden", "true");
+    line1.appendChild(cursor);
+
+    var i1 = 0;
+    var i2 = 0;
+    var speed = 36; // ms per char
+
+    function typeLine1() {
+      if (i1 < text1.length) {
+        var char = text1.charAt(i1);
+        var span = document.createElement("span");
+        span.className = "typed-char";
+        if (char === " ") {
+          span.innerHTML = "&nbsp;";
+        } else {
+          span.textContent = char;
+        }
+        line1.insertBefore(span, cursor);
+        i1++;
+        setTimeout(typeLine1, speed);
+      } else {
+        // Pause briefly before starting line 2
+        setTimeout(function () {
+          if (cursor.parentNode) cursor.parentNode.removeChild(cursor);
+          line2.appendChild(cursor);
+          typeLine2();
+        }, 120);
+      }
+    }
+
+    function typeLine2() {
+      if (i2 < text2.length) {
+        var char = text2.charAt(i2);
+        var span = document.createElement("span");
+        span.className = "typed-char";
+        if (char === " ") {
+          span.innerHTML = "&nbsp;";
+        } else {
+          span.textContent = char;
+        }
+        line2.insertBefore(span, cursor);
+        i2++;
+        setTimeout(typeLine2, speed);
+      } else {
+        // Typing complete: hold cursor blinking for 2.2s, then fade out smoothly
+        setTimeout(function () {
+          cursor.classList.add("cursor-fade");
+          setTimeout(function () {
+            if (cursor.parentNode) cursor.parentNode.removeChild(cursor);
+          }, 600);
+        }, 2200);
+      }
+    }
+
+    // Start typing after initial entrance timing (320ms)
+    setTimeout(typeLine1, 320);
+  }
+
+  /* ========================================================================
+     15. HERO OUTCOME TAGS INTERACTIVITY
+     ======================================================================== */
+  function initHeroOutcomeTags() {
+    var tags = document.querySelectorAll(".hero-outcome-preview .outcome-tag");
+    if (!tags.length) return;
+
+    var badgePoints = document.querySelector(".badge-points");
+    var badgeWa = document.querySelector(".badge-whatsapp");
+    var badgeFollowup = document.querySelector(".badge-followup");
+
+    tags.forEach(function (tag, index) {
+      tag.addEventListener("click", function () {
+        tags.forEach(function (t) { t.classList.remove("active", "tag-pulsed"); });
+        tag.classList.add("active", "tag-pulsed");
+
+        // Provide reactive feedback on floating badges
+        var targetBadge = null;
+        if (index === 0) targetBadge = badgePoints;
+        else if (index === 1) targetBadge = badgeFollowup;
+        else if (index === 2) targetBadge = badgeWa;
+
+        if (targetBadge) {
+          targetBadge.classList.remove("badge-highlight");
+          void targetBadge.offsetWidth; // Force reflow
+          targetBadge.classList.add("badge-highlight");
+          setTimeout(function () {
+            targetBadge.classList.remove("badge-highlight");
+          }, 850);
+        }
+      });
+    });
+  }
+
+  /* ========================================================================
+     16. SCROLL REVEAL CASCADE ANIMATION
+     ======================================================================== */
+  function initScrollReveal() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!("IntersectionObserver" in window)) return;
+
+    var groups = [
+      { selector: ".section-head", type: "fade" },
+      { selector: ".video-studio-window", type: "scale" },
+      { selector: ".problem-card, .solution-card", type: "fade", stagger: true },
+      { selector: ".bento-card", type: "fade", stagger: true },
+      { selector: ".points-hud-card", type: "scale", stagger: true },
+      { selector: ".comp-table-wrap", type: "fade" },
+      { selector: ".faq-item", type: "fade", stagger: true },
+      { selector: ".demo-form-card", type: "scale" }
+    ];
+
+    var observer = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            var el = entry.target;
+            el.classList.add("is-revealed");
+            observer.unobserve(el);
+
+            // Once entrance transition completes, clean up classes so hover & transforms work natively
+            var cleanup = function () {
+              el.classList.remove("reveal-on-scroll", "reveal-scale", "is-revealed");
+              el.removeAttribute("data-delay");
+            };
+            var onEnd = function (e) {
+              if (e.propertyName === "opacity" || e.propertyName === "transform") {
+                cleanup();
+                el.removeEventListener("transitionend", onEnd);
+              }
+            };
+            el.addEventListener("transitionend", onEnd);
+            setTimeout(cleanup, 1200);
+          }
+        });
+      },
+      {
+        threshold: 0.12,
+        rootMargin: "0px 0px -40px 0px",
+      }
+    );
+
+    groups.forEach(function (grp) {
+      var elements = document.querySelectorAll(grp.selector);
+      elements.forEach(function (el, idx) {
+        var cls = grp.type === "scale" ? "reveal-scale" : "reveal-on-scroll";
+        el.classList.add(cls);
+        if (grp.stagger) {
+          el.setAttribute("data-delay", (idx % 4) + 1);
+        }
+        observer.observe(el);
+      });
+    });
   }
 })();

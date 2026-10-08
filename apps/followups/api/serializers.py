@@ -4,6 +4,8 @@ from apps.followups.models import FollowUp
 
 
 class FollowUpSerializer(serializers.ModelSerializer):
+    lead_name = serializers.CharField(source="lead.name", read_only=True, default=None)
+    lead_phone = serializers.CharField(source="lead.phone", read_only=True, default=None)
     caller_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(
         source="get_status_display",
@@ -15,6 +17,8 @@ class FollowUpSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "lead",
+            "lead_name",
+            "lead_phone",
             "phone_number",
             "call",
             "caller",

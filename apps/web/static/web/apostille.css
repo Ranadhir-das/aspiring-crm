@@ -1,0 +1,8 @@
+/* Scoped additions to the shared Admission form components. */
+#apostille-form [hidden] { display:none; }
+#apostille-form fieldset { min-width:0; margin:0; padding:0; border:0; }
+#apostille-form legend { margin-bottom:0; }
+#apostille-form .source-card { align-items:center; }
+#apostille-form .source-card input { flex:0 0 auto; width:18px; height:18px; margin:0; accent-color:var(--accent); }
+#apostille-form .notice p { margin-top:8px; }
+@media(max-width:480px) { #apostille-form .source-selector-grid { grid-template-columns:1fr; } }

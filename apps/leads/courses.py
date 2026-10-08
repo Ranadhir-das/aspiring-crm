@@ -14,7 +14,7 @@ class Course(models.TextChoices):
     OTHERS = 'OTHERS', 'Others'
 
 
-BLOCKED_CONTACT_OUTCOMES = frozenset({'NOT_INTERESTED', 'NO_CANDIDATE', 'WRONG_NUMBER'})
+BLOCKED_CONTACT_OUTCOMES = frozenset({'NOT_INTERESTED', 'NO_CANDIDATE', 'WRONG_NUMBER', 'ADMISSION_DONE_BY_OTHER_CONSULTANCY'})
 
 
 def validate_course(code, custom='', *, required=True):

@@ -136,6 +136,12 @@
           <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg></span>
           <span class="nav-text">Admissions</span>
         </a>
+        {% if can_manage_employees %}
+        <a {% if section == 'apostilles' %}aria-current="page"{% endif %} href="{% url 'web:apostilles' %}">
+          <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h8M8 17h5"></path></svg></span>
+          <span class="nav-text">Apostille</span>
+        </a>
+        {% endif %}
         {% if can_manage %}
         <a {% if section == 'counselling' %}aria-current="page"{% endif %} href="{% url 'web:counselling' %}">
           <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M7 8h10M7 12h6"></path></svg></span>
@@ -144,6 +150,14 @@
         <a {% if section == 'consultations' %}aria-current="page"{% endif %} href="{% url 'web:consultations' %}">
           <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></span>
           <span class="nav-text">Lead Consultations</span>
+        </a>
+        <a {% if section == 'counselor-desk' %}aria-current="page"{% endif %} href="{% url 'web:counselor-desk' %}">
+          <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"></path></svg></span>
+          <span class="nav-text">Counselor Desk</span>
+        </a>
+        <a {% if section == 'admission-requests' %}aria-current="page"{% endif %} href="{% url 'web:admission-requests' %}">
+          <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></span>
+          <span class="nav-text">Admission Requests</span>
         </a>
         {% endif %}
       </div>
@@ -213,6 +227,12 @@
           <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></span>
           <span class="nav-text">Employee Sessions</span>
         </a>
+        {% if can_manage_employees %}
+        <a {% if section == 'employee-locations' %}aria-current="page"{% endif %} href="{% url 'web:employee-locations' %}">
+          <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"></path><circle cx="12" cy="10" r="3"></circle></svg></span>
+          <span class="nav-text">Employee Locations</span>
+        </a>
+        {% endif %}
         {% endif %}
       </div>
     </div>
