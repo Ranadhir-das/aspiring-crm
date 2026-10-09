@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone as utc_timezone
 from io import StringIO
 from unittest.mock import patch
 
@@ -243,6 +243,128 @@ class EmployeeLocationTests(TestCase):
         self.assertNotContains(response, '/employee-locations/')
 
 
+    def test_old_session_cannot_become_live_and_bad_quality_does_not_replace_fix(self):
+        point = self.stored_point(recorded_at=timezone.now()-timedelta(seconds=10))
+        CallerSession.objects.filter(pk=self.session.pk).update(logged_out_at=timezone.now()-timedelta(seconds=5))
+        current = self.session_for(self.employee)
+        CallerSession.objects.filter(pk=current.pk).update(logged_in_at=timezone.now(), location_state='ACTIVE')
+        self.stored_point(session=current, accuracy=1000)
+        self.stored_point(session=current, mocked=True)
+        result = self.admin_client().get('/api/v1/admin/employee-locations/live/')
+        row = next(r for r in result.data['results'] if r['employee']==self.employee.pk)
+        self.assertEqual(row['last_seen_at'], point.recorded_at)
+        self.assertFalse(row['current_session_point'])
+        self.assertEqual(row['status'], 'STALE')
+        self.assertTrue(row['tracking_active'])
+
+    def test_history_pagination_excludes_newly_received_delayed_samples(self):
+        captured=timezone.now()-timedelta(minutes=10)
+        points=[self.stored_point(recorded_at=captured+timedelta(minutes=i)) for i in range(3)]
+        client=self.admin_client()
+        first=client.get('/api/v1/admin/employee-locations/history/', {'employee':self.employee.pk,
+            'start':captured.isoformat(),'end':timezone.now().isoformat(),'page_size':2})
+        self.assertIn('snapshot_at=',first.data['next'])
+        self.stored_point(recorded_at=captured+timedelta(seconds=30))
+        from urllib.parse import urlsplit
+        next_url=urlsplit(first.data['next'])
+        second=client.get(next_url.path+'?'+next_url.query)
+        self.assertEqual(second.data['count'],3)
+        self.assertEqual([p['id'] for p in second.data['results']],[points[2].pk])
+        self.assertEqual(second.data['results'][0]['segment_reason'],'CONTINUOUS')
+
+    def test_freshness_filters_are_applied_before_pagination(self):
+        self.stored_point(recorded_at=timezone.now()-timedelta(seconds=10))
+        self.stored_point(employee=self.other,session=self.other_session,recorded_at=timezone.now()-timedelta(minutes=2))
+        client=self.admin_client()
+        for state,expected in [('LIVE',self.employee.pk),('RECENT',self.other.pk)]:
+            response=client.get('/api/v1/admin/employee-locations/live/', {'status':state,'page_size':1})
+            self.assertEqual(response.data['count'],1)
+            self.assertEqual(response.data['results'][0]['employee'],expected)
+        CallerSession.objects.filter(pk=self.session.pk).update(logged_out_at=timezone.now(),location_state='ACTIVE')
+        response=client.get('/api/v1/admin/employee-locations/live/', {'tracking':'STOPPED','search':'location-employee'})
+        self.assertEqual(response.data['count'],1)
+        self.assertEqual(response.data['results'][0]['location_state'],'STOPPED')
+
+    def test_metadata_and_diagnostics_are_optional_and_validated(self):
+        self.assertEqual(self.submit([self.point(source='expo-location', platform='android', mocked=True)]).status_code, 200)
+        stored = EmployeeLocationPoint.objects.get()
+        self.assertTrue(stored.mocked)
+        self.assertEqual(stored.source, 'expo-location')
+        self.assertEqual(self.submit([self.point(source='arbitrary')]).status_code, 400)
+        result = self.api.post('/api/v1/mobile/location/status/', {'session_id':str(self.session.pk),
+            'state':'UNAVAILABLE', 'reason':'GPS_UNAVAILABLE'}, format='json')
+        self.assertEqual(result.status_code, 200)
+        self.session.refresh_from_db()
+        self.assertEqual(self.session.location_reason, 'GPS_UNAVAILABLE')
+
+    def test_out_of_order_and_delayed_upload_preserve_capture_and_raw_values(self):
+        times = [timezone.now()-timedelta(minutes=n) for n in (2,8,5)]
+        self.assertEqual(self.submit([self.point(recorded_at=t.isoformat()) for t in times]).status_code, 200)
+        points = list(EmployeeLocationPoint.objects.order_by('recorded_at'))
+        self.assertEqual([p.recorded_at for p in points], sorted(times))
+        self.assertTrue(all(p.received_at > p.recorded_at for p in points))
+        self.assertEqual(self.submit([self.point(recorded_at=times[0].isoformat(), latitude=1)]).status_code, 200)
+        self.assertEqual(EmployeeLocationPoint.objects.get(recorded_at=times[0]).latitude, 22.5726)
+
+    @override_settings(TIME_ZONE='Asia/Kolkata')
+    def test_previous_date_exact_boundaries_and_time_range(self):
+        from zoneinfo import ZoneInfo
+        day = timezone.localdate()-timedelta(days=2)
+        start = datetime.combine(day, datetime.min.time(), tzinfo=ZoneInfo('Asia/Kolkata'))
+        for offset in (-1,0,3600,86399,86400):
+            self.stored_point(recorded_at=start+timedelta(seconds=offset))
+        api = self.admin_client()
+        query = {'employee':self.employee.pk, 'date':day.isoformat()}
+        result = api.get('/api/v1/admin/employee-locations/history/', query)
+        self.assertEqual(result.data['count'], 3)
+        self.assertEqual(result.data['start'], start.astimezone(utc_timezone.utc))
+        query.update(time_from='00:00',time_to='01:00')
+        self.assertEqual(api.get('/api/v1/admin/employee-locations/history/', query).data['count'], 1)
+        query.update(date=(day-timedelta(days=3)).isoformat())
+        self.assertEqual(api.get('/api/v1/admin/employee-locations/history/', query).data['count'], 0)
+
+    @override_settings(TIME_ZONE='America/New_York')
+    def test_daylight_saving_days_and_ambiguous_local_times(self):
+        from apps.accounts.api.location import HistoryFilter
+        for day, hours in [('2026-03-08',23),('2026-11-01',25)]:
+            data = HistoryFilter(data={'employee':self.employee.pk,'date':day})
+            self.assertTrue(data.is_valid(), data.errors)
+            self.assertEqual((data.validated_data['end']-data.validated_data['start']).total_seconds(), hours*3600)
+        for day, clock in [('2026-03-08','02:30'),('2026-11-01','01:30')]:
+            data = HistoryFilter(data={'employee':self.employee.pk,'date':day,'time_from':clock})
+            self.assertFalse(data.is_valid())
+
+    @override_settings(EMPLOYEE_LOCATION_MAX_GAP_SECONDS=300, EMPLOYEE_LOCATION_MAX_SPEED_MPS=55)
+    def test_route_segments_quality_jumps_and_pagination_boundary(self):
+        start = timezone.now()-timedelta(hours=1)
+        specs = [(0,22.0,10,self.session,False), (60,22.0001,10,self.session,False),
+                 (120,50,10,self.session,False), (600,50,10,self.session,False),
+                 (660,50,1000,self.session,False), (720,50,10,self.session,False),
+                 (780,50,10,self.other_session,False), (840,50,10,self.other_session,True)]
+        for seconds, lat, accuracy, session, mocked in specs:
+            self.stored_point(session=session, recorded_at=start+timedelta(seconds=seconds), latitude=lat, accuracy=accuracy, mocked=mocked)
+        query = {'employee':self.employee.pk,'start':start.isoformat(),'end':timezone.now().isoformat(),'page_size':2}
+        api = self.admin_client()
+        results=[]
+        for page in range(1,5):
+            query['page']=page
+            results.extend(api.get('/api/v1/admin/employee-locations/history/',query).data['results'])
+        self.assertEqual([r['segment_reason'] for r in results], ['START','CONTINUOUS','IMPLAUSIBLE_JUMP','TIME_GAP','POOR_ACCURACY','QUALITY_GAP','SESSION_CHANGE','MOCK_LOCATION'])
+        self.assertGreater(results[1]['distance_from_previous_m'],0)
+        self.assertTrue(all(r['distance_from_previous_m']==0 for i,r in enumerate(results) if i!=1))
+        self.assertEqual(EmployeeLocationPoint.objects.count(),8)
+
+    def test_search_tracking_filter_and_tile_referrer_policy(self):
+        CallerSession.objects.filter(pk=self.session.pk).update(location_state='ACTIVE')
+        client=self.admin_client()
+        data=client.get('/api/v1/admin/employee-locations/live/', {'search':'location-employee','tracking':'ACTIVE'}).data
+        self.assertEqual([r['employee'] for r in data['results']], [self.employee.pk])
+        response=client.get('/employee-locations/')
+        self.assertEqual(response['Referrer-Policy'],'strict-origin-when-cross-origin')
+        self.assertContains(response, 'location-play')
+
+
+
 @override_settings(CHANNEL_LAYERS={'default': {'BACKEND':'channels.layers.InMemoryChannelLayer'}})
 class LocationSocketTests(TransactionTestCase):
     def test_cookie_session_admin_only_and_role_revocation(self):
@@ -256,3 +378,53 @@ class LocationSocketTests(TransactionTestCase):
             user = User.objects.create_user(f'socket-{role}', role=role)
             self.client.force_login(user)
             async_to_sync(exercise)(user, self.client.session.session_key, role in ('ADMIN','SUPER_ADMIN'))
+
+
+    def test_socket_reconnect_and_access_revocation(self):
+        from channels.db import database_sync_to_async
+        from channels.layers import get_channel_layer
+        from apps.accounts.location_service import LOCATION_GROUP
+        user=User.objects.create_user('socket-reconnect',role='ADMIN')
+        self.client.force_login(user)
+        key=self.client.session.session_key
+        async def exercise():
+            async def connect():
+                socket=WebsocketCommunicator(EmployeeLocationConsumer.as_asgi(),'/ws/employee-locations/')
+                socket.scope.update(user=user,session=SessionStore(session_key=key))
+                self.assertTrue((await socket.connect())[0])
+                return socket
+            socket=await connect()
+            await socket.disconnect()
+            socket=await connect()
+            await get_channel_layer().group_send(LOCATION_GROUP,{'type':'location.changed'})
+            self.assertEqual(await socket.receive_json_from(),{'type':'location.changed'})
+            await database_sync_to_async(User.objects.filter(pk=user.pk).update)(role='MANAGER')
+            await get_channel_layer().group_send(LOCATION_GROUP,{'type':'location.changed'})
+            self.assertEqual((await socket.receive_output())['code'],4003)
+            await socket.disconnect()
+        async_to_sync(exercise)()
+
+
+class LocationMigrationTests(TransactionTestCase):
+    def test_additive_migration_preserves_existing_location_and_session(self):
+        from django.db.migrations.executor import MigrationExecutor
+        old=('accounts','0012_callersession_location_state_and_more')
+        new=('accounts','0014_location_received_index')
+        executor=MigrationExecutor(connection)
+        executor.migrate([old])
+        try:
+            state=executor.loader.project_state([old]).apps
+            employee=state.get_model('accounts','User').objects.create(username='pre-upgrade-location',role='EMPLOYEE')
+            session=state.get_model('accounts','CallerSession').objects.create(caller_id=employee.pk,
+                verified_at=timezone.now(),expires_at=timezone.now()+timedelta(hours=1),location_state='ACTIVE')
+            captured=timezone.now()-timedelta(minutes=5)
+            point=state.get_model('accounts','EmployeeLocationPoint').objects.create(employee_id=employee.pk,
+                session_id=session.pk,latitude=22.57,longitude=88.36,accuracy=12,recorded_at=captured)
+            before=(point.latitude,point.longitude,point.recorded_at,point.received_at,point.session_id)
+        finally:
+            MigrationExecutor(connection).migrate([new])
+        point=EmployeeLocationPoint.objects.get(pk=point.pk)
+        self.assertEqual((point.latitude,point.longitude,point.recorded_at,point.received_at,point.session_id),before)
+        self.assertIsNone(point.mocked)
+        self.assertEqual(point.platform,'')
+        self.assertEqual(CallerSession.objects.get(pk=session.pk).location_state,'ACTIVE')

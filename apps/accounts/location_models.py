@@ -13,10 +13,14 @@ class EmployeeLocationPoint(models.Model):
     heading = models.FloatField(null=True, blank=True)
     recorded_at = models.DateTimeField(db_index=True)
     received_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=32, blank=True, default='')
+    platform = models.CharField(max_length=16, blank=True, default='')
+    mocked = models.BooleanField(null=True, blank=True)
 
     class Meta:
         ordering = ['recorded_at', 'pk']
-        indexes = [models.Index(fields=['employee', '-recorded_at', '-id'], name='employee_location_latest')]
+        indexes = [models.Index(fields=['employee', '-recorded_at', '-id'], name='employee_location_latest'),
+                   models.Index(fields=['employee', '-received_at'], name='employee_location_received')]
         constraints = [
             models.UniqueConstraint(fields=['session', 'recorded_at'], name='unique_session_location_time'),
             models.CheckConstraint(condition=models.Q(latitude__gte=-90, latitude__lte=90), name='employee_latitude_valid'),

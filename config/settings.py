@@ -96,7 +96,14 @@ CHANNEL_LAYERS = {
 # Public tile requests contain map coordinates; use an approved provider for your deployment.
 EMPLOYEE_LOCATION_TILE_URL = env('EMPLOYEE_LOCATION_TILE_URL', default='https://tile.openstreetmap.org/{z}/{x}/{y}.png')
 EMPLOYEE_LOCATION_TILE_ATTRIBUTION = env('EMPLOYEE_LOCATION_TILE_ATTRIBUTION', default='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
-EMPLOYEE_LOCATION_STATUS_SECONDS = (30, 300, 900)
+EMPLOYEE_LOCATION_STATUS_SECONDS = (
+    env.int('EMPLOYEE_LOCATION_LIVE_SECONDS', default=30),
+    env.int('EMPLOYEE_LOCATION_RECENT_SECONDS', default=300),
+    env.int('EMPLOYEE_LOCATION_STALE_SECONDS', default=900),
+)
+EMPLOYEE_LOCATION_MAX_GAP_SECONDS = env.int('EMPLOYEE_LOCATION_MAX_GAP_SECONDS', default=300)
+EMPLOYEE_LOCATION_MAX_ACCURACY_METERS = env.float('EMPLOYEE_LOCATION_MAX_ACCURACY_METERS', default=150)
+EMPLOYEE_LOCATION_MAX_SPEED_MPS = env.float('EMPLOYEE_LOCATION_MAX_SPEED_MPS', default=55)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

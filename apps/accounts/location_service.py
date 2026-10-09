@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import timedelta
 
 from asgiref.sync import async_to_sync
@@ -38,3 +39,28 @@ def notify_location_change():
 
 def retention_cutoff():
     return timezone.now() - timedelta(days=RETENTION_DAYS)
+
+
+def route_quality(point, previous=None):
+    """Classify raw samples, never smooth, interpolate or modify stored observations."""
+    limit = settings.EMPLOYEE_LOCATION_MAX_ACCURACY_METERS
+    if point.mocked:
+        return 'MOCK_LOCATION', 0.0
+    if point.accuracy > limit:
+        return 'POOR_ACCURACY', 0.0
+    if previous is None:
+        return 'START', 0.0
+    if previous.mocked or previous.accuracy > limit:
+        return 'QUALITY_GAP', 0.0
+    if point.session_id != previous.session_id:
+        return 'SESSION_CHANGE', 0.0
+    elapsed = (point.recorded_at - previous.recorded_at).total_seconds()
+    if elapsed <= 0 or elapsed > settings.EMPLOYEE_LOCATION_MAX_GAP_SECONDS:
+        return 'TIME_GAP', 0.0
+    lat1, lat2 = math.radians(previous.latitude), math.radians(point.latitude)
+    dlat, dlon = lat2 - lat1, math.radians(point.longitude - previous.longitude)
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    distance = 6371000 * 2 * math.asin(min(1, math.sqrt(a)))
+    if max(0, distance - point.accuracy - previous.accuracy) / elapsed > settings.EMPLOYEE_LOCATION_MAX_SPEED_MPS:
+        return 'IMPLAUSIBLE_JUMP', 0.0
+    return 'CONTINUOUS', distance

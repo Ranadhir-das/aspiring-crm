@@ -76,20 +76,20 @@ component; it starts/restores tracking automatically and leaves workspace routin
 
 The employee sees a location disclosure before the background-permission request and a
 visible Android foreground-service notification while tracking. Permission/GPS unavailability
-shows only **Please enable location.** in the app; it does not block sign-in. A denied or
+shows a specific permission/GPS/paused diagnostic and last successful sync in the app; it does not block sign-in. A denied or
 revoked permission is not bypassed. Reopening the app after permission is restored restarts
 tracking automatically. Native/API failures are isolated from login.
 
 Two requests share Android's fused provider:
 
-- Moving stream: high accuracy, minimum 10 seconds and 15 metres displacement.
+- Primary foreground-service stream: high accuracy / 10 seconds / 15 metres when moving; balanced / 60 seconds / no displacement minimum when stationary or power-saving. Native options change only while the app is visible.
 - Stationary stream: balanced accuracy, 60 seconds, no displacement minimum.
 
 Shared filtering uses speed, distance, accuracy and elapsed time: moving samples about every
 10 seconds, significant movement no faster than 5 seconds when delivered by Android, and
-stationary samples once per minute. Samples worse than 150m accuracy are excluded. These are
+stationary samples once per minute. Finite poor-accuracy samples remain raw history; the CRM excludes points worse than the configured accuracy threshold from displayed segments. These are
 requested intervals and recorded-sample limits, not guarantees about GPS timing or hardware
-power consumption. The distance-filtered high-accuracy request remains registered while
+power consumption. The last safely configured native request remains registered while
 backgrounded; device battery/GPS behavior must be measured in the field. SDK 57 rejects
 restarting a foreground location service from the background, so the app does not attempt
 unsupported background option changes. There is no rapid JS GPS polling.
@@ -102,10 +102,11 @@ expiry and never requests GPS. Overlapping callbacks serialize writes and upload
 
 Current-session and archived-session buffers each hold at most 5,000 points and retain at
 most two days when processed. Expiry/401/403 stops native collection and keeps pending data
-for replay by the same employee after reauthentication. A different employee never inherits
-or uploads that queue. Explicit logout stops native tasks first, makes a bounded online
-flush, reports STOPPED where reachable, and clears remaining local points and credentials.
-Unacknowledged samples on explicit offline logout are intentionally discarded; a remote
+for replay by the same employee after reauthentication. A different employee never receives
+or uploads that history. Bounded archived queues retain their original employee/session identity.
+Explicit logout stops native tasks first, makes a bounded online flush, reports STOPPED
+where reachable, and retains unacknowledged disabled samples for that employee to retry.
+Credentials still clear through the unchanged authentication flow. A remote
 session that cannot be contacted remains stale until normal expiry. Auth restoration failures
 preserve the bounded queue while keeping the existing sign-out behavior.
 
@@ -163,7 +164,7 @@ autovacuum, request latency and retention runtime; consider time partitioning as
 
 ## Native build and device acceptance
 
-`expo-task-manager` is a new native dependency. The expo-location plugin enables Android
+`expo-task-manager` supplies the existing native tasks. The audit adds `expo-battery` for supported low-power signals (unknown/older binaries fall back safely). The expo-location plugin enables Android
 background and foreground-service permissions; the existing native manifest is synchronized
 without prebuild or rewriting Gradle/custom native modules. Android requires fine/coarse,
 background location, FOREGROUND_SERVICE and FOREGROUND_SERVICE_LOCATION permissions. The
@@ -191,3 +192,12 @@ References: [Expo SDK 57 Location](https://docs.expo.dev/versions/v57.0.0/sdk/lo
 [TaskManager](https://docs.expo.dev/versions/v57.0.0/sdk/task-manager/),
 [Leaflet](https://leafletjs.com/download.html),
 [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/).
+
+
+## 2026-10-09 reliability audit and upgrade
+
+See [location-tracking-audit.md](location-tracking-audit.md) for confirmed causes,
+new fields and behavior, test evidence, remaining device/browser checks, and the
+backup-first production rollout/rollback procedure. The new additive migration is
+`accounts.0013_location_diagnostics` plus the concurrent receipt-time index in
+`accounts.0014_location_received_index`; the original `0012` is unchanged.

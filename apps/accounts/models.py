@@ -135,6 +135,7 @@ class CallerSession(models.Model):
         ('UNKNOWN', 'Not reported'), ('ACTIVE', 'Collecting'),
         ('UNAVAILABLE', 'Location unavailable'), ('STOPPED', 'Stopped')])
     location_state_at = models.DateTimeField(null=True, blank=True)
+    location_reason = models.CharField(max_length=32, blank=True, default='')
 
     @property
     def active_display(self):

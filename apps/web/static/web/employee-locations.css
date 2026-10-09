@@ -4,4 +4,12 @@
 #location-detail,#location-route-status { margin-top:12px; line-height:1.6; }
 #location-employees button { background:none; border:0; padding:0; color:var(--accent); text-align:left; text-decoration:underline; }
 #location-employees td { min-width:100px; }
+.location-filters { display:grid; gap:12px; padding:16px; }
+.location-filters label,.location-playback label,#location-route-form label { display:flex; flex-direction:column; gap:6px; }
+.location-playback { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+.location-scrubber { flex:1; min-width:160px; }
+#location-route-points tr[aria-current="true"] { background:var(--accent-soft,#ede9fe); }
+#location-map-status { color:var(--danger,#a83030); margin-top:12px; }
+#employee-location-workspace button[aria-pressed="true"] { background:var(--accent,#7566e8); color:white; }
+#employee-location-workspace input[type="range"] { padding:0; }
 @media(max-width:1000px) { .location-workspace-grid { grid-template-columns:minmax(0,1fr); } #employee-location-map { height:360px; } }
