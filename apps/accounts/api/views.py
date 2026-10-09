@@ -15,8 +15,11 @@ from .face_detection import validate_face_photo, verify_face_photo, face_feature
 from .session_service import close_open_sessions, close_session, next_midnight
 
 
+FACE_VERIFICATION_EXEMPT_ROLES = {'ADMIN', 'SUPER_ADMIN', 'COUNSELOR'}
+
+
 def needs_onboarding(user):
-    return user.role not in {'ADMIN', 'SUPER_ADMIN'} and not AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
+    return user.role not in FACE_VERIFICATION_EXEMPT_ROLES and not AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
 
 
 def client_ip(request):
@@ -47,7 +50,7 @@ class MobileLoginView(PublicAuthView):
         challenge = AttendancePhotoChallenge.objects.create(employee=user, action=action)
         return Response({'status': 'ENROLLMENT_REQUIRED' if action == 'ENROLL' else 'PHOTO_REQUIRED',
                          'challenge': str(challenge.pk), 'expires_in': 180,
-                         'photo_required': action == 'ENROLL' or user.role not in {'ADMIN', 'SUPER_ADMIN'},
+                         'photo_required': action == 'ENROLL' or user.role not in FACE_VERIFICATION_EXEMPT_ROLES,
                          'review_note': latest.review_note if latest and latest.status == 'REJECTED' else ''})
 
 
@@ -89,7 +92,7 @@ class MobileVerifyLoginView(PublicAuthView):
             return Response({'detail': 'Enrollment approval is required.'}, status=403)
         verification = None
         attendance = None
-        if user.role not in {'ADMIN', 'SUPER_ADMIN'}:
+        if user.role not in FACE_VERIFICATION_EXEMPT_ROLES:
             reference = AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').order_by('-reviewed_at', '-pk').first()
             if not reference:
                 return Response({'detail': 'An approved enrollment photo is required.'}, status=403)
@@ -103,7 +106,7 @@ class MobileVerifyLoginView(PublicAuthView):
             if LeaveRequest.objects.filter(employee=user, status='APPROVED', start_date__lte=timezone.localdate(), end_date__gte=timezone.localdate()).exists():
                 return Response({'detail': 'You have approved leave today. Contact your administrator before checking in.'}, status=409)
         close_open_sessions(user, now)
-        if verification or user.role in {'ADMIN', 'SUPER_ADMIN'}:
+        if verification or user.role in FACE_VERIFICATION_EXEMPT_ROLES:
             attendance, _ = Attendance.objects.get_or_create(employee=user, date=timezone.localdate(), defaults={'checked_in': now, 'login_remark': login_remark})
             if attendance.checked_in is None:
                 attendance.checked_in = now

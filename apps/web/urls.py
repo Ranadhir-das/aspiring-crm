@@ -10,7 +10,7 @@ from . import performance_views
 from . import app_intro_views
 from . import analytics_views
 from . import marketing_views
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LogoutView
 from django.urls import path
 from . import views
 from . import counselling_views
@@ -18,7 +18,6 @@ from . import apostille_views
 from . import location_views
 from . import counselor_views
 from . import workforce_views as workforce
-from .forms import LoginForm
 
 app_name = 'web'
 urlpatterns = [
@@ -99,7 +98,7 @@ urlpatterns = [
     path('book-demo/', marketing_views.book_demo_view, name='book-demo'),
     path('robots.txt', marketing_views.robots_txt_view, name='robots-txt'),
     path('sitemap.xml', marketing_views.sitemap_xml_view, name='sitemap-xml'),
-    path('login/', LoginView.as_view(template_name='web/login.html', authentication_form=LoginForm), name='login'),
+    path('login/', views.CRMLoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('', marketing_views.landing_page, name='landing'),
     path('dashboard/', analytics_views.dashboard_view, name='dashboard'),

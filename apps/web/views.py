@@ -12,6 +12,8 @@ from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.contrib.auth.views import LoginView
+from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
 
 from apps.accounts.models import User
@@ -19,7 +21,18 @@ from apps.calls.models import Call
 from apps.followups.models import FollowUp
 from apps.leads.models import Lead, LeadImportBatch
 from apps.leads.services import bulk_assign_leads, commit_import, preview_import
-from .forms import ACCESS, CALLING, MANAGEMENT, FollowUpForm, ImportForm, LeadForm
+from .forms import ACCESS, CALLING, MANAGEMENT, FollowUpForm, ImportForm, LeadForm, LoginForm
+
+
+class CRMLoginView(LoginView):
+    template_name = 'web/login.html'
+    authentication_form = LoginForm
+
+    def get_default_redirect_url(self):
+        user = self.request.user
+        if user.is_authenticated and user.role not in CALLING:
+            return str(reverse_lazy('web:employee-home'))
+        return super().get_default_redirect_url()
 
 
 def workspace(management=False, employee=False):
