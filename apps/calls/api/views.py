@@ -16,6 +16,7 @@ from apps.calls.models import Call
 from apps.followups.models import FollowUp
 from apps.leads.models import Lead
 from apps.leads.outcomes import apply_website_outcome
+from apps.leads.apostille_leads import is_apostille_lead, is_apostille_caller, restrict_apostille, has_active_website_claim
 
 from .permissions import CanCreateCall
 from .serializers import CallSerializer, ResolvePhoneSerializer
@@ -84,7 +85,8 @@ class CallCreateView(APIView):
             lead = matching_lead(data['phone_number'], request.user)
             if lead:
                 lead = Lead.objects.select_for_update().get(pk=lead.pk)
-        if lead and request.user.role == User.Role.CALLER and lead.assigned_caller_id != request.user.pk:
+        if lead and request.user.role == User.Role.CALLER and (lead.assigned_caller_id != request.user.pk or
+                (is_apostille_lead(lead) and not is_apostille_caller(request.user))):
             return Response({'detail': 'You can only create calls for your assigned leads.'}, status=status.HTTP_404_NOT_FOUND)
         # Keep the dialed number snapshot even if the lead phone later changes.
         phone = data.get('phone_number') or (lead.phone if lead else '')
@@ -121,7 +123,7 @@ class CallCreateView(APIView):
 
         # Create the Call
         from apps.leads.courses import classify_course
-        classification = classify_course(lead, data.get('selected_course'), data.get('selected_course_custom', '')) if outcome == 'INTERESTED' else ''
+        classification = classify_course(lead, data.get('selected_course'), data.get('selected_course_custom', '')) if outcome == 'INTERESTED' and not is_apostille_lead(lead) else ''
         call = serializer.save(course_classification=classification,
             caller=request.user, lead=lead, phone_number=phone, submission_fingerprint=fingerprint
         )
@@ -147,6 +149,8 @@ class CallCreateView(APIView):
             Call.Outcome.RINGING: Lead.Status.RINGING,
             Call.Outcome.ADMISSION_DONE_BY_OTHER_CONSULTANCY: Lead.Status.ADMISSION_DONE_BY_OTHER_CONSULTANCY,
             Call.Outcome.B2B: Lead.Status.B2B,
+            Call.Outcome.CONVERTED: Lead.Status.CONVERTED,
+            Call.Outcome.FOLLOW_UP_REQUIRED: Lead.Status.FOLLOW_UP_REQUIRED,
         }
 
         new_status = outcome_to_status.get(call.outcome)
@@ -198,9 +202,7 @@ class LeadCallHistoryView(ListAPIView):
 
         # Caller can only see calls for their own leads
         if user.role == User.Role.CALLER:
-            return queryset.filter(
-                lead__assigned_caller=user, caller=user
-            )
+            return restrict_apostille(queryset.filter(lead__assigned_caller=user, caller=user), user, 'lead__')
 
         # Management can see all call history
         if user.role in {
@@ -232,10 +234,15 @@ class ResolvePhoneView(APIView):
         serializer.is_valid(raise_exception=True)
         lead = serializer.validated_data.get('lead')
         if lead:
+            if is_apostille_lead(lead) and request.user.role == "CALLER" and not is_apostille_caller(request.user):
+                return Response({"detail": "This lead is not available to your account."}, status=404)
             if request.user.role == User.Role.CALLER and lead.assigned_caller_id != request.user.pk:
                 return Response({'detail': 'This lead is not available to your account.'}, status=404)
-            return Response({'phone_number': lead.phone, 'lead': lead.pk, 'lead_name': lead.name})
+            return Response({'phone_number': lead.phone, 'lead': lead.pk, 'lead_name': lead.name,
+                             'service_code': lead.service_type.code if lead.service_type_id else '',
+                             'is_claimed': has_active_website_claim(lead)})
         phone = serializer.validated_data['phone_number']
         lead = matching_lead(phone, request.user)
         return Response({'phone_number': phone, 'lead': lead.pk if lead else None,
-                         'lead_name': lead.name if lead else None})
+                         'lead_name': lead.name if lead else None, 'service_code': lead.service_type.code if lead and lead.service_type_id else '',
+                         'is_claimed': has_active_website_claim(lead) if lead else False})

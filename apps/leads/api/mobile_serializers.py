@@ -4,6 +4,7 @@ from apps.leads.models import Lead
 
 
 class MobileLeadSerializer(serializers.ModelSerializer):
+    service_code = serializers.CharField(source='service_type.code', read_only=True, default='')
     interested_details = serializers.SerializerMethodField()
 
     def get_interested_details(self, obj):
@@ -24,7 +25,7 @@ class MobileLeadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lead
         fields = [
-            "id",
+            "id", "service_code",
             "batch_id",
             "batch_name",
             "name",

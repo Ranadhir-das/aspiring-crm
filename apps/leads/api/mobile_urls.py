@@ -1,4 +1,5 @@
 from django.urls import path
+from .apostille_views import ApostilleLeadListView, ApostilleLeadDetailView
 from .claim_views import (
     AvailableWebsiteLeadsView,
     ClaimWebsiteLeadView,
@@ -31,6 +32,8 @@ from .counselor_views import (
 )
 
 urlpatterns = [
+    path('apostille-leads/', ApostilleLeadListView.as_view(), name='mobile-apostille-leads'),
+    path('apostille-leads/<int:id>/', ApostilleLeadDetailView.as_view(), name='mobile-apostille-lead'),
     path('counselors/', CounselorDirectoryView.as_view(), name='mobile-counselors'),
     path('leads/<int:id>/counselor/', LeadCounselorView.as_view(), name='mobile-lead-counselor'),
     path('leads/<int:id>/forward-counselor/', ForwardLeadToCounselorView.as_view(), name='mobile-forward-counselor'),

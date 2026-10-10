@@ -1,3 +1,4 @@
+from apps.leads.apostille_leads import restrict_apostille
 from datetime import timedelta
 
 from django.db import transaction
@@ -34,12 +35,7 @@ class MobileLeadListView(ListAPIView):
         user = self.request.user
         if user.role != User.Role.CALLER:
             return Lead.objects.none()
-        return (
-            Lead.objects
-            .select_related("import_batch")
-            .filter(assigned_caller=user)
-            .order_by("-created_at")
-        )
+        return restrict_apostille(Lead.objects.select_related("import_batch", "service_type").filter(assigned_caller=user).order_by("-created_at"), user)
 
 
 class MobileLeadDetailView(RetrieveAPIView):
@@ -52,7 +48,7 @@ class MobileLeadDetailView(RetrieveAPIView):
         user = self.request.user
         if user.role != User.Role.CALLER:
             return Lead.objects.none()
-        return Lead.objects.filter(assigned_caller=user)
+        return restrict_apostille(Lead.objects.filter(assigned_caller=user), user)
 
 
 class MobileLeadUpdateView(UpdateAPIView):
@@ -65,7 +61,7 @@ class MobileLeadUpdateView(UpdateAPIView):
         user = self.request.user
         if user.role != User.Role.CALLER:
             return Lead.objects.none()
-        return Lead.objects.filter(assigned_caller=user)
+        return restrict_apostille(Lead.objects.filter(assigned_caller=user), user)
 
 
 class MobileAdmissionsView(APIView):

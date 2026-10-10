@@ -3,6 +3,7 @@ from django.db import models
 from django.utils import timezone
 from django.core.validators import RegexValidator
 from .apostille import Apostille
+from .apostille_leads import ApostilleLeadDetails
 from .counselor import AdmissionRequest, CounselorNote, LeadCounselorAssignment
 
 
@@ -152,6 +153,8 @@ class Lead(models.Model):
         RINGING = "RINGING", "Ringing"
         ADMISSION_DONE_BY_OTHER_CONSULTANCY = "ADMISSION_DONE_BY_OTHER_CONSULTANCY", "Admission done by other consultancy"
         B2B = "B2B", "B2B"
+        CONVERTED = "CONVERTED", "Converted"
+        FOLLOW_UP_REQUIRED = "FOLLOW_UP_REQUIRED", "Follow-up Required"
 
     # -------------------------
     # Basic Information

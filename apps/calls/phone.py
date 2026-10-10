@@ -2,6 +2,7 @@
 import re
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from apps.leads.models import Lead
+from apps.leads.apostille_leads import is_apostille_lead, is_apostille_caller
 
 
 def normalize_phone(value):
@@ -32,7 +33,8 @@ def matching_lead(phone, user):
     separators = r'[ +().\-]*'
     pattern = '^' + separators + '(' + '|'.join(separators.join(v) for v in sorted(variants)) + ')' + separators + '$'
     matches = list(Lead.objects.filter(phone__regex=pattern).order_by('pk')[:3])
-    if user.role == 'CALLER' and any(item.assigned_caller_id != user.pk for item in matches):
+    if user.role == 'CALLER' and any(item.assigned_caller_id != user.pk or
+            (is_apostille_lead(item) and not is_apostille_caller(user)) for item in matches):
         raise PermissionDenied('This number is not available to your account. Contact your manager.')
     if len(matches) > 1:
         raise ValidationError({'phone_number': 'Multiple leads match this number. Select an assigned lead explicitly.'})

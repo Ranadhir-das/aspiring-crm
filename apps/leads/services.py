@@ -581,6 +581,10 @@ def bulk_assign_leads(
             .filter(id__in=lead_ids)
         )
 
+        from .apostille_leads import is_apostille_caller
+        if leads.filter(service_type__code='APOSTILLE').exists() and not is_apostille_caller(new_caller):
+            raise ValueError('Select an active Apostille caller.')
+
         for lead in leads:
 
             previous_caller = lead.assigned_caller

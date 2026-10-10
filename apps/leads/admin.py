@@ -218,10 +218,39 @@ class CounsellingInline(admin.TabularInline):
     ordering = ('-conducted_at',)
 
 
+class ApostilleLeadInline(admin.StackedInline):
+    from .models import ApostilleLeadDetails
+    model = ApostilleLeadDetails
+    extra = 0
+    fields = ('country', 'document_name', 'number_of_documents', 'conversion', 'notes', 'reason', 'created_by')
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class LeadAdminForm(forms.ModelForm):
+    class Meta:
+        model = Lead
+        fields = '__all__'
+
+    def clean(self):
+        data = super().clean()
+        from .apostille_leads import is_apostille_caller
+        service, caller = data.get('service_type'), data.get('assigned_caller')
+        if service and service.code == 'APOSTILLE' and caller and not is_apostille_caller(caller):
+            self.add_error('assigned_caller', 'Select an active Apostille caller.')
+        return data
+
+
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
+    form = LeadAdminForm
     autocomplete_fields = ('service_type',)
-    inlines = [WebsiteLeadSubmissionInline, CounsellingInline]
+    inlines = [WebsiteLeadSubmissionInline, CounsellingInline, ApostilleLeadInline]
 
     list_display = (
         "name",

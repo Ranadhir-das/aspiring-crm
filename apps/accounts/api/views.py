@@ -30,8 +30,10 @@ def client_ip(request):
 
 
 def user_data(user):
+    from apps.leads.apostille_leads import is_apostille_caller
     return {'id': user.pk, 'username': user.username, 'email': user.email,
-            'name': user.get_full_name(), 'role': user.role, 'needs_onboarding': needs_onboarding(user)}
+            'name': user.get_full_name(), 'role': user.role, 'needs_onboarding': needs_onboarding(user),
+            'can_manage_apostille_leads': is_apostille_caller(user)}
 
 
 class MobileLoginView(PublicAuthView):
@@ -43,7 +45,10 @@ class MobileLoginView(PublicAuthView):
         user = User.objects.select_for_update().get(pk=data.validated_data['user'].pk)
         latest = AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL').order_by('-created_at').first()
         approved = AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
-        if latest and latest.status == 'PENDING' and (user.registration_pending or not approved):
+        if user.role == User.Role.COUNSELOR and user.registration_pending:
+            return Response({'status': 'PENDING', 'detail': 'Your account is awaiting administrator approval.'})
+        if latest and latest.status == 'PENDING' and (user.registration_pending or
+                (user.role not in FACE_VERIFICATION_EXEMPT_ROLES and not approved)):
             return Response({'status': 'PENDING', 'detail': 'Your enrollment photo is awaiting administrator approval.'})
         action = 'ENROLL' if user.registration_pending or needs_onboarding(user) else 'IN'
         AttendancePhotoChallenge.objects.filter(employee=user, used=False).update(used=True)

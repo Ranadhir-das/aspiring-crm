@@ -50,6 +50,14 @@ class BulkLeadAssignmentSerializer(serializers.Serializer):
         allow_blank=True,
     )
 
+    def validate(self, attrs):
+        from apps.leads.apostille_leads import is_apostille_caller
+        from apps.leads.models import Lead
+        if (Lead.objects.filter(pk__in=attrs['lead_ids'], service_type__code='APOSTILLE').exists()
+                and not is_apostille_caller(attrs['caller_id'])):
+            raise serializers.ValidationError({'caller_id': 'Select an active Apostille caller.'})
+        return attrs
+
     def validate_caller_id(self, value):
         User = get_user_model()
 

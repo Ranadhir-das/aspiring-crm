@@ -46,6 +46,8 @@ class Call(models.Model):
         RINGING = "RINGING", "Ringing"
         ADMISSION_DONE_BY_OTHER_CONSULTANCY = "ADMISSION_DONE_BY_OTHER_CONSULTANCY", "Admission done by other consultancy"
         B2B = "B2B", "B2B"
+        CONVERTED = "CONVERTED", "Converted"
+        FOLLOW_UP_REQUIRED = "FOLLOW_UP_REQUIRED", "Follow-up Required"
 
     phone_number = models.CharField(max_length=30, blank=True, db_index=True)
     submission_fingerprint = models.CharField(max_length=64, blank=True, editable=False)

@@ -1,0 +1,5 @@
+{% extends 'web/base.html' %}{% block title %}Apostille Lead{% endblock %}{% block content %}
+<div class="page-heading"><h1>{% if lead %}Edit{% else %}Add{% endif %} Apostille Lead</h1></div>
+<section class="panel"><form method="post">{% csrf_token %}{{ form.non_field_errors }}{% for field in form %}{% if field.is_hidden %}{{ field }}{% else %}<div class="field" data-field="{{ field.name }}">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endif %}{% endfor %}<div class="actions"><button class="button primary" type="submit">Save Lead</button><a class="button" href="{% url 'web:apostille-leads' %}">Back</a></div></form></section>
+<script>const conversion=document.getElementById('id_conversion');function conditionalFields(){for(const key of ['notes','reason']){const field=document.querySelector('[data-field="'+key+'"]');const active=key===(conversion.value==='true'?'notes':'reason');field.hidden=!active;field.querySelector('textarea').disabled=!active;}}conversion.addEventListener('change',conditionalFields);conditionalFields();</script>
+{% endblock %}

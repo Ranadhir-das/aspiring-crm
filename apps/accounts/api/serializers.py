@@ -25,6 +25,11 @@ class MobileLoginSerializer(serializers.Serializer):
                 user = pending
 
         if not user:
+            inactive = User.objects.filter(username=username, is_active=False).first()
+            if inactive and inactive.check_password(password):
+                raise serializers.ValidationError(
+                    "This account is inactive."
+                )
             raise serializers.ValidationError(
                 "Invalid username or password."
             )

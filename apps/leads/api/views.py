@@ -1,3 +1,4 @@
+from apps.leads.apostille_leads import restrict_apostille
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
@@ -154,7 +155,7 @@ class LeadListView(ListAPIView):
         )
 
         if user.role == User.Role.CALLER:
-            return queryset.filter(assigned_caller=user)
+            return restrict_apostille(queryset.filter(assigned_caller=user), user)
 
         if user.role in {
             User.Role.SUPER_ADMIN,
@@ -182,7 +183,7 @@ class LeadDetailView(RetrieveAPIView):
         )
 
         if user.role == User.Role.CALLER:
-            return queryset.filter(assigned_caller=user)
+            return restrict_apostille(queryset.filter(assigned_caller=user), user)
 
         if user.role in {
             User.Role.SUPER_ADMIN,
@@ -211,7 +212,7 @@ class LeadUpdateView(UpdateAPIView):
         )
 
         if user.role == User.Role.CALLER:
-            return queryset.filter(assigned_caller=user)
+            return restrict_apostille(queryset.filter(assigned_caller=user), user)
 
         if user.role in {
             User.Role.SUPER_ADMIN,

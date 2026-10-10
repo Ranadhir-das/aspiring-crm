@@ -1,7 +1,8 @@
 from rest_framework import serializers
 
 from apps.calls.models import Call
-from apps.calls.phone import normalize_phone
+from apps.calls.phone import normalize_phone, matching_lead
+from apps.leads.apostille_leads import is_apostille_lead, is_apostille_caller
 from apps.leads.models import Lead
 from apps.leads.courses import validate_course, BLOCKED_CONTACT_OUTCOMES
 
@@ -95,6 +96,17 @@ class CallSerializer(serializers.ModelSerializer):
         if not attrs.get('lead') and not attrs.get('phone_number'):
             raise serializers.ValidationError({'phone_number': 'Provide a lead or a phone number.'})
 
+        request = self.context.get("request")
+        lead = attrs.get("lead")
+        if (not lead and request and attrs.get("phone_number") and not self.context.get('legacy_replay')
+                and attrs.get('outcome') in {'INTERESTED', 'CONVERTED', 'FOLLOW_UP_REQUIRED'}):
+            lead = matching_lead(attrs["phone_number"], request.user)
+        apostille = is_apostille_lead(lead)
+        if apostille and request and request.user.role == "CALLER" and not is_apostille_caller(request.user):
+            raise serializers.ValidationError({"lead": "This lead is not available to your account."})
+        if attrs.get("outcome") in {"CONVERTED", "FOLLOW_UP_REQUIRED"} and not apostille:
+            raise serializers.ValidationError({"outcome": "This outcome is only available for Apostille leads."})
+
         started_at = attrs.get("started_at")
         ended_at = attrs.get("ended_at")
         outcome = attrs.get("outcome")
@@ -105,12 +117,12 @@ class CallSerializer(serializers.ModelSerializer):
                 "Ended time cannot be earlier than started time."
             )
 
-        if outcome == Call.Outcome.CALL_BACK and not callback_at:
+        if outcome in {Call.Outcome.CALL_BACK, Call.Outcome.FOLLOW_UP_REQUIRED} and not callback_at:
             raise serializers.ValidationError(
                 {
                     "callback_at": (
                         "Callback date and time are required "
-                        "when outcome is Call Back."
+                        "when outcome is Call Back or Follow-up Required."
                     )
                 }
             )
@@ -120,7 +132,7 @@ class CallSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'callback_at': 'Follow-up is not allowed for this outcome.'})
             if attrs.get('whatsapp_message') or attrs.get('whatsapp_template'):
                 raise serializers.ValidationError({'whatsapp_message': 'WhatsApp is not allowed for this outcome.'})
-        if outcome == Call.Outcome.INTERESTED and not (self.context.get('legacy_replay') and not attrs.get('selected_course')):
+        if outcome == Call.Outcome.INTERESTED and not apostille and not (self.context.get('legacy_replay') and not attrs.get('selected_course')):
             try:
                 attrs['selected_course'], attrs['selected_course_custom'] = validate_course(
                     attrs.get('selected_course'), attrs.get('selected_course_custom', ''))

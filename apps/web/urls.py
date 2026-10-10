@@ -15,12 +15,17 @@ from django.urls import path
 from . import views
 from . import counselling_views
 from . import apostille_views
+from . import apostille_lead_views
 from . import location_views
 from . import counselor_views
 from . import workforce_views as workforce
 
 app_name = 'web'
 urlpatterns = [
+    path('apostille-leads/', apostille_lead_views.apostille_leads, name='apostille-leads'),
+    path('apostille-leads/new/', apostille_lead_views.apostille_lead_edit, name='apostille-lead-new'),
+    path('apostille-leads/<int:pk>/', apostille_lead_views.apostille_lead_manage, name='apostille-lead-manage'),
+    path('apostille-leads/<int:pk>/edit/', apostille_lead_views.apostille_lead_edit, name='apostille-lead-edit'),
     path('employee-locations/', location_views.employee_locations, name='employee-locations'),
     path('counselor-desk/', counselor_views.counselor_desk, name='counselor-desk'),
     path('admission-requests/', counselor_views.admission_requests, name='admission-requests'),
