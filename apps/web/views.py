@@ -120,43 +120,127 @@ def dashboard(request):
 @workspace()
 def leads(request):
     base_query = visible_leads(request.user)
-    batch = request.GET.get('batch', '')
+
+    # Text Search (name, phone, email)
+    search = request.GET.get('q', '').strip()
+    if search:
+        base_query = base_query.filter(
+            Q(name__icontains=search) | Q(phone__icontains=search) | Q(email__icontains=search)
+        )
+
+    # Import Batch Filter
+    batch = request.GET.get('batch', '').strip()
     if batch == 'none':
         base_query = base_query.filter(import_batch__isnull=True)
     elif batch.isdigit():
         base_query = base_query.filter(import_batch_id=int(batch))
-    search = request.GET.get('q', '').strip()
-    status = request.GET.get('status', '')
-    owner = request.GET.get('owner', '')
-    if search:
-        base_query = base_query.filter(Q(name__icontains=search) | Q(phone__icontains=search) | Q(email__icontains=search))
-    if owner == 'unassigned':
-        base_query = base_query.filter(assigned_caller__isnull=True)
-    elif owner.isdigit():
-        base_query = base_query.filter(assigned_caller_id=int(owner))
+
+    # Assigned Caller / Ownership Filter (Management only)
+    owner = request.GET.get('owner', '').strip()
+    if request.user.role in MANAGEMENT:
+        if owner == 'unassigned':
+            base_query = base_query.filter(assigned_caller__isnull=True)
+        elif owner == 'assigned':
+            base_query = base_query.filter(assigned_caller__isnull=False)
+        elif owner.isdigit():
+            base_query = base_query.filter(assigned_caller_id=int(owner))
+
+    # Source Filter
     source = request.GET.get('source', '').strip()
     if source:
         base_query = base_query.filter(source=source)
+
+    # Service / Service Type Filter
     service = request.GET.get('service', '').strip()
     if service:
         if service.isdigit():
             base_query = base_query.filter(Q(service_type_id=int(service)) | Q(service=service))
         else:
-            base_query = base_query.filter(Q(service_type__code__iexact=service) | Q(service__iexact=service) | Q(service_type__name__iexact=service))
-    from .workforce_views import PeriodForm
-    get_params = request.GET.copy()
-    if 'date_from' in get_params and 'start_date' not in get_params:
-        get_params['start_date'] = get_params['date_from']
-    if 'date_to' in get_params and 'end_date' not in get_params:
-        get_params['end_date'] = get_params['date_to']
-    date_filters = PeriodForm(get_params)
-    date_filters.fields.pop('employee')
-    if date_filters.is_valid():
-        if date_filters.cleaned_data.get('start_date'):
-            base_query = base_query.filter(created_at__date__gte=date_filters.cleaned_data['start_date'])
-        if date_filters.cleaned_data.get('end_date'):
-            base_query = base_query.filter(created_at__date__lte=date_filters.cleaned_data['end_date'])
-    else:
+            base_query = base_query.filter(
+                Q(service_type__code__iexact=service) | Q(service__iexact=service) | Q(service_type__name__iexact=service)
+            )
+
+    # Creation Date Range Filter
+    date_error = None
+    start_date_str = (request.GET.get('start_date') or request.GET.get('date_from') or '').strip()
+    end_date_str = (request.GET.get('end_date') or request.GET.get('date_to') or '').strip()
+    start_date = None
+    end_date = None
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            base_query = base_query.filter(created_at__date__gte=start_date)
+        except ValueError:
+            date_error = f"Invalid start date '{start_date_str}'. Use YYYY-MM-DD."
+    if end_date_str and not date_error:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            base_query = base_query.filter(created_at__date__lte=end_date)
+        except ValueError:
+            date_error = f"Invalid end date '{end_date_str}'. Use YYYY-MM-DD."
+    if start_date and end_date and start_date > end_date and not date_error:
+        date_error = "Start date cannot be after end date."
+        base_query = base_query.none()
+
+    # Last Call Date Range Filter (subquery avoids join multiplication)
+    last_call_from_str = request.GET.get('last_call_from', '').strip()
+    last_call_to_str = request.GET.get('last_call_to', '').strip()
+    if (last_call_from_str or last_call_to_str) and not date_error:
+        call_subfilter = Q()
+        if last_call_from_str:
+            try:
+                lcf = datetime.strptime(last_call_from_str, '%Y-%m-%d').date()
+                call_subfilter &= Q(started_at__date__gte=lcf)
+            except ValueError:
+                date_error = f"Invalid last call from date '{last_call_from_str}'."
+        if last_call_to_str and not date_error:
+            try:
+                lct = datetime.strptime(last_call_to_str, '%Y-%m-%d').date()
+                call_subfilter &= Q(started_at__date__lte=lct)
+            except ValueError:
+                date_error = f"Invalid last call to date '{last_call_to_str}'."
+        if not date_error:
+            called_lead_ids = Call.objects.filter(call_subfilter).values('lead_id')
+            base_query = base_query.filter(pk__in=called_lead_ids)
+
+    # Next Follow-up Status and Date Range Filter
+    followup_status = request.GET.get('followup_status', '').strip()
+    followup_from_str = request.GET.get('followup_from', '').strip()
+    followup_to_str = request.GET.get('followup_to', '').strip()
+    now_local = timezone.localtime()
+    today_local = now_local.date()
+
+    if (followup_status or followup_from_str or followup_to_str) and not date_error:
+        if followup_status == 'no_followup':
+            leads_with_pending = FollowUp.objects.filter(status=FollowUp.Status.PENDING).values('lead_id')
+            base_query = base_query.exclude(pk__in=leads_with_pending)
+        else:
+            fu_subfilter = Q(status=FollowUp.Status.PENDING)
+            if followup_status == 'due_today':
+                fu_subfilter &= Q(scheduled_at__date=today_local)
+            elif followup_status == 'overdue':
+                fu_subfilter &= Q(scheduled_at__lt=now_local)
+            elif followup_status == 'upcoming':
+                fu_subfilter &= Q(scheduled_at__gt=now_local)
+
+            if followup_from_str:
+                try:
+                    fuf = datetime.strptime(followup_from_str, '%Y-%m-%d').date()
+                    fu_subfilter &= Q(scheduled_at__date__gte=fuf)
+                except ValueError:
+                    date_error = f"Invalid follow-up from date '{followup_from_str}'."
+            if followup_to_str and not date_error:
+                try:
+                    fut = datetime.strptime(followup_to_str, '%Y-%m-%d').date()
+                    fu_subfilter &= Q(scheduled_at__date__lte=fut)
+                except ValueError:
+                    date_error = f"Invalid follow-up to date '{followup_to_str}'."
+
+            if not date_error:
+                matching_fu_lead_ids = FollowUp.objects.filter(fu_subfilter).values('lead_id')
+                base_query = base_query.filter(pk__in=matching_fu_lead_ids)
+
+    if date_error:
         base_query = base_query.none()
 
     # Pre-status-filter counts across the current scope
@@ -169,22 +253,51 @@ def leads(request):
     ]
 
     # Filter by status if provided
+    status = request.GET.get('status', '').strip()
     query = base_query
     if status in Lead.Status.values:
         query = query.filter(status=status)
     query = query.order_by('import_batch_id', 'name', 'pk')
 
+    # Export Handler (CSV / Excel)
+    export_format = request.GET.get('export', '').lower().strip()
+    if export_format == 'csv':
+        from .export_utils import export_leads_csv
+        return export_leads_csv(query)
+    elif export_format in ('xlsx', 'excel'):
+        from .export_utils import export_leads_excel
+        return export_leads_excel(query)
+
     selected_status_display = dict(Lead.Status.choices).get(status, '')
     selected_owner_user = User.objects.filter(pk=int(owner)).first() if owner.isdigit() else None
 
-    return page(request, 'leads', 'leads', records=paginate(request, query), search=search,
-                selected_batch=batch, batches=LeadImportBatch.objects.filter(leads__in=visible_leads(request.user)).distinct().order_by('-created_at'),
+    batches = LeadImportBatch.objects.filter(leads__in=visible_leads(request.user)).distinct().order_by('-created_at')
+    sources = visible_leads(request.user).exclude(source='').values_list('source', flat=True).distinct()
+    callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else []
+
+    active_filters_count = sum(1 for v in [
+        search, batch, status, (owner if owner != 'all' else ''), source, service,
+        start_date_str, end_date_str, last_call_from_str, last_call_to_str,
+        followup_status, followup_from_str, followup_to_str
+    ] if v)
+
+    return page(request, 'leads', 'leads',
+                records=paginate(request, query),
+                search=search,
+                selected_batch=batch, batches=batches,
                 selected_status=status, selected_status_display=selected_status_display,
                 selected_owner=owner, selected_owner_user=selected_owner_user,
                 statuses=Lead.Status.choices, status_choices_with_counts=status_choices_with_counts,
                 total_matching_leads=total_matching_leads,
-                selected_source=source, sources=visible_leads(request.user).exclude(source='').values_list('source', flat=True).distinct(), date_filters=date_filters,
-                callers=User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else [])
+                selected_source=source, sources=sources,
+                selected_service=service,
+                start_date=start_date_str, end_date=end_date_str,
+                last_call_from=last_call_from_str, last_call_to=last_call_to_str,
+                followup_status=followup_status,
+                followup_from=followup_from_str, followup_to=followup_to_str,
+                callers=callers,
+                date_error=date_error,
+                active_filters_count=active_filters_count)
 
 
 @workspace(management=True)
@@ -284,29 +397,98 @@ def lead_import(request):
 @workspace()
 def calls(request):
     base_query = visible_calls(request.user)
-    search = request.GET.get('q', '').strip()
-    outcome = request.GET.get('outcome', '').strip()
-    caller = request.GET.get('caller', '').strip()
 
+    # Text Search (lead name, lead phone, phone_number)
+    search = request.GET.get('q', '').strip()
     if search:
-        base_query = base_query.filter(Q(lead__name__icontains=search) | Q(lead__phone__icontains=search) | Q(phone_number__icontains=search))
-    if caller.isdigit():
+        base_query = base_query.filter(
+            Q(lead__name__icontains=search) | Q(lead__phone__icontains=search) | Q(phone_number__icontains=search)
+        )
+
+    # Caller Filter (Management only)
+    caller = request.GET.get('caller', '').strip()
+    if caller.isdigit() and request.user.role in MANAGEMENT:
         base_query = base_query.filter(caller_id=int(caller))
 
-    start_date = request.GET.get('start_date') or request.GET.get('date_from')
-    end_date = request.GET.get('end_date') or request.GET.get('date_to')
-    if start_date:
+    # Lead Batch Filter
+    batch = request.GET.get('batch', '').strip()
+    if batch == 'none':
+        base_query = base_query.filter(Q(lead__import_batch__isnull=True) | Q(lead__isnull=True))
+    elif batch.isdigit():
+        base_query = base_query.filter(lead__import_batch_id=int(batch))
+
+    # Lead Source Filter
+    source = request.GET.get('source', '').strip()
+    if source:
+        base_query = base_query.filter(lead__source=source)
+
+    # Call Date Range Filter
+    date_error = None
+    start_date_str = (request.GET.get('start_date') or request.GET.get('date_from') or '').strip()
+    end_date_str = (request.GET.get('end_date') or request.GET.get('date_to') or '').strip()
+    start_date = None
+    end_date = None
+    if start_date_str:
         try:
-            sd = datetime.strptime(start_date.strip(), '%Y-%m-%d').date()
-            base_query = base_query.filter(started_at__date__gte=sd)
-        except (ValueError, TypeError):
-            pass
-    if end_date:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            base_query = base_query.filter(started_at__date__gte=start_date)
+        except ValueError:
+            date_error = f"Invalid start date '{start_date_str}'. Use YYYY-MM-DD."
+    if end_date_str and not date_error:
         try:
-            ed = datetime.strptime(end_date.strip(), '%Y-%m-%d').date()
-            base_query = base_query.filter(started_at__date__lte=ed)
-        except (ValueError, TypeError):
-            pass
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            base_query = base_query.filter(started_at__date__lte=end_date)
+        except ValueError:
+            date_error = f"Invalid end date '{end_date_str}'. Use YYYY-MM-DD."
+    if start_date and end_date and start_date > end_date and not date_error:
+        date_error = "Start date cannot be after end date."
+        base_query = base_query.none()
+
+    # Duration Filter
+    duration_min = request.GET.get('duration_min', '').strip()
+    duration_max = request.GET.get('duration_max', '').strip()
+    duration_preset = request.GET.get('duration_preset', '').strip()
+
+    if duration_preset == 'connected':
+        base_query = base_query.filter(duration_seconds__gt=0)
+    elif duration_preset == 'zero':
+        base_query = base_query.filter(duration_seconds=0)
+    elif duration_preset in ('under_30', '<30s'):
+        base_query = base_query.filter(duration_seconds__lt=30)
+    elif duration_preset in ('30_to_120', '30s_to_2m'):
+        base_query = base_query.filter(duration_seconds__gte=30, duration_seconds__lte=120)
+    elif duration_preset in ('over_120', 'over_2m'):
+        base_query = base_query.filter(duration_seconds__gt=120)
+    elif duration_preset == 'over_1m':
+        base_query = base_query.filter(duration_seconds__gte=60)
+    elif duration_preset == 'over_5m':
+        base_query = base_query.filter(duration_seconds__gte=300)
+
+    if duration_min.isdigit():
+        base_query = base_query.filter(duration_seconds__gte=int(duration_min))
+    if duration_max.isdigit():
+        base_query = base_query.filter(duration_seconds__lte=int(duration_max))
+
+    # Recording Status Filter
+    has_recording = request.GET.get('has_recording', '').strip()
+    if has_recording == 'yes':
+        base_query = base_query.filter(recording__isnull=False)
+    elif has_recording == 'no':
+        base_query = base_query.filter(recording__isnull=True)
+
+    # Follow-up Status Filter
+    has_followup = request.GET.get('has_followup', '').strip()
+    if has_followup == 'yes':
+        base_query = base_query.filter(followup__isnull=False)
+    elif has_followup == 'no':
+        base_query = base_query.filter(followup__isnull=True)
+    elif has_followup == 'pending':
+        base_query = base_query.filter(followup__status=FollowUp.Status.PENDING)
+    elif has_followup == 'completed':
+        base_query = base_query.filter(followup__status=FollowUp.Status.COMPLETED)
+
+    if date_error:
+        base_query = base_query.none()
 
     # Pre-outcome-filter counts across current scope
     outcome_counts = dict(base_query.order_by().values('outcome').annotate(n=Count('pk')).values_list('outcome', 'n'))
@@ -317,6 +499,8 @@ def calls(request):
         for key, label in Call.Outcome.choices
     ]
 
+    # Outcome Filter
+    outcome = request.GET.get('outcome', '').strip()
     query = base_query
     if outcome in Call.Outcome.values:
         query = query.filter(outcome=outcome)
@@ -324,15 +508,44 @@ def calls(request):
         query = query.filter(outcome='')
     query = query.order_by('lead__import_batch_id', '-started_at', '-pk')
 
+    # Export Handler (CSV / Excel)
+    export_format = request.GET.get('export', '').lower().strip()
+    if export_format == 'csv':
+        from .export_utils import export_calls_csv
+        return export_calls_csv(query)
+    elif export_format in ('xlsx', 'excel'):
+        from .export_utils import export_calls_excel
+        return export_calls_excel(query)
+
     selected_outcome_display = dict(Call.Outcome.choices).get(outcome, '')
     selected_caller_user = User.objects.filter(pk=int(caller)).first() if caller.isdigit() else None
 
-    return page(request, 'calls', 'calls', records=paginate(request, query), search=search,
+    batches = LeadImportBatch.objects.filter(leads__in=visible_leads(request.user)).distinct().order_by('-created_at')
+    sources = visible_leads(request.user).exclude(source='').values_list('source', flat=True).distinct()
+    callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else []
+
+    active_filters_count = sum(1 for v in [
+        search, outcome, caller, batch, source, start_date_str, end_date_str,
+        duration_min, duration_max, duration_preset, has_recording, has_followup
+    ] if v)
+
+    return page(request, 'calls', 'calls',
+                records=paginate(request, query),
+                search=search,
                 selected_outcome=outcome, selected_outcome_display=selected_outcome_display,
                 selected_caller=caller, selected_caller_user=selected_caller_user,
+                selected_batch=batch, batches=batches,
+                selected_source=source, sources=sources,
+                start_date=start_date_str, end_date=end_date_str,
+                duration_min=duration_min, duration_max=duration_max,
+                duration_preset=duration_preset,
+                has_recording=has_recording,
+                has_followup=has_followup,
                 outcome_choices_with_counts=outcome_choices_with_counts,
                 total_matching_calls=total_matching_calls,
-                callers=User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else [])
+                callers=callers,
+                date_error=date_error,
+                active_filters_count=active_filters_count)
 
 
 @workspace()

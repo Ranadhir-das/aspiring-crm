@@ -1,5 +1,312 @@
 {% extends 'web/base.html' %}{% load web_tags %}{% block title %}Notices{% endblock %}{% block breadcrumb %}Notices{% endblock %}{% block content %}
-<div class="page-heading"><div><h1>Notices<span class="accent">.</span></h1><p>Announcements from management, targeted to your role.</p></div>{% if can_create %}<button type="button" class="button primary" onclick="document.getElementById('new-notice-dialog').hidden=false">＋ New notice</button>{% endif %}</div>
-{% if can_create %}<div id="new-notice-dialog" class="panel spaced" hidden><div class="panel-heading"><h2>Post a notice</h2></div><form method="post" action="{% url 'web:notice-new' %}" class="form-panel" enctype="multipart/form-data">{% csrf_token %}<div class="form-grid"><div class="field span-two"><label for="notice-title">Title</label><input id="notice-title" name="title" required maxlength="200"></div><div class="field span-two"><label for="notice-body">Message</label><textarea id="notice-body" name="body" rows="4" required maxlength="4000"></textarea></div><div class="field span-two"><label for="notice-attachments">Attachments (optional)</label><input type="file" id="notice-attachments" name="attachments" multiple accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.pdf"><small class="muted">Allowed formats: Images (JPG, PNG, WebP), Video (MP4, MOV, WebM), PDF. Max 25 MB per file.</small></div><div class="field span-two"><label>Send to</label><div class="notice-roles">{% for value, label in role_choices %}<label class="checkbox"><input type="checkbox" name="roles" value="{{ value }}"> {{ label }}</label>{% endfor %}</div><p class="muted">Leave all unchecked to send to every employee.</p></div></div><div class="form-actions"><button type="button" class="button" onclick="document.getElementById('new-notice-dialog').hidden=true">Cancel</button><button class="button primary">Post notice</button></div></form></div>{% endif %}
-<div class="stack spaced">{% for notice in notices %}<section class="panel notice-card"><div class="panel-heading"><div><h2>{{ notice.title }}</h2><p>{{ notice.created_by|user_name|default:'Management' }} · {{ notice.created_at|date:'d M Y, H:i' }}</p></div><div class="row" style="gap:8px;align-items:center"><span class="badge">{{ notice.audience_label }}</span>{% if can_create %}<form method="post" action="{% url 'web:notice-delete' notice.pk %}" onsubmit="return confirm('Delete this notice?')"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><button class="icon-button" title="Delete notice" aria-label="Delete notice">✕</button></form>{% endif %}</div></div><p class="notice-body">{{ notice.body|linebreaksbr }}</p>{% if notice.attachments.all %}<div class="notice-attachments" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);"><strong style="font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--muted);display:block;margin-bottom:8px;">Attachments ({{ notice.attachments.count }})</strong><div style="display:flex;flex-wrap:wrap;gap:10px;">{% for att in notice.attachments.all %}<div class="attachment-item" style="border:1px solid var(--border);border-radius:8px;padding:6px 12px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);"><span style="font-size:16px;">{% if 'image' in att.mime_type %}🖼{% elif 'video' in att.mime_type %}🎥{% else %}📄{% endif %}</span><a href="{% url 'web:notice-attachment-download' notice.pk att.pk %}" target="_blank" rel="noopener noreferrer" style="color:var(--text);font-weight:500;text-decoration:none;">{{ att.original_filename }}</a><span style="font-size:11px;color:var(--muted);">({{ att.file_size|filesizeformat }})</span><a href="{% url 'web:notice-attachment-download' notice.pk att.pk %}?download=1" style="color:var(--primary);font-size:12px;margin-left:4px;" title="Download file">⬇</a>{% if can_create %}<form method="post" action="{% url 'web:notice-attachment-delete' notice.pk att.pk %}" style="display:inline;margin:0;" onsubmit="return confirm('Remove attachment {{ att.original_filename }}?')">{% csrf_token %}<button class="icon-button" style="font-size:11px;padding:2px 4px;color:var(--danger, #ff4d4f);" title="Remove attachment">✕</button></form>{% endif %}</div>{% endfor %}</div></div>{% endif %}</section>{% empty %}<div class="panel"><p class="empty">No notices right now.</p></div>{% endfor %}</div>
+<div class="page-heading">
+  <div>
+    <h1>Notices<span class="accent">.</span></h1>
+    <p>Announcements from management, targeted to your role or selected team members.</p>
+  </div>
+  {% if can_create %}
+  <button type="button" class="button primary" onclick="document.getElementById('new-notice-dialog').hidden=false">＋ New notice</button>
+  {% endif %}
+</div>
+
+{% if can_create %}
+<div id="new-notice-dialog" class="panel spaced notice-compose-panel" hidden>
+  <div class="panel-heading">
+    <div>
+      <h2>Post a notice</h2>
+      <p class="muted" style="margin:2px 0 0;font-size:11px;">Create a company-wide announcement, role notification, or private employee notice.</p>
+    </div>
+    <button type="button" class="notice-close-btn" onclick="document.getElementById('new-notice-dialog').hidden=true" title="Close compose panel">✕</button>
+  </div>
+  <form method="post" action="{% url 'web:notice-new' %}" class="form-panel" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="form-grid">
+      <div class="field span-two">
+        <label for="notice-title">Title</label>
+        <input id="notice-title" name="title" required maxlength="200" placeholder="e.g. Schedule update for tomorrow">
+      </div>
+      <div class="field span-two">
+        <label for="notice-body">Message</label>
+        <textarea id="notice-body" name="body" rows="4" required maxlength="4000" placeholder="Write notice details..."></textarea>
+      </div>
+      <div class="field span-two">
+        <label for="notice-attachments">Attachments (optional)</label>
+        <input type="file" id="notice-attachments" name="attachments" multiple accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.pdf">
+        <small class="muted">Allowed formats: Images (JPG, PNG, WebP), Video (MP4, MOV, WebM), PDF. Max 25 MB per file.</small>
+      </div>
+
+      <!-- Recipient Target Selection -->
+      <div class="field span-two">
+        <label>Recipient Target</label>
+        <div class="recipient-type-selector">
+          <label class="recipient-type-card active" id="label-type-role">
+            <input type="radio" name="recipient_type" value="role" checked onchange="handleRecipientTypeChange('role')">
+            <div class="recipient-type-card-content">
+              <span class="recipient-type-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                By Role
+              </span>
+              <span class="recipient-type-desc">Send to entire employee roles or all company staff</span>
+            </div>
+          </label>
+          <label class="recipient-type-card" id="label-type-employees">
+            <input type="radio" name="recipient_type" value="employees" onchange="handleRecipientTypeChange('employees')">
+            <div class="recipient-type-card-content">
+              <span class="recipient-type-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                Selected Employees
+              </span>
+              <span class="recipient-type-desc">Send directly to one or more individual employees</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Role-based recipients section -->
+      <div id="section-role-recipients" class="field span-two">
+        <label>Target Roles</label>
+        <div class="notice-roles">
+          {% for value, label in role_choices %}
+          <label class="checkbox"><input type="checkbox" name="roles" value="{{ value }}"> {{ label }}</label>
+          {% endfor %}
+        </div>
+        <p class="muted">Leave all unchecked to send to every employee.</p>
+      </div>
+
+      <!-- Individual employees selection section -->
+      <div id="section-employee-recipients" class="field span-two" style="display:none;">
+        <div class="employee-picker-header">
+          <label>Select Individual Recipients</label>
+          <div class="employee-picker-stats">
+            <span id="employee-selected-count" class="picker-count-badge">0 selected</span>
+            <button type="button" class="btn-picker-action" onclick="selectAllEmployees(true)">Select all</button>
+            <span class="separator">·</span>
+            <button type="button" class="btn-picker-action" onclick="selectAllEmployees(false)">Clear</button>
+          </div>
+        </div>
+
+        <div class="employee-picker-search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="employee-picker-search" placeholder="Search employees by name, username, role, or email..." oninput="filterEmployees(this.value)">
+        </div>
+
+        <!-- Selected chips preview -->
+        <div id="selected-chips-box" class="selected-chips-box" style="display:none;"></div>
+
+        <!-- Scrollable list of employee cards -->
+        <div class="employee-picker-list" id="employee-picker-list">
+          {% for emp in eligible_employees %}
+          <label class="employee-picker-item" data-id="{{ emp.pk }}" data-name="{{ emp.get_full_name|default:emp.username|lower }}" data-role="{{ emp.get_role_display|lower }}" data-username="{{ emp.username|lower }}" data-email="{{ emp.email|lower }}">
+            <input type="checkbox" name="recipients" value="{{ emp.pk }}" class="employee-checkbox" onchange="updateEmployeeSelection()" data-name="{{ emp.get_full_name|default:emp.username }}">
+            <div class="employee-picker-avatar">
+              {{ emp.first_name|default:emp.username|slice:":1"|upper }}
+            </div>
+            <div class="employee-picker-info">
+              <span class="employee-picker-name">
+                {{ emp.get_full_name|default:emp.username }}
+                {% if emp.get_full_name and emp.get_full_name != emp.username %}<span class="muted" style="font-size:11px;">(@{{ emp.username }})</span>{% endif %}
+              </span>
+              <span class="employee-picker-sub">
+                <span class="badge-mini">{{ emp.get_role_display }}</span>
+                {% if emp.email %}<span class="muted">{{ emp.email }}</span>{% endif %}
+              </span>
+            </div>
+          </label>
+          {% empty %}
+          <p class="muted" style="padding:15px;text-align:center;">No eligible employees found.</p>
+          {% endfor %}
+        </div>
+        <p class="muted" style="margin-top:8px;">Only active, registered employees are eligible to receive individual notices.</p>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" class="button" onclick="document.getElementById('new-notice-dialog').hidden=true">Cancel</button>
+      <button class="button primary" id="btn-submit-notice">Post notice</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function handleRecipientTypeChange(type) {
+  const roleSection = document.getElementById('section-role-recipients');
+  const empSection = document.getElementById('section-employee-recipients');
+  const roleCard = document.getElementById('label-type-role');
+  const empCard = document.getElementById('label-type-employees');
+
+  if (type === 'employees') {
+    if (roleSection) roleSection.style.display = 'none';
+    if (empSection) empSection.style.display = 'block';
+    if (roleCard) roleCard.classList.remove('active');
+    if (empCard) empCard.classList.add('active');
+  } else {
+    if (roleSection) roleSection.style.display = 'block';
+    if (empSection) empSection.style.display = 'none';
+    if (roleCard) roleCard.classList.add('active');
+    if (empCard) empCard.classList.remove('active');
+  }
+}
+
+function filterEmployees(query) {
+  const q = (query || '').toLowerCase().trim();
+  const items = document.querySelectorAll('.employee-picker-item');
+  items.forEach(function(item) {
+    if (!q) {
+      item.style.display = '';
+      return;
+    }
+    const name = item.getAttribute('data-name') || '';
+    const username = item.getAttribute('data-username') || '';
+    const role = item.getAttribute('data-role') || '';
+    const email = item.getAttribute('data-email') || '';
+    if (name.includes(q) || username.includes(q) || role.includes(q) || email.includes(q)) {
+      item.style.display = '';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+
+function updateEmployeeSelection() {
+  const checkboxes = document.querySelectorAll('.employee-checkbox');
+  const checked = Array.from(checkboxes).filter(cb => cb.checked);
+  const countEl = document.getElementById('employee-selected-count');
+  if (countEl) {
+    countEl.textContent = checked.length + ' selected';
+  }
+
+  const chipsBox = document.getElementById('selected-chips-box');
+  if (!chipsBox) return;
+
+  chipsBox.innerHTML = '';
+  if (checked.length === 0) {
+    chipsBox.style.display = 'none';
+    return;
+  }
+  chipsBox.style.display = 'flex';
+
+  checked.forEach(function(cb) {
+    const chip = document.createElement('span');
+    chip.className = 'employee-chip';
+    const name = cb.getAttribute('data-name') || 'Employee';
+    chip.textContent = name;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'employee-chip-remove';
+    removeBtn.innerHTML = '✕';
+    removeBtn.title = 'Remove ' + name;
+    removeBtn.onclick = function(e) {
+      e.stopPropagation();
+      cb.checked = false;
+      updateEmployeeSelection();
+    };
+    chip.appendChild(removeBtn);
+    chipsBox.appendChild(chip);
+  });
+}
+
+function selectAllEmployees(select) {
+  const items = document.querySelectorAll('.employee-picker-item');
+  items.forEach(function(item) {
+    if (select) {
+      if (item.style.display !== 'none') {
+        const cb = item.querySelector('.employee-checkbox');
+        if (cb) cb.checked = true;
+      }
+    } else {
+      const cb = item.querySelector('.employee-checkbox');
+      if (cb) cb.checked = false;
+    }
+  });
+  updateEmployeeSelection();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.querySelector('#new-notice-dialog form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      const recipientTypeInput = form.querySelector('input[name="recipient_type"]:checked');
+      const recipientType = recipientTypeInput ? recipientTypeInput.value : 'role';
+      if (recipientType === 'employees') {
+        const selectedRecipients = form.querySelectorAll('input[name="recipients"]:checked');
+        if (selectedRecipients.length === 0) {
+          e.preventDefault();
+          alert('Please select at least one employee recipient.');
+          return false;
+        }
+      }
+    });
+  }
+});
+</script>
+{% endif %}
+
+<div class="stack spaced">
+  {% for notice in notices %}
+  <section class="panel notice-card">
+    <div class="panel-heading">
+      <div class="notice-title-group">
+        <h2>{{ notice.title }}</h2>
+        <div class="notice-meta">
+          <span>{{ notice.created_by|user_name|default:'Management' }}</span>
+          <span>·</span>
+          <span>{{ notice.created_at|date:'d M Y, H:i' }}</span>
+        </div>
+      </div>
+      <div class="notice-actions">
+        <span class="notice-audience-badge {% if notice.has_individual_recipients %}individual{% else %}role{% endif %}" {% if notice.has_individual_recipients %}title="Direct recipients: {% for r in notice.recipients.all %}{{ r|user_name }}{% if not forloop.last %}, {% endif %}{% endfor %}"{% endif %}>
+          {% if notice.has_individual_recipients %}
+            <svg class="badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>{{ notice.audience_label }}</span>
+          {% else %}
+            <svg class="badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>{{ notice.audience_label }}</span>
+          {% endif %}
+        </span>
+        {% if can_create %}
+        <form method="post" action="{% url 'web:notice-delete' notice.pk %}" onsubmit="return confirm('Delete this notice?')" style="margin:0;">
+          <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+          <button class="notice-delete-btn" title="Delete notice" aria-label="Delete notice">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="notice-body">{{ notice.body|linebreaksbr }}</p>
+
+    {% if notice.attachments.all %}
+    <div class="notice-attachments">
+      <span class="notice-attachments-title">📎 Attachments ({{ notice.attachments.count }})</span>
+      <div class="notice-attachments-grid">
+        {% for att in notice.attachments.all %}
+        <div class="attachment-chip">
+          <span class="attachment-chip-icon">{% if 'image' in att.mime_type %}🖼{% elif 'video' in att.mime_type %}🎥{% else %}📄{% endif %}</span>
+          <a href="{% url 'web:notice-attachment-download' notice.pk att.pk %}" target="_blank" rel="noopener noreferrer" class="attachment-chip-link" title="{{ att.original_filename }}">{{ att.original_filename }}</a>
+          <span class="attachment-chip-size">({{ att.file_size|filesizeformat }})</span>
+          <a href="{% url 'web:notice-attachment-download' notice.pk att.pk %}?download=1" class="attachment-chip-dl" title="Download {{ att.original_filename }}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </a>
+          {% if can_create %}
+          <form method="post" action="{% url 'web:notice-attachment-delete' notice.pk att.pk %}" style="display:inline;margin:0;" onsubmit="return confirm('Remove attachment {{ att.original_filename }}?')">
+            {% csrf_token %}
+            <button class="attachment-chip-del" title="Remove attachment {{ att.original_filename }}">✕</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% empty %}
+  <div class="panel empty-notice-panel">
+    <div class="empty-icon-wrap">📢</div>
+    <h3>No notices right now</h3>
+    <p class="muted">Company announcements and employee notices will appear here.</p>
+  </div>
+  {% endfor %}
+</div>
 {% endblock %}

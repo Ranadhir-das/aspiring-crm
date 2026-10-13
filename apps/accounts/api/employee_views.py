@@ -153,7 +153,7 @@ class EmployeeReportPhotoView(EmployeeView):
 
 class EmployeeNoticeView(EmployeeView):
     def get(self, request):
-        notices = [n for n in Notice.objects.select_related('created_by').prefetch_related('attachments') if n.is_visible_to(request.user)]
+        notices = [n for n in Notice.objects.select_related('created_by').prefetch_related('attachments', 'recipients') if n.is_visible_to(request.user)]
         return Response([{
             'id': n.pk,
             'title': n.title,

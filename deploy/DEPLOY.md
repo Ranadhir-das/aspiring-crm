@@ -148,6 +148,12 @@ map $http_upgrade $connection_upgrade {
     default upgrade;
     ''      close;
 }
+
+log_format ws_sanitized '$remote_addr - $remote_user [$time_local] '
+                        '"$request_method $uri $server_protocol" '
+                        '$status $body_bytes_sent "-" '
+                        '"$http_user_agent" '
+                        'rt=$request_time uct="$upstream_connect_time" urt="$upstream_response_time"';
 ```
 
 Then install the site config:

@@ -76,12 +76,15 @@ def notify_team_chat(message_id):
 
 
 def notify_notice(notice_id):
-    notice = Notice.objects.filter(pk=notice_id).first()
+    notice = Notice.objects.prefetch_related('recipients').filter(pk=notice_id).first()
     if not notice:
         return
-    recipients = active_employees().exclude(pk=notice.created_by_id)
-    if notice.roles:
-        recipients = recipients.filter(role__in=notice.roles)
+    if notice.recipients.exists():
+        recipients = notice.recipients.filter(is_active=True, registration_pending=False).exclude(pk=notice.created_by_id)
+    else:
+        recipients = active_employees().exclude(pk=notice.created_by_id)
+        if notice.roles:
+            recipients = recipients.filter(role__in=notice.roles)
     persist_and_deliver(recipients, Notification.Type.NOTICE, 'New notice',
                         'A new company notice is available. Tap to read it.',
                         {'type': 'NOTICE', 'notice_id': notice.pk})

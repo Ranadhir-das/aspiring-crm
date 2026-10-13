@@ -105,10 +105,33 @@ EMPLOYEE_LOCATION_MAX_GAP_SECONDS = env.int('EMPLOYEE_LOCATION_MAX_GAP_SECONDS',
 EMPLOYEE_LOCATION_MAX_ACCURACY_METERS = env.float('EMPLOYEE_LOCATION_MAX_ACCURACY_METERS', default=150)
 EMPLOYEE_LOCATION_MAX_SPEED_MPS = env.float('EMPLOYEE_LOCATION_MAX_SPEED_MPS', default=55)
 
+# Shared cache for rate-limiting (login, signup, location, public intake) and temporary tokens.
+# In production with REDIS_URL, uses Redis with automatic in-process fallback to LocMemCache if Redis
+# is restarting or unreachable. In local development or tests without REDIS_URL, uses LocMemCache directly.
+CACHES = {
+    'default': {
+        'BACKEND': 'config.cache_backends.FallbackRedisCache',
+        'LOCATION': REDIS_URL,
+        'KEY_PREFIX': 'vaani',
+        'TIMEOUT': 300,
+        'OPTIONS': {
+            'socket_connect_timeout': 2,
+            'socket_timeout': 2,
+            'retry_on_timeout': True,
+        },
+    } if REDIS_URL else {
+        'BACKEND': 'config.cache_backends.AtomicLocMemCache',
+        'LOCATION': 'vaani_locmem',
+    },
+}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "apps.accounts.api.authentication.VerifiedSessionAuthentication",
     ],
+    # Enforces trusted single-proxy header inspection behind Nginx to prevent
+    # rate-limit bypass via spoofed X-Forwarded-For prefixes.
+    "NUM_PROXIES": env.int("NUM_PROXIES", default=1),
 }
 
 MIDDLEWARE = [

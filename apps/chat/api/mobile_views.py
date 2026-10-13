@@ -1,4 +1,5 @@
 import os
+import secrets
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.http import FileResponse, Http404
@@ -98,3 +99,27 @@ class MobileChatAttachmentDownloadView(MobileChatView):
         response['Content-Disposition'] = f'{disposition}; filename="{attachment.original_name}"'
         response['X-Content-Type-Options'] = 'nosniff'
         return response
+
+
+class MobileChatTicketView(MobileChatView):
+    """Issues a short-lived (30s), single-use, channel-authorized ticket for WebSocket connection.
+    Prevents long-lived DRF auth tokens from appearing in query strings or access logs."""
+
+    def post(self, request, channel_id):
+        channel = get_object_or_404(ChatChannel, pk=channel_id)
+        if not channel.is_member(request.user) and request.user.role not in {'SUPER_ADMIN', 'ADMIN'}:
+            raise PermissionDenied('You are not a member of this channel.')
+
+        ticket = secrets.token_urlsafe(32)
+        cache_key = f'ws_ticket:{ticket}'
+        from django.core.cache import cache
+        import redis.exceptions
+
+        try:
+            cache.set(cache_key, {'user_id': request.user.id, 'channel_id': channel.id}, timeout=30)
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError, redis.exceptions.RedisError):
+            return Response(
+                {'detail': 'Chat service is temporarily unavailable. Please retry shortly.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response({'ticket': ticket, 'expires_in': 30})

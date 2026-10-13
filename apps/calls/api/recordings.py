@@ -13,13 +13,16 @@ from apps.calls.recordings import permitted_call, playback
 from .permissions import CanCreateCall
 
 
+MAX_RECORDING_SIZE = 30 * 1024 * 1024  # 30 MB (~40 min at 96kbps mono AAC)
+
+
 class RecordingUploadSerializer(serializers.Serializer):
     recording = serializers.FileField()
     duration_seconds = serializers.IntegerField(min_value=0, max_value=2147483647)
 
     def validate_recording(self, file):
-        if Path(file.name).suffix.lower() != '.m4a' or not 12 <= file.size <= 200 * 1024 * 1024:
-            raise serializers.ValidationError('Upload an .m4a file between 12 bytes and 200 MB.')
+        if Path(file.name).suffix.lower() != '.m4a' or not 12 <= file.size <= MAX_RECORDING_SIZE:
+            raise serializers.ValidationError(f'Upload an .m4a file between 12 bytes and {MAX_RECORDING_SIZE // (1024 * 1024)} MB.')
         header = file.read(12)
         file.seek(0)
         if header[4:8] != b'ftyp':

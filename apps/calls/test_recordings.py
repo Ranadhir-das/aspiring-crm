@@ -87,6 +87,15 @@ class RecordingTests(TestCase):
         self.assertEqual(self.api.post(self.url(), {}, format='multipart').status_code, 400)
         self.assertFalse(CallRecording.objects.exists())
 
+    def test_oversized_upload_rejected(self):
+        from apps.calls.api.recordings import MAX_RECORDING_SIZE, RecordingUploadSerializer
+        oversized = SimpleUploadedFile('large.m4a', self.data, content_type='audio/mp4')
+        oversized.size = MAX_RECORDING_SIZE + 1
+        serializer = RecordingUploadSerializer(data={'recording': oversized, 'duration_seconds': 60})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('between 12 bytes and 30 MB', str(serializer.errors['recording']))
+        self.assertFalse(CallRecording.objects.exists())
+
     def test_api_and_session_playback_permission(self):
         self.upload()
         response = self.api.get(self.url())

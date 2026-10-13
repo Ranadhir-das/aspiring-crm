@@ -20,10 +20,16 @@ ADMIN_ROLES = {'ADMIN', 'SUPER_ADMIN'}
 @workspace(employee=True)
 def notices(request):
     can_create = request.user.role in ADMIN_ROLES
-    query = Notice.objects.select_related('created_by').prefetch_related('attachments')
+    query = Notice.objects.select_related('created_by').prefetch_related('attachments', 'recipients')
     visible = list(query) if can_create else [n for n in query if n.is_visible_to(request.user)]
+    eligible_employees = []
+    if can_create:
+        eligible_employees = list(
+            User.objects.filter(is_active=True, registration_pending=False)
+            .order_by('first_name', 'last_name', 'username')
+        )
     return page(request, 'notices', 'notices', notices=visible, can_create=can_create,
-                role_choices=User.Role.choices)
+                role_choices=User.Role.choices, eligible_employees=eligible_employees)
 
 
 @require_POST
@@ -34,13 +40,36 @@ def notice_new(request):
         raise PermissionDenied
     title = (request.POST.get('title') or '').strip()[:200]
     body = (request.POST.get('body') or '').strip()[:4000]
-    roles = [r for r in request.POST.getlist('roles') if r in dict(User.Role.choices)]
+    recipient_type = (request.POST.get('recipient_type') or 'role').strip().lower()
 
     if not title or not body:
         messages.error(request, 'Notice title and message are required.')
         return redirect('web:notices')
 
-    notice = Notice.objects.create(title=title, body=body, roles=roles, created_by=request.user)
+    target_roles = []
+    target_employees = []
+
+    if recipient_type == 'employees':
+        raw_ids = request.POST.getlist('recipients')
+        valid_ids = [int(raw_id) for raw_id in raw_ids if str(raw_id).isdigit()]
+        if valid_ids:
+            target_employees = list(
+                User.objects.filter(
+                    pk__in=valid_ids,
+                    is_active=True,
+                    registration_pending=False,
+                ).distinct()
+            )
+
+        if not target_employees:
+            messages.error(request, 'Please select at least one active, valid employee recipient.')
+            return redirect('web:notices')
+    else:
+        target_roles = [r for r in request.POST.getlist('roles') if r in dict(User.Role.choices)]
+
+    notice = Notice.objects.create(title=title, body=body, roles=target_roles, created_by=request.user)
+    if target_employees:
+        notice.recipients.set(target_employees)
 
     uploaded_files = request.FILES.getlist('attachments')
     for f in uploaded_files:

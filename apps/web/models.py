@@ -223,6 +223,8 @@ class Notice(models.Model):
     # Empty list means "all employees" — a role-scoped announcement board, not a
     # conversation, so there's no per-recipient row to maintain as staff join/leave.
     roles = models.JSONField(default=list, blank=True)
+    # Direct individual employee recipients when targeted specifically to selected individuals
+    recipients = models.ManyToManyField(USER, blank=True, related_name='received_notices')
     created_by = models.ForeignKey(USER, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -233,10 +235,35 @@ class Notice(models.Model):
         return self.title
 
     def is_visible_to(self, user):
+        if not user or not user.is_authenticated:
+            return False
+        if self.created_by_id and self.created_by_id == user.pk:
+            return True
+        direct_recipients = self.recipients.all()
+        if direct_recipients:
+            return any(u.pk == user.pk for u in direct_recipients)
         return not self.roles or user.role in self.roles
 
     @property
+    def has_individual_recipients(self):
+        return bool(self.recipients.all())
+
+    @property
     def audience_label(self):
+        direct_recipients = list(self.recipients.all())
+        if direct_recipients:
+            count = len(direct_recipients)
+            if count == 1:
+                u = direct_recipients[0]
+                name = u.get_full_name() or u.username
+                return f"{name} ({u.username})" if u.get_full_name() and u.get_full_name() != u.username else name
+            elif count <= 3:
+                names = [u.get_full_name() or u.username for u in direct_recipients]
+                return ', '.join(names)
+            else:
+                first_names = [direct_recipients[0].get_full_name() or direct_recipients[0].username,
+                               direct_recipients[1].get_full_name() or direct_recipients[1].username]
+                return f"{count} employees ({', '.join(first_names)} + {count - 2} more)"
         if not self.roles:
             return 'All employees'
         from apps.accounts.models import User
