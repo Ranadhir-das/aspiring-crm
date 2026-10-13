@@ -1,4 +1,6 @@
 from rest_framework.generics import ListAPIView
+from django.db.models import Q
+from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.followups.models import FollowUp
@@ -25,8 +27,13 @@ class MobileFollowUpListView(ListAPIView):
             .order_by("scheduled_at")
         )
 
+        # Home requests only actionable reminders; other consumers retain the
+        # existing all-pending feed, including future appointments.
+        if self.request.query_params.get('due') == 'true':
+            queryset = queryset.filter(scheduled_at__lte=timezone.now())
+
         if user.role == User.Role.CALLER:
-            return queryset.filter(caller=user)
+            return queryset.filter(caller=user).filter(Q(lead__isnull=True) | Q(lead__assigned_caller=user))
 
         if user.role in {
             User.Role.SUPER_ADMIN,

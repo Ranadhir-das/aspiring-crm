@@ -82,6 +82,9 @@ class CallCreateView(APIView):
         if lead:
             lead = Lead.objects.select_for_update().get(pk=lead.pk)
         elif data.get('phone_number'):
+            if data.get('outcome') == 'INTERESTED' and request.user.role == User.Role.CALLER:
+                from apps.calls.phone import lock_phone_for_creation
+                lock_phone_for_creation(data['phone_number'])
             lead = matching_lead(data['phone_number'], request.user)
             if lead:
                 lead = Lead.objects.select_for_update().get(pk=lead.pk)
@@ -120,6 +123,20 @@ class CallCreateView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Approved Direct Dialer policy: a new Interested contact becomes this
+        # caller's external lead. Its first selected course is its own preference.
+        if lead is None and outcome == 'INTERESTED' and request.user.role == User.Role.CALLER:
+            from django.utils import timezone
+            from apps.leads.models import LeadAssignmentHistory
+            lead = Lead(name=phone, phone=phone, source='EXTERNAL',
+                        assigned_caller=request.user, assigned_at=timezone.now(),
+                        preferred_course=data['selected_course'],
+                        preferred_course_custom=data.get('selected_course_custom', ''))
+            lead._changed_by = request.user
+            lead.save()
+            LeadAssignmentHistory.objects.create(lead=lead, new_caller=request.user,
+                assigned_by=request.user, reason='Direct Dialer Interested contact')
 
         # Create the Call
         from apps.leads.courses import classify_course
@@ -167,6 +184,8 @@ class CallCreateView(APIView):
                 ]
             )
 
+        from apps.followups.services import complete_due_followups_for_call
+        completed_followup_ids = complete_due_followups_for_call(call)
         apply_website_outcome(lead, call, callback_at=callback_at)
 
         # If Call Back → create FollowUp
@@ -180,7 +199,7 @@ class CallCreateView(APIView):
             )
 
         return Response(
-            CallSerializer(call).data,
+            {**CallSerializer(call).data, "completed_followup_ids": completed_followup_ids},
             status=status.HTTP_201_CREATED,
         )
 

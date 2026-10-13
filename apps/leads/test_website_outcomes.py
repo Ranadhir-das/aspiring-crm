@@ -184,16 +184,20 @@ class WebsiteOutcomeTests(TestCase):
                 self.assertEqual(lead.assigned_caller_id, self.a.pk)
                 self.assertEqual(lead.status, outcome)
 
-    def test_other_existing_outcomes_keep_prior_followup_behavior(self):
-        old = FollowUp.objects.create(lead=self.lead, caller=self.a, scheduled_at=timezone.now())
+    def test_other_existing_outcomes_complete_due_but_preserve_future_followups(self):
+        future = FollowUp.objects.create(lead=self.lead, caller=self.a,
+                                         scheduled_at=timezone.now() + timedelta(days=1))
         for outcome in ['FORWARDED_CALLS', 'NO_CANDIDATE', 'DISCONNECTED',
                         'ALL_WAITING', 'NOT_REACHABLE', 'RINGING']:
+            old = FollowUp.objects.create(lead=self.lead, caller=self.a, scheduled_at=timezone.now())
             self.assertEqual(self.post(self.payload(outcome)).status_code, 201)
             self.lead.refresh_from_db()
             old.refresh_from_db()
             self.assertEqual(self.lead.status, outcome)
             self.assertEqual(self.lead.assigned_caller_id, self.a.pk)
-            self.assertEqual(old.status, 'PENDING')
+            self.assertEqual(old.status, 'COMPLETED')
+            future.refresh_from_db()
+            self.assertEqual(future.status, 'PENDING')
         # Business Rule 1: Callers cannot set ADMISSION_DONE
         self.assertEqual(self.post(self.payload('ADMISSION_DONE')).status_code, 403)
 

@@ -36,7 +36,7 @@ class ExternalCallTests(TestCase):
         return self.api.post('/api/v1/calls/', data, format='json')
 
     def test_external_call_keeps_phone_without_fake_lead_and_derives_caller(self):
-        response = self.post(self.payload(caller=self.other.pk, phone_number='+91 91234-56789'))
+        response = self.post(self.payload(outcome='NOT_INTERESTED', caller=self.other.pk, phone_number='+91 91234-56789'))
         self.assertEqual(response.status_code, 201, response.data)
         call = Call.objects.get(pk=response.data['id'])
         self.assertIsNone(call.lead_id)
@@ -175,7 +175,7 @@ class ExternalCallTests(TestCase):
         self.assertEqual(self.client.get(reverse('web:followups')).status_code, 200)
 
     def test_list_date_validation_and_pagination(self):
-        self.post(self.payload())
+        self.post(self.payload(outcome='NOT_INTERESTED'))
         manager = User.objects.create_user('filters-admin', role='ADMIN')
         self.client.force_login(manager)
         listing = reverse('web:external-calls')
@@ -186,7 +186,7 @@ class ExternalCallTests(TestCase):
         tomorrow = (timezone.localdate() + timedelta(days=1)).isoformat()
         self.assertEqual(self.client.get(listing, {'start_date': tomorrow}).context['records'].paginator.count, 0)
         for _ in range(21):
-            self.post(self.payload())
-        response = self.client.get(listing, {'page': '2', 'outcome': 'INTERESTED'})
+            self.post(self.payload(outcome='NOT_INTERESTED'))
+        response = self.client.get(listing, {'page': '2', 'outcome': 'NOT_INTERESTED'})
         self.assertEqual(len(response.context['records']), 2)
-        self.assertContains(response, 'outcome=INTERESTED')
+        self.assertContains(response, 'outcome=NOT_INTERESTED')
