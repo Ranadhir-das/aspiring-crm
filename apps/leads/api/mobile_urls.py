@@ -22,8 +22,10 @@ from .mobile_views import (
 
 from .counselor_views import (
     CounselorAdmissionRequestView,
+    CounselorCallerListView,
     CounselorDashboardView,
     CounselorDirectoryView,
+    CounselorLeadCreateView,
     CounselorLeadDetailView,
     CounselorLeadListView,
     CounselorNoteCreateView,
@@ -38,6 +40,8 @@ urlpatterns = [
     path('leads/<int:id>/counselor/', LeadCounselorView.as_view(), name='mobile-lead-counselor'),
     path('leads/<int:id>/forward-counselor/', ForwardLeadToCounselorView.as_view(), name='mobile-forward-counselor'),
     path('counselor/dashboard/', CounselorDashboardView.as_view(), name='mobile-counselor-dashboard'),
+    path('counselor/callers/', CounselorCallerListView.as_view(), name='mobile-counselor-callers'),
+    path('counselor/leads/create/', CounselorLeadCreateView.as_view(), name='mobile-counselor-lead-create'),
     path('counselor/leads/', CounselorLeadListView.as_view(), name='mobile-counselor-leads'),
     path('counselor/leads/<int:id>/', CounselorLeadDetailView.as_view(), name='mobile-counselor-lead-detail'),
     path('counselor/leads/<int:id>/notes/', CounselorNoteCreateView.as_view(), name='mobile-counselor-notes'),

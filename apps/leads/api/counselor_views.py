@@ -4,8 +4,12 @@ Caller-facing endpoints (counselor directory, forward/reassign) and
 counselor-facing endpoints (dashboard, leads, notes, admission requests).
 Counselors only ever see leads actively forwarded to them; anything else 404s.
 """
+import logging
 import uuid
 
+from django.db import transaction
+from django.db.models import Q
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -32,7 +36,10 @@ from apps.leads.counselor_services import (
     request_admission,
     visible_counselor_notes,
 )
-from apps.leads.models import Counselling, Lead
+from apps.leads.models import Counselling, Lead, LeadAssignmentHistory
+from apps.leads.utils import find_duplicate_lead, normalize_phone
+
+logger = logging.getLogger(__name__)
 
 
 class IsCaller(BasePermission):
@@ -331,3 +338,161 @@ class CounselorAdmissionRequestView(APIView):
         return Response({'success': True, 'admission_request': admission_request_data(item),
                          'message': 'Admission request sent to Admin/Manager for review.'},
                         status=status.HTTP_201_CREATED)
+
+
+class CounselorCallerListView(APIView):
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated, IsActiveCounselor]
+
+    def get(self, request):
+        callers = (
+            User.objects
+            .filter(role=User.Role.CALLER, is_active=True, registration_pending=False)
+            .order_by('first_name', 'last_name', 'username')
+        )
+        return Response({
+            'callers': [{
+                'id': caller.pk,
+                'name': display_name(caller),
+                'username': caller.username,
+                'phone': caller.phone or '',
+                'designation': caller.designation or 'Caller',
+            } for caller in callers]
+        })
+
+
+class CounselorLeadCreateView(APIView):
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated, IsActiveCounselor]
+
+    def post(self, request):
+        data = request.data
+        phone = str(data.get('phone') or '').strip()
+        normalized_phone = normalize_phone(phone)
+        if not normalized_phone or len(normalized_phone) < 10:
+            raise ValidationError({'phone': 'Please enter a valid phone number (at least 10 digits).'})
+
+        last10 = normalized_phone[-10:] if len(normalized_phone) >= 10 else normalized_phone
+        existing = (
+            Lead.objects
+            .filter(Q(phone=normalized_phone) | Q(phone=last10) | Q(phone='91' + last10) | Q(phone='0' + last10))
+            .first()
+        )
+        if not existing:
+            existing = find_duplicate_lead(normalized_phone)
+        if existing:
+            caller_info = f" (assigned to {display_name(existing.assigned_caller)})" if existing.assigned_caller else ""
+            raise ValidationError({'phone': f'A lead with this phone number already exists: {existing.name}{caller_info}.'})
+
+        caller_id = data.get('assigned_caller_id') or data.get('caller_id')
+        if not caller_id:
+            raise ValidationError({'assigned_caller_id': 'Please select an eligible caller.'})
+
+        try:
+            caller = User.objects.get(
+                pk=caller_id,
+                role=User.Role.CALLER,
+                is_active=True,
+                registration_pending=False,
+            )
+        except (User.DoesNotExist, ValueError, TypeError):
+            raise ValidationError({'assigned_caller_id': 'Selected caller is invalid, inactive, or not a caller.'})
+
+        # Student name is optional in counselor form; default to "Student" if blank
+        raw_name = str(data.get('name') or '').strip()
+        name = raw_name if raw_name else 'Student'
+
+        # Optional course validation
+        preferred_course = data.get('preferred_course') or None
+        preferred_course_custom = str(data.get('preferred_course_custom') or '').strip()
+        if preferred_course:
+            from apps.leads.courses import validate_course
+            try:
+                preferred_course, preferred_course_custom = validate_course(
+                    preferred_course, preferred_course_custom, required=False
+                )
+            except ValueError as err:
+                raise ValidationError({'preferred_course': str(err)})
+
+        pcb_percentage = data.get('pcb_percentage')
+        if pcb_percentage is not None and str(pcb_percentage).strip() != '':
+            try:
+                pcb_percentage = round(float(pcb_percentage), 2)
+            except (ValueError, TypeError):
+                raise ValidationError({'pcb_percentage': 'Enter a valid decimal percentage.'})
+        else:
+            pcb_percentage = None
+
+        email = str(data.get('email') or '').strip()
+        location = str(data.get('location') or '').strip()
+        college = str(data.get('college') or '').strip()
+        neet_status = str(data.get('neet_status') or '').strip()
+        preferred_intake = str(data.get('preferred_intake') or '').strip()
+        notes = str(data.get('notes') or '').strip()
+        source = str(data.get('source') or '').strip() or 'Counselor App'
+        campaign = str(data.get('campaign') or '').strip()
+
+        # Optional service / service_type
+        service_id = data.get('service_id')
+        service_type = None
+        if service_id:
+            from apps.leads.models import Service
+            service_type = Service.objects.filter(pk=service_id, is_active=True).first()
+
+        now = timezone.now()
+        with transaction.atomic():
+            lead = Lead.objects.create(
+                name=name,
+                phone=normalized_phone,
+                email=email,
+                location=location,
+                college=college,
+                neet_status=neet_status,
+                pcb_percentage=pcb_percentage,
+                preferred_intake=preferred_intake,
+                preferred_course=preferred_course,
+                preferred_course_custom=preferred_course_custom,
+                notes=notes,
+                source=source,
+                campaign=campaign,
+                service_type=service_type,
+                service=service_type.name if service_type else '',
+                status=Lead.Status.PENDING,
+                assigned_caller=caller,
+                assigned_at=now,
+            )
+
+            LeadAssignmentHistory.objects.create(
+                lead=lead,
+                previous_caller=None,
+                new_caller=caller,
+                assigned_by=request.user,
+                reason='Created and assigned by counselor',
+            )
+
+            caller_pk = caller.pk
+            lead_pk = lead.pk
+
+            def _on_commit_notify():
+                try:
+                    from apps.accounts.push_notifications import notify_caller_about_assigned_leads
+                    notify_caller_about_assigned_leads(caller_pk, [lead_pk])
+                except Exception as exc:
+                    logger.exception('[Counselor Lead Creation Push] Failed: %s', exc)
+
+            transaction.on_commit(_on_commit_notify)
+
+        return Response({
+            'success': True,
+            'message': f'Lead created and assigned to {display_name(caller)}.',
+            'lead': {
+                'id': lead.pk,
+                'name': lead.name,
+                'phone': lead.phone,
+                'status': lead.status,
+                'status_display': lead.get_status_display(),
+                'assigned_caller_id': caller.pk,
+                'assigned_caller_name': display_name(caller),
+                'created_at': lead.created_at.isoformat(),
+            }
+        }, status=status.HTTP_201_CREATED)
