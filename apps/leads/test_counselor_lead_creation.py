@@ -24,6 +24,16 @@ class CounselorLeadCreationTests(TestCase):
             registration_pending=False,
         )
 
+        self.counselor2 = User.objects.create_user(
+            username='counselor_amit',
+            password='Password123!',
+            first_name='Amit',
+            last_name='Gupta',
+            role=User.Role.COUNSELOR,
+            is_active=True,
+            registration_pending=False,
+        )
+
         # Callers
         self.caller1 = User.objects.create_user(
             username='caller_rahul',
@@ -253,3 +263,161 @@ class CounselorLeadCreationTests(TestCase):
         # Caller 2 attempts to directly access Caller 1's lead details -> MUST be 404
         forbidden_detail = self.client.get(f'/api/v1/mobile/leads/{lead_id}/')
         self.assertEqual(forbidden_detail.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_counselor_lists_only_own_created_leads(self):
+        # Counselor 1 creates a lead
+        self.client.force_authenticate(user=self.counselor)
+        r1 = self.client.post('/api/v1/mobile/counselor/leads/create/', data={
+            'name': 'Priya Student 1',
+            'phone': '9876500011',
+            'assigned_caller_id': self.caller1.pk,
+        }, format='json')
+        self.assertEqual(r1.status_code, status.HTTP_201_CREATED)
+        lead1_id = r1.data['lead']['id']
+
+        # Counselor 2 creates a lead
+        self.client.force_authenticate(user=self.counselor2)
+        r2 = self.client.post('/api/v1/mobile/counselor/leads/create/', data={
+            'name': 'Amit Student 1',
+            'phone': '9876500022',
+            'assigned_caller_id': self.caller1.pk,
+        }, format='json')
+        self.assertEqual(r2.status_code, status.HTTP_201_CREATED)
+        lead2_id = r2.data['lead']['id']
+
+        # Counselor 1 lists created leads -> sees only lead1
+        self.client.force_authenticate(user=self.counselor)
+        list_res = self.client.get('/api/v1/mobile/counselor/created-leads/')
+        self.assertEqual(list_res.status_code, status.HTTP_200_OK)
+        lead_ids = [l['id'] for l in list_res.data['leads']]
+        self.assertIn(lead1_id, lead_ids)
+        self.assertNotIn(lead2_id, lead_ids)
+
+        # Search filter
+        search_res = self.client.get('/api/v1/mobile/counselor/created-leads/?search=Priya')
+        self.assertEqual(search_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(search_res.data['leads']), 1)
+        self.assertEqual(search_res.data['leads'][0]['id'], lead1_id)
+
+    def test_counselor_created_lead_detail_and_isolation(self):
+        # Counselor 1 creates lead
+        self.client.force_authenticate(user=self.counselor)
+        r = self.client.post('/api/v1/mobile/counselor/leads/create/', data={
+            'name': 'Kavita Singh',
+            'phone': '9876500033',
+            'email': 'kavita@example.com',
+            'location': 'Pune',
+            'college': 'Fergusson',
+            'neet_status': 'Qualified',
+            'pcb_percentage': '88.5',
+            'preferred_course': 'MBBS',
+            'assigned_caller_id': self.caller1.pk,
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        lead_id = r.data['lead']['id']
+
+        # Counselor 1 fetches detail
+        detail_res = self.client.get(f'/api/v1/mobile/counselor/created-leads/{lead_id}/')
+        self.assertEqual(detail_res.status_code, status.HTTP_200_OK)
+        lead_data = detail_res.data['lead']
+        self.assertEqual(lead_data['name'], 'Kavita Singh')
+        self.assertEqual(lead_data['phone'], '9876500033')
+        self.assertEqual(lead_data['email'], 'kavita@example.com')
+        self.assertEqual(lead_data['location'], 'Pune')
+        self.assertEqual(lead_data['college'], 'Fergusson')
+        self.assertEqual(lead_data['neet_status'], 'Qualified')
+        self.assertEqual(lead_data['assigned_caller_id'], self.caller1.pk)
+        self.assertEqual(len(lead_data['assignment_history']), 1)
+        self.assertEqual(lead_data['assignment_history'][0]['new_caller_id'], self.caller1.pk)
+        self.assertEqual(lead_data['assignment_history'][0]['reason'], 'Created and assigned by counselor')
+
+        # Counselor 2 tries to fetch Counselor 1's created lead -> 404
+        self.client.force_authenticate(user=self.counselor2)
+        c2_res = self.client.get(f'/api/v1/mobile/counselor/created-leads/{lead_id}/')
+        self.assertEqual(c2_res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_counselor_reassign_created_lead_success(self):
+        # Counselor 1 creates lead assigned to caller1
+        self.client.force_authenticate(user=self.counselor)
+        r = self.client.post('/api/v1/mobile/counselor/leads/create/', data={
+            'name': 'Deepak Verma',
+            'phone': '9876500044',
+            'assigned_caller_id': self.caller1.pk,
+        }, format='json')
+        self.assertEqual(r.status_code, status.HTTP_201_CREATED)
+        lead_id = r.data['lead']['id']
+
+        # Reassign to caller2
+        reassign_res = self.client.post(f'/api/v1/mobile/counselor/created-leads/{lead_id}/reassign/', data={
+            'caller_id': self.caller2.pk,
+        }, format='json')
+        self.assertEqual(reassign_res.status_code, status.HTTP_200_OK)
+        self.assertTrue(reassign_res.data['success'])
+        self.assertEqual(reassign_res.data['lead']['assigned_caller_id'], self.caller2.pk)
+
+        # Verify DB state
+        lead = Lead.objects.get(pk=lead_id)
+        self.assertEqual(lead.assigned_caller, self.caller2)
+
+        # Verify audit trail
+        history = list(LeadAssignmentHistory.objects.filter(lead=lead).order_by('assigned_at'))
+        self.assertEqual(len(history), 2)
+        # 1st: created and assigned to caller1
+        self.assertIsNone(history[0].previous_caller)
+        self.assertEqual(history[0].new_caller, self.caller1)
+        self.assertEqual(history[0].reason, 'Created and assigned by counselor')
+        # 2nd: reassigned to caller2
+        self.assertEqual(history[1].previous_caller, self.caller1)
+        self.assertEqual(history[1].new_caller, self.caller2)
+        self.assertEqual(history[1].assigned_by, self.counselor)
+        self.assertEqual(history[1].reason, 'Reassigned by counselor')
+
+        # Verify caller2 now sees it, and caller1 does not
+        self.client.force_authenticate(user=self.caller2)
+        c2_list = self.client.get('/api/v1/mobile/leads/')
+        self.assertIn(lead_id, [l['id'] for l in c2_list.data])
+
+        self.client.force_authenticate(user=self.caller1)
+        c1_list = self.client.get('/api/v1/mobile/leads/')
+        self.assertNotIn(lead_id, [l['id'] for l in c1_list.data])
+
+    def test_counselor_reassign_validation_rules(self):
+        # Counselor 1 creates lead assigned to caller1
+        self.client.force_authenticate(user=self.counselor)
+        r = self.client.post('/api/v1/mobile/counselor/leads/create/', data={
+            'name': 'Validation Lead',
+            'phone': '9876500055',
+            'assigned_caller_id': self.caller1.pk,
+        }, format='json')
+        lead_id = r.data['lead']['id']
+
+        # Reassign to same caller -> 400
+        res = self.client.post(f'/api/v1/mobile/counselor/created-leads/{lead_id}/reassign/', data={
+            'caller_id': self.caller1.pk,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('already assigned', str(res.data))
+
+        # Reassign to inactive caller -> 400
+        res = self.client.post(f'/api/v1/mobile/counselor/created-leads/{lead_id}/reassign/', data={
+            'caller_id': self.inactive_caller.pk,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Reassign to non-caller (admin) -> 400
+        res = self.client.post(f'/api/v1/mobile/counselor/created-leads/{lead_id}/reassign/', data={
+            'caller_id': self.admin.pk,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # Counselor 2 cannot reassign Counselor 1's lead -> 404
+        self.client.force_authenticate(user=self.counselor2)
+        res = self.client.post(f'/api/v1/mobile/counselor/created-leads/{lead_id}/reassign/', data={
+            'caller_id': self.caller2.pk,
+        }, format='json')
+        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_caller_role_cannot_access_created_leads(self):
+        self.client.force_authenticate(user=self.caller1)
+        res = self.client.get('/api/v1/mobile/counselor/created-leads/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)

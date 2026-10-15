@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -496,3 +496,177 @@ class CounselorLeadCreateView(APIView):
                 'created_at': lead.created_at.isoformat(),
             }
         }, status=status.HTTP_201_CREATED)
+
+
+def counselor_created_leads_qs(user):
+    return (
+        Lead.objects
+        .filter(
+            assignment_history__previous_caller__isnull=True,
+            assignment_history__assigned_by=user,
+            assignment_history__reason='Created and assigned by counselor',
+        )
+        .distinct()
+    )
+
+
+def get_counselor_created_lead_or_404(lead_id, user):
+    lead = (
+        counselor_created_leads_qs(user)
+        .filter(pk=lead_id)
+        .select_related('assigned_caller')
+        .first()
+    )
+    if not lead:
+        raise NotFound('Lead not found or was not created by you.')
+    return lead
+
+
+class CounselorCreatedLeadListView(APIView):
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated, IsActiveCounselor]
+
+    def get(self, request):
+        qs = (
+            counselor_created_leads_qs(request.user)
+            .select_related('assigned_caller')
+            .order_by('-created_at')
+        )
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(phone__icontains=search))
+
+        leads_data = []
+        for lead in qs:
+            leads_data.append({
+                'id': lead.pk,
+                'name': lead.name,
+                'phone': lead.phone,
+                'status': lead.status,
+                'status_display': lead.get_status_display(),
+                'assigned_caller_id': lead.assigned_caller_id,
+                'assigned_caller_name': display_name(lead.assigned_caller) if lead.assigned_caller else None,
+                'course_label': lead.preferred_course_label,
+                'location': lead.location,
+                'created_at': iso(lead.created_at),
+            })
+
+        return Response({
+            'total': len(leads_data),
+            'leads': leads_data,
+        })
+
+
+class CounselorCreatedLeadDetailView(APIView):
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated, IsActiveCounselor]
+
+    def get(self, request, id):
+        lead = get_counselor_created_lead_or_404(id, request.user)
+
+        history = [
+            {
+                'id': h.pk,
+                'previous_caller_id': h.previous_caller_id,
+                'previous_caller_name': display_name(h.previous_caller) if h.previous_caller else None,
+                'new_caller_id': h.new_caller_id,
+                'new_caller_name': display_name(h.new_caller) if h.new_caller else None,
+                'assigned_by_id': h.assigned_by_id,
+                'assigned_by_name': display_name(h.assigned_by) if h.assigned_by else None,
+                'assigned_at': iso(h.assigned_at),
+                'reason': h.reason,
+            }
+            for h in lead.assignment_history.select_related('previous_caller', 'new_caller', 'assigned_by').order_by('-assigned_at')
+        ]
+
+        return Response({
+            'lead': {
+                'id': lead.pk,
+                'name': lead.name,
+                'phone': lead.phone,
+                'email': lead.email,
+                'location': lead.location,
+                'college': lead.college,
+                'neet_status': lead.neet_status,
+                'pcb_percentage': str(lead.pcb_percentage) if lead.pcb_percentage is not None else None,
+                'preferred_intake': lead.preferred_intake,
+                'preferred_course': lead.preferred_course,
+                'preferred_course_custom': lead.preferred_course_custom,
+                'course_label': lead.preferred_course_label,
+                'status': lead.status,
+                'status_display': lead.get_status_display(),
+                'source': lead.source,
+                'campaign': lead.campaign,
+                'service': lead.service,
+                'notes': lead.notes,
+                'assigned_caller_id': lead.assigned_caller_id,
+                'assigned_caller_name': display_name(lead.assigned_caller) if lead.assigned_caller else None,
+                'assigned_caller_phone': lead.assigned_caller.phone if (lead.assigned_caller and lead.assigned_caller.phone) else '',
+                'assigned_at': iso(lead.assigned_at),
+                'created_at': iso(lead.created_at),
+                'updated_at': iso(lead.updated_at),
+                'assignment_history': history,
+            }
+        })
+
+
+class CounselorCreatedLeadReassignView(APIView):
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated, IsActiveCounselor]
+
+    def post(self, request, id):
+        lead = get_counselor_created_lead_or_404(id, request.user)
+        caller_id = request.data.get('caller_id') or request.data.get('assigned_caller_id')
+        if not caller_id:
+            raise ValidationError({'caller_id': 'Please select an eligible caller.'})
+
+        try:
+            caller = User.objects.get(
+                pk=caller_id,
+                role=User.Role.CALLER,
+                is_active=True,
+                registration_pending=False,
+            )
+        except (User.DoesNotExist, ValueError, TypeError):
+            raise ValidationError({'caller_id': 'Selected caller is invalid, inactive, or not a caller.'})
+
+        if caller.pk == lead.assigned_caller_id:
+            raise ValidationError({'caller_id': 'This lead is already assigned to this caller.'})
+
+        previous_caller = lead.assigned_caller
+        now = timezone.now()
+        with transaction.atomic():
+            lead.assigned_caller = caller
+            lead.assigned_at = now
+            lead.save(update_fields=['assigned_caller', 'assigned_at', 'updated_at'])
+
+            LeadAssignmentHistory.objects.create(
+                lead=lead,
+                previous_caller=previous_caller,
+                new_caller=caller,
+                assigned_by=request.user,
+                reason='Reassigned by counselor',
+            )
+
+            caller_pk = caller.pk
+            lead_pk = lead.pk
+
+            def _on_commit_notify():
+                try:
+                    from apps.accounts.push_notifications import notify_caller_about_assigned_leads
+                    notify_caller_about_assigned_leads(caller_pk, [lead_pk])
+                except Exception as exc:
+                    logger.exception('[Counselor Lead Reassign Push] Failed: %s', exc)
+
+            transaction.on_commit(_on_commit_notify)
+
+        return Response({
+            'success': True,
+            'message': f'Lead reassigned to {display_name(caller)}.',
+            'lead': {
+                'id': lead.pk,
+                'assigned_caller_id': caller.pk,
+                'assigned_caller_name': display_name(caller),
+                'assigned_at': iso(lead.assigned_at),
+            }
+        })
