@@ -650,3 +650,98 @@ def bulk_assign_leads(
         "reassigned_count": reassigned_count,
         "skipped_count": skipped_count,
     }
+
+
+def generate_paste_batch_name(preferred_course, preferred_course_custom=""):
+    from .courses import course_label
+    import zoneinfo
+    kolkata_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+    now = timezone.now().astimezone(kolkata_tz)
+    label = course_label(preferred_course, preferred_course_custom) or "General"
+    base_name = f"{label} - {now.strftime('%Y-%m-%d %H:%M:%S')}"
+    batch_name = base_name
+    counter = 1
+    while LeadImportBatch.objects.filter(filename=batch_name).exists():
+        batch_name = f"{base_name} ({counter})"
+        counter += 1
+    return batch_name
+
+
+def commit_paste_import(pasted_text, imported_by, assigned_caller=None, *, preferred_course=None, preferred_course_custom=""):
+    """
+    Import leads from multiline pasted phone numbers.
+
+    - Duplicates are allowed: repeated numbers within the paste and existing CRM leads
+      are both created as separate leads.
+    - Generates batch name: <Selected Course> - YYYY-MM-DD HH:mm:ss in Asia/Kolkata timezone.
+    - Names are left blank (name="").
+    - Invalid numbers are skipped and returned in the report.
+    """
+    from .courses import course_label, validate_course
+    from .phone_normalization import parse_pasted_phone_numbers
+
+    preferred_course, preferred_course_custom = validate_course(
+        preferred_course, preferred_course_custom, required=True
+    )
+    label = course_label(preferred_course, preferred_course_custom)
+    parsed = parse_pasted_phone_numbers(pasted_text)
+    valid_numbers = parsed["valid_numbers"]
+    invalid_entries = parsed["invalid_entries"]
+
+    if not valid_numbers:
+        return {
+            "success": False,
+            "batch_id": None,
+            "batch_name": None,
+            "course_label": label,
+            "submitted_count": parsed["total_submitted"],
+            "created_count": 0,
+            "skipped_count": len(invalid_entries),
+            "invalid_entries": invalid_entries,
+            "created_ids": [],
+        }
+
+    batch_name = generate_paste_batch_name(preferred_course, preferred_course_custom)
+
+    with transaction.atomic():
+        batch = LeadImportBatch.objects.create(
+            filename=batch_name,
+            imported_by=imported_by,
+            total_rows=len(valid_numbers),
+            created_count=0,
+            duplicate_count=0,
+            warning_count=0,
+        )
+        created_ids = []
+        for phone in valid_numbers:
+            lead = Lead(
+                import_batch=batch,
+                preferred_course=preferred_course,
+                preferred_course_custom=preferred_course_custom,
+                name="",
+                phone=phone,
+                status=Lead.Status.PENDING,
+            )
+            lead._changed_by = imported_by
+            lead.save()
+            created_ids.append(lead.pk)
+
+        if assigned_caller and created_ids:
+            bulk_assign_leads(created_ids, assigned_caller, imported_by,
+                              reason=f"Assigned during paste import {batch.pk}",
+                              notify=False)
+
+        batch.created_count = len(created_ids)
+        batch.save(update_fields=["created_count"])
+
+    return {
+        "success": True,
+        "batch_id": batch.id,
+        "batch_name": batch.filename,
+        "course_label": label,
+        "submitted_count": parsed["total_submitted"],
+        "created_count": len(created_ids),
+        "skipped_count": len(invalid_entries),
+        "invalid_entries": invalid_entries,
+        "created_ids": created_ids,
+    }

@@ -100,8 +100,8 @@ if response.status_code != 200:
     )
 
 
-# Your current API has no pagination, so response.data is a list.
-returned_leads = response.data
+# Handle both paginated object and legacy bare list
+returned_leads = response.data.get("results", response.data) if isinstance(response.data, dict) else response.data
 
 for lead in returned_leads:
     if lead["assigned_caller"] != caller_1.id:

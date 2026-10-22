@@ -74,6 +74,35 @@ class ImportForm(forms.Form):
     preferred_course = forms.ChoiceField(choices=[('', 'Select a course'), *Course.choices], widget=forms.RadioSelect)
     preferred_course_custom = forms.CharField(max_length=150, required=False, label='Enter Course Name (Others)')
 
+    pasted_numbers = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'rows': 8,
+            'placeholder': 'Paste phone numbers here, one per line...\ne.g.\n9392130350\n+91 6304569634\n9179897 73522',
+            'class': 'paste-numbers-textarea',
+        }),
+        required=False,
+        label='Paste phone numbers',
+        help_text='One number per line. Indian mobile numbers (+91, spaces, hyphens, parentheses, optional braces) are normalized to 10 digits.',
+    )
+
+    caller = forms.ModelChoiceField(
+        queryset=User.objects.filter(role=User.Role.CALLER, is_active=True),
+        required=False, label='Assign imported leads to',
+        empty_label='Leave unassigned',
+        help_text='Only newly imported leads are assigned. Existing duplicates keep their current caller.',
+    )
+    file = forms.FileField(widget=forms.ClearableFileInput(attrs={'accept': '.csv,.xlsx'}), required=False)
+
+    def clean_file(self):
+        value = self.cleaned_data.get('file')
+        if not value:
+            return None
+        if not value.name.lower().endswith(('.csv', '.xlsx')):
+            raise forms.ValidationError('Choose a CSV or XLSX file.')
+        if value.size > 5 * 1024 * 1024:
+            raise forms.ValidationError('Choose a file smaller than 5 MB.')
+        return value
+
     def clean(self):
         data = super().clean()
         if data.get('preferred_course'):
@@ -82,23 +111,14 @@ class ImportForm(forms.Form):
                     data['preferred_course'], data.get('preferred_course_custom'))
             except ValueError as exc:
                 self.add_error('preferred_course_custom', str(exc))
+
+        has_file = bool(data.get('file'))
+        has_paste = bool(str(data.get('pasted_numbers') or '').strip())
+        if not has_file and not has_paste:
+            self.add_error(None, 'Please provide either a CSV/XLSX file or paste phone numbers.')
+
         return data
 
-    caller = forms.ModelChoiceField(
-        queryset=User.objects.filter(role=User.Role.CALLER, is_active=True),
-        required=False, label='Assign imported leads to',
-        empty_label='Leave unassigned',
-        help_text='Only newly imported leads are assigned. Existing duplicates keep their current caller.',
-    )
-    file = forms.FileField(widget=forms.ClearableFileInput(attrs={'accept': '.csv,.xlsx'}))
-
-    def clean_file(self):
-        value = self.cleaned_data['file']
-        if not value.name.lower().endswith(('.csv', '.xlsx')):
-            raise forms.ValidationError('Choose a CSV or XLSX file.')
-        if value.size > 5 * 1024 * 1024:
-            raise forms.ValidationError('Choose a file smaller than 5 MB.')
-        return value
 
 
 class QuickLeadForm(forms.Form):

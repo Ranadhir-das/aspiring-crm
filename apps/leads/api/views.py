@@ -1,5 +1,6 @@
 from apps.leads.apostille_leads import restrict_apostille
 from rest_framework import status
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -139,8 +140,21 @@ class BulkLeadAssignmentView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+class LeadPagination(PageNumberPagination):
+    """
+    Standard page-number pagination for the CRM lead list API (/api/v1/leads/).
+    Enforces a default page size of 25 leads, allows clients to customize
+    the page size up to a maximum limit of 100, and ensures database-level
+    SQL LIMIT and OFFSET query execution.
+    """
+    page_size = 25
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
 class LeadListView(ListAPIView):
     serializer_class = LeadSerializer
+    pagination_class = LeadPagination
 
     def get_permissions(self):
         return [CanAccessLeads()]
@@ -151,8 +165,12 @@ class LeadListView(ListAPIView):
         queryset = (
             Lead.objects
             .select_related("assigned_caller")
-            .order_by("-created_at")
+            .order_by("-created_at", "-id")
         )
+
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
 
         if user.role == User.Role.CALLER:
             return restrict_apostille(queryset.filter(assigned_caller=user), user)

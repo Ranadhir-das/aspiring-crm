@@ -20,7 +20,7 @@ from apps.accounts.models import User
 from apps.calls.models import Call
 from apps.followups.models import FollowUp
 from apps.leads.models import Lead, LeadImportBatch
-from apps.leads.services import bulk_assign_leads, commit_import, preview_import
+from apps.leads.services import bulk_assign_leads, commit_import, commit_paste_import, preview_import
 from .forms import ACCESS, CALLING, MANAGEMENT, FollowUpForm, ImportForm, LeadForm, LoginForm
 
 
@@ -375,23 +375,76 @@ def lead_assign(request):
 def lead_import(request):
     form = ImportForm(request.POST or None, request.FILES or None)
     preview = None
+    paste_result = None
     if request.method == 'POST' and form.is_valid():
-        try:
-            upload = form.cleaned_data['file']
-            if request.POST.get('action') == 'import':
-                result = commit_import(upload, request.user, assigned_caller=form.cleaned_data['caller'], preferred_course=form.cleaned_data['preferred_course'], preferred_course_custom=form.cleaned_data['preferred_course_custom'])
+        upload = form.cleaned_data.get('file')
+        pasted_text = form.cleaned_data.get('pasted_numbers')
+        action = request.POST.get('action')
+
+        if action == 'import_paste':
+            if not pasted_text:
+                form.add_error('pasted_numbers', 'Please paste phone numbers to import.')
+            else:
+                result = commit_paste_import(
+                    pasted_text,
+                    request.user,
+                    assigned_caller=form.cleaned_data['caller'],
+                    preferred_course=form.cleaned_data['preferred_course'],
+                    preferred_course_custom=form.cleaned_data['preferred_course_custom'],
+                )
+                paste_result = result
+                if result['success']:
+                    if form.cleaned_data['caller']:
+                        caller_name = form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username
+                        messages.success(request, f"Assigned {result['created_count']} new leads to {caller_name}.")
+                    messages.success(request, f"Created batch \"{result['batch_name']}\" with {result['created_count']} leads." +
+                                     (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else ""))
+                else:
+                    messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
+        elif action in ('preview', 'import'):
+            if not upload:
+                form.add_error('file', 'Please choose a CSV or Excel file.')
+            else:
+                try:
+                    if action == 'import':
+                        result = commit_import(upload, request.user, assigned_caller=form.cleaned_data['caller'], preferred_course=form.cleaned_data['preferred_course'], preferred_course_custom=form.cleaned_data['preferred_course_custom'])
+                        if form.cleaned_data['caller']:
+                            messages.success(request, f"Assigned {result['created_count']} new leads to {form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username}.")
+                        messages.success(request, f"Imported {result['created_count']} leads; {result['duplicate_count']} duplicates and {result['skipped_count']} invalid rows skipped.")
+                        from django.urls import reverse
+                        return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
+                    preview = preview_import(upload)
+                    from apps.leads.courses import course_label
+                    preview['course_label'] = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
+                except (ValueError, UnicodeError, BadZipFile):
+                    form.add_error('file', 'This file could not be read. Check its format and required name/phone columns.')
+        elif pasted_text:
+            result = commit_paste_import(
+                pasted_text,
+                request.user,
+                assigned_caller=form.cleaned_data['caller'],
+                preferred_course=form.cleaned_data['preferred_course'],
+                preferred_course_custom=form.cleaned_data['preferred_course_custom'],
+            )
+            paste_result = result
+            if result['success']:
                 if form.cleaned_data['caller']:
-                    messages.success(request, f"Assigned {result['created_count']} new leads to {form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username}.")
-                messages.success(request, f"Imported {result['created_count']} leads; {result['duplicate_count']} duplicates and {result['skipped_count']} invalid rows skipped.")
-                from django.urls import reverse
-                return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
-            preview = preview_import(upload)
-            from apps.leads.courses import course_label
-            preview['course_label'] = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
-        except (ValueError, UnicodeError, BadZipFile):
-            form.add_error('file', 'This file could not be read. Check its format and required name/phone columns.')
-    return page(request, 'import', 'import', form=form, preview=preview,
+                    caller_name = form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username
+                    messages.success(request, f"Assigned {result['created_count']} new leads to {caller_name}.")
+                messages.success(request, f"Created batch \"{result['batch_name']}\" with {result['created_count']} leads." +
+                                 (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else ""))
+            else:
+                messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
+        elif upload:
+            try:
+                preview = preview_import(upload)
+                from apps.leads.courses import course_label
+                preview['course_label'] = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
+            except (ValueError, UnicodeError, BadZipFile):
+                form.add_error('file', 'This file could not be read. Check its format and required name/phone columns.')
+    return page(request, 'import', 'import', form=form, preview=preview, paste_result=paste_result,
                 batches=LeadImportBatch.objects.select_related('imported_by').annotate(remaining=Count('leads', filter=Q(leads__assigned_caller__isnull=True)), allocated=Count('leads', filter=Q(leads__assigned_caller__isnull=False))).order_by('-created_at')[:10])
+
 
 
 @workspace()

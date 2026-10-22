@@ -361,6 +361,31 @@ class CounselorCallerListView(APIView):
         })
 
 
+def counselor_created_leads_qs(user):
+    return (
+        Lead.objects
+        .filter(
+            assignment_history__previous_caller__isnull=True,
+            assignment_history__assigned_by=user,
+            assignment_history__reason__in=['Created and assigned by counselor', 'Created by counselor'],
+        )
+        .distinct()
+    )
+
+
+def can_counselor_view_lead(user, lead):
+    if not user or not lead or not getattr(user, 'is_authenticated', False):
+        return False
+    return (
+        counselor_created_leads_qs(user).filter(pk=lead.pk).exists()
+        or Lead.objects.filter(
+            pk=lead.pk,
+            counselor_assignments__counselor=user,
+            counselor_assignments__is_active=True,
+        ).exists()
+    )
+
+
 class CounselorLeadCreateView(APIView):
     authentication_classes = [VerifiedSessionAuthentication]
     permission_classes = [IsAuthenticated, IsActiveCounselor]
@@ -381,22 +406,24 @@ class CounselorLeadCreateView(APIView):
         if not existing:
             existing = find_duplicate_lead(normalized_phone)
         if existing:
-            caller_info = f" (assigned to {display_name(existing.assigned_caller)})" if existing.assigned_caller else ""
-            raise ValidationError({'phone': f'A lead with this phone number already exists: {existing.name}{caller_info}.'})
+            can_view = can_counselor_view_lead(request.user, existing)
+            if can_view:
+                caller_info = f" (assigned to {display_name(existing.assigned_caller)})" if existing.assigned_caller else ""
+                raise ValidationError({'phone': f'A lead with this phone number already exists: {existing.name}{caller_info}.'})
+            raise ValidationError({'phone': 'A lead with this phone number already exists.'})
 
         caller_id = data.get('assigned_caller_id') or data.get('caller_id')
-        if not caller_id:
-            raise ValidationError({'assigned_caller_id': 'Please select an eligible caller.'})
-
-        try:
-            caller = User.objects.get(
-                pk=caller_id,
-                role=User.Role.CALLER,
-                is_active=True,
-                registration_pending=False,
-            )
-        except (User.DoesNotExist, ValueError, TypeError):
-            raise ValidationError({'assigned_caller_id': 'Selected caller is invalid, inactive, or not a caller.'})
+        caller = None
+        if caller_id:
+            try:
+                caller = User.objects.get(
+                    pk=caller_id,
+                    role=User.Role.CALLER,
+                    is_active=True,
+                    registration_pending=False,
+                )
+            except (User.DoesNotExist, ValueError, TypeError):
+                raise ValidationError({'assigned_caller_id': 'Selected caller is invalid, inactive, or not a caller.'})
 
         # Student name is optional in counselor form; default to "Student" if blank
         raw_name = str(data.get('name') or '').strip()
@@ -441,7 +468,7 @@ class CounselorLeadCreateView(APIView):
 
         now = timezone.now()
         with transaction.atomic():
-            lead = Lead.objects.create(
+            lead = Lead(
                 name=name,
                 phone=normalized_phone,
                 email=email,
@@ -459,55 +486,268 @@ class CounselorLeadCreateView(APIView):
                 service=service_type.name if service_type else '',
                 status=Lead.Status.PENDING,
                 assigned_caller=caller,
-                assigned_at=now,
+                assigned_at=now if caller else None,
             )
+            lead._changed_by = request.user
+            lead.save()
 
             LeadAssignmentHistory.objects.create(
                 lead=lead,
                 previous_caller=None,
                 new_caller=caller,
                 assigned_by=request.user,
-                reason='Created and assigned by counselor',
+                reason='Created and assigned by counselor' if caller else 'Created by counselor',
             )
 
-            caller_pk = caller.pk
-            lead_pk = lead.pk
+            if caller:
+                caller_pk = caller.pk
+                lead_pk = lead.pk
 
-            def _on_commit_notify():
-                try:
-                    from apps.accounts.push_notifications import notify_caller_about_assigned_leads
-                    notify_caller_about_assigned_leads(caller_pk, [lead_pk])
-                except Exception as exc:
-                    logger.exception('[Counselor Lead Creation Push] Failed: %s', exc)
+                def _on_commit_notify():
+                    try:
+                        from apps.accounts.push_notifications import notify_caller_about_assigned_leads
+                        notify_caller_about_assigned_leads(caller_pk, [lead_pk])
+                    except Exception as exc:
+                        logger.exception('[Counselor Lead Creation Push] Failed: %s', exc)
 
-            transaction.on_commit(_on_commit_notify)
+                transaction.on_commit(_on_commit_notify)
 
         return Response({
             'success': True,
-            'message': f'Lead created and assigned to {display_name(caller)}.',
+            'message': f'Lead created and assigned to {display_name(caller)}.' if caller else 'Lead created.',
             'lead': {
                 'id': lead.pk,
                 'name': lead.name,
                 'phone': lead.phone,
                 'status': lead.status,
                 'status_display': lead.get_status_display(),
-                'assigned_caller_id': caller.pk,
-                'assigned_caller_name': display_name(caller),
+                'assigned_caller_id': caller.pk if caller else None,
+                'assigned_caller_name': display_name(caller) if caller else None,
                 'created_at': lead.created_at.isoformat(),
             }
         }, status=status.HTTP_201_CREATED)
 
 
-def counselor_created_leads_qs(user):
-    return (
-        Lead.objects
-        .filter(
-            assignment_history__previous_caller__isnull=True,
-            assignment_history__assigned_by=user,
-            assignment_history__reason='Created and assigned by counselor',
-        )
-        .distinct()
-    )
+class CounselorCheckDuplicatesView(APIView):
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated, IsActiveCounselor]
+
+    def post(self, request):
+        phones = request.data.get('phones') or []
+        if isinstance(phones, str):
+            phones = [phones]
+        if not isinstance(phones, list):
+            raise ValidationError({'phones': 'Must be a list of phone numbers.'})
+
+        results = {}
+        for raw_phone in phones:
+            phone_str = str(raw_phone).strip()
+            normalized = normalize_phone(phone_str)
+            if not normalized:
+                results[phone_str] = {'exists': False, 'valid': False}
+                continue
+
+            last10 = normalized[-10:] if len(normalized) >= 10 else normalized
+            existing = (
+                Lead.objects
+                .filter(Q(phone=normalized) | Q(phone=last10) | Q(phone='91' + last10) | Q(phone='0' + last10))
+                .select_related('assigned_caller')
+                .first()
+            )
+            if not existing:
+                existing = find_duplicate_lead(normalized)
+
+            if existing:
+                can_view = can_counselor_view_lead(request.user, existing)
+                results[phone_str] = {
+                    'exists': True,
+                    'valid': True,
+                    'lead_id': existing.pk if can_view else None,
+                    'name': existing.name if can_view else None,
+                    'assigned_caller_name': display_name(existing.assigned_caller) if (can_view and existing.assigned_caller) else None,
+                    'can_view': can_view,
+                }
+            else:
+                results[phone_str] = {
+                    'exists': False,
+                    'valid': True,
+                }
+
+        return Response({'results': results})
+
+
+class CounselorLeadBatchCreateView(APIView):
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated, IsActiveCounselor]
+
+    def post(self, request):
+        data = request.data
+        leads_input = data.get('leads') or []
+        if not isinstance(leads_input, list) or not leads_input:
+            raise ValidationError({'leads': 'A non-empty list of leads is required.'})
+
+        caller_id = data.get('assigned_caller_id') or data.get('caller_id')
+        caller = None
+        if caller_id:
+            try:
+                caller = User.objects.get(
+                    pk=caller_id,
+                    role=User.Role.CALLER,
+                    is_active=True,
+                    registration_pending=False,
+                )
+            except (User.DoesNotExist, ValueError, TypeError):
+                raise ValidationError({'assigned_caller_id': 'Selected caller is invalid, inactive, or not a caller.'})
+
+        common_course = data.get('preferred_course')
+        common_custom_course = str(data.get('preferred_course_custom') or '').strip()
+
+        results = []
+        created_lead_ids = []
+        now = timezone.now()
+
+        with transaction.atomic():
+            for item in leads_input:
+                if not isinstance(item, dict):
+                    results.append({
+                        'phone': '',
+                        'success': False,
+                        'error': 'Each lead must be an object.',
+                    })
+                    continue
+                raw_phone = str(item.get('phone') or '').strip()
+                normalized_phone = normalize_phone(raw_phone)
+                if not normalized_phone or len(normalized_phone) < 10:
+                    results.append({
+                        'phone': raw_phone,
+                        'success': False,
+                        'error': 'Invalid phone number (must be at least 10 digits).',
+                    })
+                    continue
+
+                last10 = normalized_phone[-10:] if len(normalized_phone) >= 10 else normalized_phone
+                existing = (
+                    Lead.objects
+                    .filter(Q(phone=normalized_phone) | Q(phone=last10) | Q(phone='91' + last10) | Q(phone='0' + last10))
+                    .first()
+                )
+                if not existing:
+                    existing = find_duplicate_lead(normalized_phone)
+                if existing:
+                    can_view = can_counselor_view_lead(request.user, existing)
+                    if can_view:
+                        caller_info = f" (assigned to {display_name(existing.assigned_caller)})" if existing.assigned_caller else ""
+                        error_msg = f'A lead with this phone number already exists: {existing.name}{caller_info}.'
+                    else:
+                        error_msg = 'A lead with this phone number already exists.'
+
+                    results.append({
+                        'phone': raw_phone,
+                        'normalized_phone': normalized_phone,
+                        'success': False,
+                        'error': error_msg,
+                    })
+                    continue
+
+                raw_name = str(item.get('name') or '').strip()
+                name = raw_name if raw_name else 'Student'
+
+                course = item.get('preferred_course') or common_course or None
+                custom_course = str(item.get('preferred_course_custom') or common_custom_course or '').strip()
+                if course:
+                    from apps.leads.courses import validate_course
+                    try:
+                        course, custom_course = validate_course(course, custom_course, required=False)
+                    except ValueError as err:
+                        results.append({
+                            'phone': raw_phone,
+                            'normalized_phone': normalized_phone,
+                            'success': False,
+                            'error': f'Course validation error: {err}',
+                        })
+                        continue
+
+                notes = str(item.get('notes') or '').strip()
+                source = str(item.get('source') or data.get('source') or 'Quick Capture').strip()
+
+                lead_caller = caller
+                if item.get('assigned_caller_id'):
+                    try:
+                        lead_caller = User.objects.get(
+                            pk=item['assigned_caller_id'],
+                            role=User.Role.CALLER,
+                            is_active=True,
+                            registration_pending=False,
+                        )
+                    except (User.DoesNotExist, ValueError, TypeError):
+                        results.append({
+                            'phone': raw_phone,
+                            'normalized_phone': normalized_phone,
+                            'success': False,
+                            'error': 'Selected caller is invalid, inactive, or not a caller.',
+                        })
+                        continue
+
+                lead = Lead(
+                    name=name,
+                    phone=normalized_phone,
+                    preferred_course=course,
+                    preferred_course_custom=custom_course,
+                    notes=notes,
+                    source=source,
+                    status=Lead.Status.PENDING,
+                    assigned_caller=lead_caller,
+                    assigned_at=now if lead_caller else None,
+                )
+                lead._changed_by = request.user
+                lead.save()
+
+                LeadAssignmentHistory.objects.create(
+                    lead=lead,
+                    previous_caller=None,
+                    new_caller=lead_caller,
+                    assigned_by=request.user,
+                    reason='Created and assigned by counselor' if lead_caller else 'Created by counselor',
+                )
+
+                created_lead_ids.append(lead.pk)
+                results.append({
+                    'phone': raw_phone,
+                    'normalized_phone': normalized_phone,
+                    'success': True,
+                    'lead': {
+                        'id': lead.pk,
+                        'name': lead.name,
+                        'phone': lead.phone,
+                        'status': lead.status,
+                        'status_display': lead.get_status_display(),
+                        'assigned_caller_id': lead_caller.pk if lead_caller else None,
+                        'assigned_caller_name': display_name(lead_caller) if lead_caller else None,
+                        'created_at': lead.created_at.isoformat(),
+                    }
+                })
+
+            if caller and created_lead_ids:
+                caller_pk = caller.pk
+                def _on_commit_notify():
+                    try:
+                        from apps.accounts.push_notifications import notify_caller_about_assigned_leads
+                        notify_caller_about_assigned_leads(caller_pk, created_lead_ids)
+                    except Exception as exc:
+                        logger.exception('[Counselor Batch Push] Failed: %s', exc)
+
+                transaction.on_commit(_on_commit_notify)
+
+        created_count = sum(1 for r in results if r['success'])
+        failed_count = len(results) - created_count
+
+        return Response({
+            'success': created_count > 0,
+            'total': len(results),
+            'created_count': created_count,
+            'failed_count': failed_count,
+            'results': results,
+        }, status=status.HTTP_201_CREATED if created_count > 0 else status.HTTP_400_BAD_REQUEST)
 
 
 def get_counselor_created_lead_or_404(lead_id, user):

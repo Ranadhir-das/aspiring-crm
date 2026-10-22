@@ -1,8 +1,260 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% load web_tags static %}{% block title %}Import leads{% endblock %}{% block breadcrumb %}Import leads{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'web/course-intake.css' %}"><script src="{% static 'web/course-intake.js' %}" defer></script>{% if can_manage %}<div class="actions spaced"><a class="button" href="{% url 'web:lead-quick-entry' %}">Quick name / phone entry</a><a class="button" href="{% url 'web:lead-distribute' %}">Assign by quantity</a></div>{% endif %}<div class="page-heading"><div><div class="eyebrow">BRING YOUR NEXT OPPORTUNITIES IN</div><h1>Import leads<span class="accent">.</span></h1><p>Upload a CSV or Excel workbook. Existing phone numbers are skipped.</p></div></div><div class="dashboard-grid"><section class="panel form-panel"><h2>Build your next lead batch</h2><p class="muted">CSV or XLSX · Up to 5 MB</p><form method="post" enctype="multipart/form-data" class="course-import-form">{% csrf_token %}{{ form.non_field_errors }}
-<fieldset class="course-selector"><legend>1. Preferred course <span class="accent">*</span></legend><p class="muted">Applied to every new lead in this batch. Existing duplicates stay unchanged.</p>
-{{ form.preferred_course.errors }}<div class="course-chips">{% for choice in form.preferred_course %}{% if choice.data.value %}<label class="course-chip">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>{% endif %}{% endfor %}</div></fieldset>
-<div class="field custom-course-field"><label for="{{ form.preferred_course_custom.id_for_label }}">Enter Course Name</label>{{ form.preferred_course_custom }}{{ form.preferred_course_custom.errors }}</div>
-<div class="course-file"><label for="{{ form.file.id_for_label }}">2. Choose your CSV or Excel file</label>{{ form.file }}{{ form.file.errors }}<small class="muted">CSV / XLSX, up to 5 MB. Preview before importing.</small></div>
-<div class="field"><label for="{{ form.caller.id_for_label }}">3. Assignment (optional)</label>{{ form.caller }}{{ form.caller.errors }}<small>{{ form.caller.help_text }}</small></div><div class="form-actions"><button name="action" value="preview" class="button">Preview file</button><button name="action" value="import" class="button primary">Import and continue to allocation ↗</button></div><p class="muted">After a preview, select the file again to import it. Invalid rows and duplicates are skipped.</p></form></section><section class="panel form-panel"><span class="eyebrow">FILE CHECKLIST</span><h2>A little preparation goes a long way.</h2><p class="muted">Accepted column headers: Name / Mobile, or name / phone. Required columns:</p><div class="actions"><code>name</code><code>phone</code></div><p class="muted">Optional columns: email, location, college, neet_status, pcb_percentage, preferred_intake, source, campaign, notes.</p><p class="muted">New leads start as Pending. Leave the caller blank to split this batch between callers on the next screen. Selecting a caller here assigns the entire new batch immediately.</p></section></div>
-{% if preview %}<section class="panel spaced"><div class="panel-heading"><div><h2>Import preview</h2><span class="badge interested">Preferred course: {{ preview.course_label }}</span><p>{{ preview.total_rows }} rows · {{ preview.duplicate_count|default:0 }} duplicates · {{ preview.error_count|default:0 }} invalid rows</p></div></div>{% if not preview.success %}<div class="notice error">Missing required columns: {{ preview.columns.missing_columns|join:', ' }}</div>{% endif %}<div class="table-scroll"><table><thead><tr><th>Row</th><th>Name</th><th>Phone</th><th>Checks</th></tr></thead><tbody>{% for row in preview.rows|slice:':100' %}<tr><td>{{ row.row_number }}</td><td>{{ row.data.name }}</td><td>{{ row.data.phone }}</td><td>{{ row.errors|join:' ' }} {{ row.warnings|join:' ' }}{% if not row.errors and not row.warnings %}<span class="badge interested">Ready</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div><p class="muted padded">Showing up to 100 preview rows.</p></section>{% endif %}
-<section class="panel spaced"><div class="panel-heading"><h2>Recent imports</h2></div><div class="table-scroll"><table><thead><tr><th>Assign</th><th>File</th><th>Imported by</th><th>Created</th><th>Assigned</th><th>Left to assign</th><th>Duplicates</th><th>Date</th></tr></thead><tbody>{% for batch in batches %}<tr><td><a class="button" href="{% url 'web:lead-distribute' %}?batch={{ batch.pk }}">Assign quantities</a></td><td><a class="text-link" href="{% url 'web:leads' %}?batch={{ batch.pk }}">{{ batch.filename }}</a></td><td>{% employee_link batch.imported_by %}</td><td>{{ batch.created_count }}</td><td>{{ batch.allocated }}</td><td><strong>{{ batch.remaining }}</strong></td><td>{{ batch.duplicate_count }}</td><td>{{ batch.created_at|date:'d M Y, H:i' }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">Your import history will appear here.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% load web_tags static %}
+{% block title %}Import leads{% endblock %}
+{% block breadcrumb %}Import leads{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/course-intake.css' %}">
+<script src="{% static 'web/course-intake.js' %}" defer></script>
+
+{% if can_manage %}
+<div class="actions spaced">
+  <a class="button" href="{% url 'web:lead-quick-entry' %}">Quick name / phone entry</a>
+  <a class="button" href="{% url 'web:lead-distribute' %}">Assign by quantity</a>
+</div>
+{% endif %}
+
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">BRING YOUR NEXT OPPORTUNITIES IN</div>
+    <h1>Import leads<span class="accent">.</span></h1>
+    <p>Upload a CSV/Excel workbook or paste phone numbers directly into a batch.</p>
+  </div>
+</div>
+
+<div class="dashboard-grid">
+  <section class="panel form-panel">
+    <h2>Build your next lead batch</h2>
+    <p class="muted">Paste phone numbers or upload CSV / XLSX</p>
+
+    <form method="post" enctype="multipart/form-data" class="course-import-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+
+      <fieldset class="course-selector">
+        <legend>1. Preferred course <span class="accent">*</span></legend>
+        <p class="muted">Applied to every new lead in this batch. Existing duplicates stay unchanged.</p>
+        {{ form.preferred_course.errors }}
+        <div class="course-chips">
+          {% for choice in form.preferred_course %}
+            {% if choice.data.value %}
+              <label class="course-chip">
+                {{ choice.tag }}
+                <span>{{ choice.choice_label }}</span>
+              </label>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </fieldset>
+
+      <div class="field custom-course-field">
+        <label for="{{ form.preferred_course_custom.id_for_label }}">Enter Course Name</label>
+        {{ form.preferred_course_custom }}
+        {{ form.preferred_course_custom.errors }}
+      </div>
+
+      <fieldset class="course-selector">
+        <legend>2. Lead data source <span class="accent">*</span></legend>
+        <p class="muted">Paste phone numbers directly or choose a spreadsheet file.</p>
+
+        <div class="paste-numbers-section">
+          <label for="{{ form.pasted_numbers.id_for_label }}"><strong>Option A: Paste phone numbers</strong></label>
+          <p class="muted" style="margin:4px 0 8px;">Paste one number per line. Indian mobile numbers (+91, spaces, hyphens, optional braces) are normalized to 10 digits. Duplicates are allowed.</p>
+          {{ form.pasted_numbers }}
+          {{ form.pasted_numbers.errors }}
+        </div>
+
+        <div class="divider-or"><span>OR</span></div>
+
+        <div class="course-file">
+          <label for="{{ form.file.id_for_label }}"><strong>Option B: Choose your CSV or Excel file</strong></label>
+          {{ form.file }}
+          {{ form.file.errors }}
+          <small class="muted">CSV / XLSX, up to 5 MB. Preview before importing.</small>
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label for="{{ form.caller.id_for_label }}">3. Assignment (optional)</label>
+        {{ form.caller }}
+        {{ form.caller.errors }}
+        <small>{{ form.caller.help_text }}</small>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" name="action" value="import_paste" class="button primary">Import Pasted Numbers ↗</button>
+        <button type="submit" name="action" value="preview" class="button">Preview file</button>
+        <button type="submit" name="action" value="import" class="button">Import file ↗</button>
+      </div>
+
+      <p class="muted">For pasted numbers, leads are created immediately with blank names. For files, you can preview first. Duplicates in files are skipped.</p>
+    </form>
+  </section>
+
+  <section class="panel form-panel">
+    <span class="eyebrow">BATCH GUIDELINES</span>
+    <h2>Fast and reliable intake.</h2>
+    <div style="margin-bottom:16px;">
+      <strong>Paste Phone Numbers:</strong>
+      <p class="muted" style="margin-top:4px;">Paste 10-digit Indian numbers (e.g. <code>9392130350</code>, <code>+91 6304569634</code>, <code>9179897 73522</code>, <code>63041 53694</code>). Braces <code>{ ... }</code> or empty lines are ignored. Duplicates are accepted as separate leads with blank names.</p>
+    </div>
+    <div>
+      <strong>Spreadsheet Upload:</strong>
+      <p class="muted" style="margin-top:4px;">Accepted column headers: <code>name</code>, <code>phone</code> (or Name / Mobile). Optional columns: email, location, college, neet_status, pcb_percentage, preferred_intake, source, campaign, notes.</p>
+    </div>
+    <p class="muted" style="margin-top:16px;">New leads start as Pending. Leave caller blank to distribute later, or choose a caller to assign immediately.</p>
+  </section>
+</div>
+
+{% if paste_result %}
+<section class="panel spaced paste-result-panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Paste import result</h2>
+      {% if paste_result.success %}
+        <span class="badge interested">Batch: {{ paste_result.batch_name }}</span>
+      {% else %}
+        <span class="badge failed">Import failed</span>
+      {% endif %}
+      <p>Course: <strong>{{ paste_result.course_label }}</strong> · {{ paste_result.submitted_count }} submitted · {{ paste_result.created_count }} created · {{ paste_result.skipped_count }} skipped</p>
+    </div>
+    {% if paste_result.success and paste_result.created_count > 0 %}
+      <div class="actions">
+        <a class="button primary" href="{% url 'web:lead-distribute' %}?batch={{ paste_result.batch_id }}">Assign / Distribute batch ↗</a>
+        <a class="button" href="{% url 'web:leads' %}?batch={{ paste_result.batch_id }}">View leads</a>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="paste-metrics-grid">
+    <div class="paste-metric-card">
+      <div class="metric-label">Course</div>
+      <div class="metric-value">{{ paste_result.course_label }}</div>
+    </div>
+    <div class="paste-metric-card">
+      <div class="metric-label">Submitted</div>
+      <div class="metric-value">{{ paste_result.submitted_count }}</div>
+    </div>
+    <div class="paste-metric-card">
+      <div class="metric-label">Leads Created</div>
+      <div class="metric-value text-success">{{ paste_result.created_count }}</div>
+    </div>
+    <div class="paste-metric-card">
+      <div class="metric-label">Skipped (Invalid)</div>
+      <div class="metric-value {% if paste_result.skipped_count > 0 %}text-danger{% endif %}">{{ paste_result.skipped_count }}</div>
+    </div>
+  </div>
+
+  {% if paste_result.invalid_entries %}
+    <div class="panel-heading" style="margin-top:20px;">
+      <div>
+        <h3>Skipped Entries ({{ paste_result.skipped_count }})</h3>
+        <p class="muted">These entries could not be converted to a valid 10-digit Indian mobile number:</p>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:60px;">#</th>
+            <th>Original Input</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in paste_result.invalid_entries %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><code>{{ item.entry }}</code></td>
+            <td><span class="badge failed">{{ item.reason }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if preview %}
+<section class="panel spaced">
+  <div class="panel-heading">
+    <div>
+      <h2>Import preview</h2>
+      <span class="badge interested">Preferred course: {{ preview.course_label }}</span>
+      <p>{{ preview.total_rows }} rows · {{ preview.duplicate_count|default:0 }} duplicates · {{ preview.error_count|default:0 }} invalid rows</p>
+    </div>
+  </div>
+  {% if not preview.success %}
+    <div class="notice error">Missing required columns: {{ preview.columns.missing_columns|join:', ' }}</div>
+  {% endif %}
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Row</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Checks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in preview.rows|slice:':100' %}
+        <tr>
+          <td>{{ row.row_number }}</td>
+          <td>{{ row.data.name }}</td>
+          <td>{{ row.data.phone }}</td>
+          <td>
+            {{ row.errors|join:' ' }} {{ row.warnings|join:' ' }}
+            {% if not row.errors and not row.warnings %}
+              <span class="badge interested">Ready</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="muted padded">Showing up to 100 preview rows.</p>
+</section>
+{% endif %}
+
+<section class="panel spaced">
+  <div class="panel-heading">
+    <h2>Recent imports</h2>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Assign</th>
+          <th>File / Batch</th>
+          <th>Imported by</th>
+          <th>Created</th>
+          <th>Assigned</th>
+          <th>Left to assign</th>
+          <th>Duplicates</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for batch in batches %}
+        <tr>
+          <td><a class="button" href="{% url 'web:lead-distribute' %}?batch={{ batch.pk }}">Assign quantities</a></td>
+          <td><a class="text-link" href="{% url 'web:leads' %}?batch={{ batch.pk }}">{{ batch.filename }}</a></td>
+          <td>{% employee_link batch.imported_by %}</td>
+          <td>{{ batch.created_count }}</td>
+          <td>{{ batch.allocated }}</td>
+          <td><strong>{{ batch.remaining }}</strong></td>
+          <td>{{ batch.duplicate_count }}</td>
+          <td>{{ batch.created_at|date:'d M Y, H:i' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="empty">Your import history will appear here.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
