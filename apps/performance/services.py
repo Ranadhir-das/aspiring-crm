@@ -5,6 +5,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Avg, Count, Q, Sum
 from django.utils import timezone
+from apps.accounts.capabilities import eligible_callers_qs, is_caller_capable
 from apps.accounts.models import User
 from apps.calls.models import Call
 from apps.followups.models import FollowUp
@@ -81,7 +82,7 @@ def reconcile_daily_calls(caller_id, target_date=None):
     if not caller_id:
         return None
     caller = User.objects.select_for_update().filter(pk=caller_id).first()
-    if not caller or caller.role != 'CALLER':
+    if not caller or not is_caller_capable(caller):
         return None
 
     if target_date is None:
@@ -150,7 +151,7 @@ def score_call(call_id):
     2. Course-qualified interested outcome
     """
     call = Call.objects.select_for_update().get(pk=call_id)
-    if not call.caller_id or call.caller.role != 'CALLER':
+    if not call.caller_id or not is_caller_capable(call.caller):
         return
 
     # 1. Reconcile daily calls bonus for the call's calendar day in project timezone
@@ -191,7 +192,7 @@ def score_counselling(counselling_id):
     Idempotent.
     """
     counselling = Counselling.objects.select_related('lead', 'caller').filter(pk=counselling_id).first()
-    if not counselling or not counselling.caller_id or counselling.caller.role != 'CALLER':
+    if not counselling or not counselling.caller_id or not is_caller_capable(counselling.caller):
         return None
     if counselling.counselling_type not in {'WALK_IN', 'GOOGLE_MEET'}:
         return None  # Legacy Online / Phone does not establish a direct video session.
@@ -220,7 +221,7 @@ def score_admission(admission_id):
     if not admission:
         return None
     caller = admission.caller or (admission.lead.assigned_caller if admission.lead else None)
-    if not caller or caller.role != 'CALLER':
+    if not caller or not is_caller_capable(caller):
         return None
     key = f'admission:{admission.pk}'
     student_name = admission.lead.name if admission.lead else (admission.walk_in_name or "student")
@@ -241,7 +242,7 @@ def score_followup(followup_id, now=None):
     """Reward first on-time completion; penalize >24h pending once per lead."""
     item = FollowUp.objects.select_for_update().get(pk=followup_id)
     now = now or timezone.now()
-    if not item.caller_id or item.caller.role != 'CALLER':
+    if not item.caller_id or not is_caller_capable(item.caller):
         return
     completed_at = item.completed_at or item.updated_at
     if item.status == 'COMPLETED' and completed_at <= item.scheduled_at:
@@ -263,7 +264,7 @@ def score_followup(followup_id, now=None):
 def validate_manager(actor, caller, reason):
     if not can_manage(actor):
         raise PermissionDenied('Only administrators can manage points.')
-    if caller.role != 'CALLER':
+    if not is_caller_capable(caller):
         raise ValidationError('Select a caller account.')
     if not str(reason).strip():
         raise ValidationError('A reason is required.')
@@ -385,8 +386,8 @@ def get_eligible_peers(user):
     Callers review other active callers; employees review other active employees/callers.
     Excludes the user themselves.
     """
-    if user.role == User.Role.CALLER:
-        qs = User.objects.filter(is_active=True, role=User.Role.CALLER)
+    if is_caller_capable(user):
+        qs = eligible_callers_qs()
     else:
         qs = User.objects.filter(is_active=True, role__in=[User.Role.CALLER, User.Role.EMPLOYEE])
     return qs.exclude(pk=user.pk).order_by('first_name', 'last_name', 'username')

@@ -18,7 +18,7 @@ class LeadCounselorAssignment(models.Model):
     lead = models.ForeignKey('leads.Lead', on_delete=models.CASCADE, related_name='counselor_assignments')
     counselor = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='counselor_assignments',
-        limit_choices_to={'role': 'COUNSELOR'},
+        limit_choices_to=models.Q(role='COUNSELOR') | models.Q(can_act_as_counselor=True),
     )
     forwarded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,

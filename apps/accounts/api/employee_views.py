@@ -199,3 +199,45 @@ class PhotoChallengeView(EmployeeView):
 
 class PhotoAttendanceView(PhotoChallengeView):
     pass
+
+
+class AdminEmployeeCapabilityView(APIView):
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def check_permissions(self, request):
+        super().check_permissions(request)
+        if request.user.role not in {'ADMIN', 'SUPER_ADMIN'}:
+            self.permission_denied(request, message='Administrative access required.')
+
+    @transaction.atomic
+    def post(self, request, pk):
+        from apps.accounts.api.views import user_data
+        target = get_object_or_404(User.objects.select_for_update(), pk=pk)
+        if target.pk == request.user.pk:
+            return Response({'detail': 'You cannot grant or revoke your own capabilities.'}, status=403)
+        if target.role in {'ADMIN', 'SUPER_ADMIN'} and request.user.role != 'SUPER_ADMIN':
+            return Response({'detail': 'Only Super Admin can manage administrator capabilities.'}, status=403)
+
+        updated_fields = []
+        if 'can_act_as_caller' in request.data:
+            target.can_act_as_caller = bool(request.data['can_act_as_caller'])
+            updated_fields.append('can_act_as_caller')
+        if 'can_act_as_counselor' in request.data:
+            target.can_act_as_counselor = bool(request.data['can_act_as_counselor'])
+            updated_fields.append('can_act_as_counselor')
+
+        if not updated_fields:
+            return Response({'detail': 'Provide can_act_as_caller and/or can_act_as_counselor.'}, status=400)
+
+        target.save(update_fields=updated_fields + ['updated_at'])
+        AuditEvent.objects.create(
+            actor=request.user,
+            category='EMPLOYEE',
+            description=(f'Updated capabilities for employee #{target.pk} ({target.username}): '
+                         f'caller={target.can_act_as_caller}, counselor={target.can_act_as_counselor}')
+        )
+        return Response({
+            'detail': 'Employee capabilities updated.',
+            'user': user_data(target),
+        })

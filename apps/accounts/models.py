@@ -64,6 +64,18 @@ class User(AbstractUser):
         default=Role.CALLER,
     )
 
+    can_act_as_caller = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Approved by administrator to perform Caller workflows in addition to primary role.",
+    )
+
+    can_act_as_counselor = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Approved by administrator to perform Counselor workflows in addition to primary role.",
+    )
+
     manager = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,
@@ -90,6 +102,21 @@ class User(AbstractUser):
     updated_at = models.DateTimeField(
         auto_now=True,
     )
+
+    @property
+    def is_caller_capable(self):
+        from .capabilities import is_caller_capable
+        return is_caller_capable(self)
+
+    @property
+    def is_counselor_capable(self):
+        from .capabilities import is_counselor_capable
+        return is_counselor_capable(self)
+
+    @property
+    def is_dual_role(self):
+        from .capabilities import is_dual_role
+        return is_dual_role(self)
 
     def __str__(self):
         name = self.get_full_name()

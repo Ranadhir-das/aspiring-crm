@@ -70,8 +70,21 @@ class AssignmentPushNotificationTests(TestCase):
         self.assertIn('2 new leads', kwargs['body'])
         self.assertEqual(kwargs['data']['type'], 'LEAD_ASSIGNED')
         self.assertEqual(kwargs['data']['count'], 2)
-        self.assertEqual(Notification.objects.count(), 2)
-        self.assertEqual(Notification.objects.get(pk=kwargs['data']['notification_id']).data['lead_id'], kwargs['data']['lead_id'])
+        self.assertEqual(kwargs['data']['tab'], 'assigned')
+        self.assertEqual(Notification.objects.count(), 1)
+        summary = Notification.objects.get()
+        self.assertEqual(summary.pk, kwargs['data']['notification_id'])
+        self.assertEqual(summary.recipient, self.caller)
+        self.assertEqual(summary.title, 'New Leads Assigned')
+        self.assertIn('2 new leads assigned to you', summary.body)
+        self.assertEqual(summary.data['count'], 2)
+        self.assertEqual(summary.data['tab'], 'assigned')
+        self.assertFalse(summary.is_read)
+
+        # Idempotent retry does not create duplicate in-app notification rows or duplicate push sends
+        notify_caller_about_assigned_leads(self.caller, [self.lead1.pk, self.lead2.pk])
+        self.assertEqual(Notification.objects.count(), 1)
+        self.assertEqual(mock_send.call_count, 1)
 
     @patch('apps.accounts.push_notifications.send_expo_push_notification')
     def test_reassignment_to_same_caller_does_not_send_notification(self, mock_send):

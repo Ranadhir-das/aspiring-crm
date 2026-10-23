@@ -254,6 +254,7 @@ def get_existing_phone_map():
 def check_duplicate_from_map(phone, phone_map):
     """
     Check for a duplicate using an in-memory phone map.
+    Matches exact normalized phone as well as standard Indian prefixes (91, 0).
     """
 
     normalized = normalize_phone(phone)
@@ -261,7 +262,17 @@ def check_duplicate_from_map(phone, phone_map):
     if not normalized:
         return None
 
-    return phone_map.get(normalized)
+    if normalized in phone_map:
+        return phone_map[normalized]
+
+    if len(normalized) == 10:
+        return phone_map.get(f"91{normalized}") or phone_map.get(f"0{normalized}")
+    elif len(normalized) == 12 and normalized.startswith("91"):
+        return phone_map.get(normalized[2:])
+    elif len(normalized) == 11 and normalized.startswith("0"):
+        return phone_map.get(normalized[1:])
+
+    return None
 
 
 def prepare_pcb_percentage(value):
@@ -507,10 +518,15 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
             # same import operation.
             existing_phone_map[normalized_phone] = lead
 
+        if assigned_caller:
+            User = get_user_model()
+            if not isinstance(assigned_caller, User) or assigned_caller.role != User.Role.CALLER or not assigned_caller.is_active:
+                raise ValueError("Selected user is not an active caller.")
+
         if assigned_caller and created_ids:
             bulk_assign_leads(created_ids, assigned_caller, imported_by,
                               reason=f'Assigned during import {batch.pk}',
-                              notify=False)
+                              notify=True)
 
         batch.created_count = created_count
         batch.duplicate_count = duplicate_count
@@ -667,18 +683,53 @@ def generate_paste_batch_name(preferred_course, preferred_course_custom=""):
     return batch_name
 
 
-def commit_paste_import(pasted_text, imported_by, assigned_caller=None, *, preferred_course=None, preferred_course_custom=""):
+def commit_paste_import(
+    pasted_text,
+    imported_by,
+    assigned_caller=None,
+    *,
+    preferred_course=None,
+    preferred_course_custom="",
+    idempotency_key=None,
+):
     """
     Import leads from multiline pasted phone numbers.
 
-    - Duplicates are allowed: repeated numbers within the paste and existing CRM leads
-      are both created as separate leads.
+    - Prevents duplicates within the pasted list and against existing CRM leads.
+    - Supports request-level idempotency via idempotency_key.
+    - Validates assigned caller server-side.
     - Generates batch name: <Selected Course> - YYYY-MM-DD HH:mm:ss in Asia/Kolkata timezone.
     - Names are left blank (name="").
-    - Invalid numbers are skipped and returned in the report.
+    - Invalid numbers and duplicates are reported in the summary metrics.
     """
+    from django.core.cache import cache
     from .courses import course_label, validate_course
     from .phone_normalization import parse_pasted_phone_numbers
+
+    import hashlib
+    user_id = getattr(imported_by, 'pk', None) or 'anon'
+    cache_key = f"paste_import:idempotency:{user_id}:{idempotency_key}" if idempotency_key else None
+    payload_hash = None
+
+    if idempotency_key:
+        caller_id = getattr(assigned_caller, 'pk', '') if assigned_caller else ''
+        payload_signature = f"{str(pasted_text).strip()}|{preferred_course}|{preferred_course_custom}|{caller_id}"
+        payload_hash = hashlib.sha256(payload_signature.encode('utf-8')).hexdigest()
+
+        cached_entry = cache.get(cache_key)
+        if cached_entry is not None:
+            if isinstance(cached_entry, dict) and 'payload_hash' in cached_entry:
+                if cached_entry['payload_hash'] != payload_hash:
+                    raise ValueError("Idempotency key reused with different request payload.")
+                logger.info("Idempotency hit for user=%s key=%s", user_id, idempotency_key)
+                return cached_entry['result']
+            logger.info("Idempotency hit for user=%s key=%s", user_id, idempotency_key)
+            return cached_entry
+
+    User = get_user_model()
+    if assigned_caller:
+        if not isinstance(assigned_caller, User) or assigned_caller.role != User.Role.CALLER or not assigned_caller.is_active:
+            raise ValueError("Selected user is not an active caller.")
 
     preferred_course, preferred_course_custom = validate_course(
         preferred_course, preferred_course_custom, required=True
@@ -687,6 +738,7 @@ def commit_paste_import(pasted_text, imported_by, assigned_caller=None, *, prefe
     parsed = parse_pasted_phone_numbers(pasted_text)
     valid_numbers = parsed["valid_numbers"]
     invalid_entries = parsed["invalid_entries"]
+    submitted_count = parsed["total_submitted"]
 
     if not valid_numbers:
         return {
@@ -694,12 +746,57 @@ def commit_paste_import(pasted_text, imported_by, assigned_caller=None, *, prefe
             "batch_id": None,
             "batch_name": None,
             "course_label": label,
-            "submitted_count": parsed["total_submitted"],
+            "submitted_count": submitted_count,
             "created_count": 0,
+            "duplicate_count": 0,
             "skipped_count": len(invalid_entries),
+            "invalid_entries": invalid_entries,
+            "duplicate_entries": [],
+            "created_ids": [],
+        }
+
+    existing_phone_map = get_existing_phone_map()
+    seen_in_paste = set()
+    leads_to_create = []
+    duplicate_entries = []
+
+    for phone in valid_numbers:
+        if phone in seen_in_paste:
+            duplicate_entries.append({
+                "phone": phone,
+                "reason": "Duplicate within pasted list",
+            })
+            continue
+
+        existing_lead = check_duplicate_from_map(phone, existing_phone_map)
+        if existing_lead:
+            duplicate_entries.append({
+                "phone": phone,
+                "reason": "Already exists in CRM",
+            })
+            continue
+
+        seen_in_paste.add(phone)
+        leads_to_create.append(phone)
+        existing_phone_map[phone] = True
+
+    if not leads_to_create:
+        result = {
+            "success": True,
+            "batch_id": None,
+            "batch_name": None,
+            "course_label": label,
+            "submitted_count": submitted_count,
+            "created_count": 0,
+            "duplicate_count": len(duplicate_entries),
+            "skipped_count": len(invalid_entries),
+            "duplicate_entries": duplicate_entries,
             "invalid_entries": invalid_entries,
             "created_ids": [],
         }
+        if idempotency_key and cache_key:
+            cache.set(cache_key, {'payload_hash': payload_hash, 'result': result}, timeout=86400)
+        return result
 
     batch_name = generate_paste_batch_name(preferred_course, preferred_course_custom)
 
@@ -707,13 +804,13 @@ def commit_paste_import(pasted_text, imported_by, assigned_caller=None, *, prefe
         batch = LeadImportBatch.objects.create(
             filename=batch_name,
             imported_by=imported_by,
-            total_rows=len(valid_numbers),
+            total_rows=len(leads_to_create),
             created_count=0,
-            duplicate_count=0,
-            warning_count=0,
+            duplicate_count=len(duplicate_entries),
+            warning_count=len(invalid_entries),
         )
         created_ids = []
-        for phone in valid_numbers:
+        for phone in leads_to_create:
             lead = Lead(
                 import_batch=batch,
                 preferred_course=preferred_course,
@@ -727,21 +824,30 @@ def commit_paste_import(pasted_text, imported_by, assigned_caller=None, *, prefe
             created_ids.append(lead.pk)
 
         if assigned_caller and created_ids:
-            bulk_assign_leads(created_ids, assigned_caller, imported_by,
-                              reason=f"Assigned during paste import {batch.pk}",
-                              notify=False)
+            bulk_assign_leads(
+                created_ids,
+                assigned_caller,
+                imported_by,
+                reason=f"Assigned during paste import {batch.pk}",
+                notify=True,
+            )
 
         batch.created_count = len(created_ids)
         batch.save(update_fields=["created_count"])
 
-    return {
+    result = {
         "success": True,
         "batch_id": batch.id,
         "batch_name": batch.filename,
         "course_label": label,
-        "submitted_count": parsed["total_submitted"],
+        "submitted_count": submitted_count,
         "created_count": len(created_ids),
+        "duplicate_count": len(duplicate_entries),
         "skipped_count": len(invalid_entries),
+        "duplicate_entries": duplicate_entries,
         "invalid_entries": invalid_entries,
         "created_ids": created_ids,
     }
+    if idempotency_key and cache_key:
+        cache.set(cache_key, {'payload_hash': payload_hash, 'result': result}, timeout=86400)
+    return result

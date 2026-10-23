@@ -26,8 +26,8 @@ class ImmutableAdmin(admin.ModelAdmin):
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         if db_field.name == 'caller':
-            from apps.accounts.models import User
-            kwargs['queryset'] = User.objects.filter(role='CALLER')
+            from apps.accounts.capabilities import eligible_callers_qs
+            kwargs['queryset'] = eligible_callers_qs()
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     @transaction.atomic

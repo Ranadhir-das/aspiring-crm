@@ -243,9 +243,7 @@ class Lead(models.Model):
         null=True,
         blank=True,
         related_name="assigned_leads",
-        limit_choices_to={
-            "role": "CALLER",
-        },
+        limit_choices_to=models.Q(role="CALLER") | models.Q(can_act_as_caller=True),
     )
 
     assigned_at = models.DateTimeField(

@@ -157,18 +157,63 @@ def notify_caller_about_assigned_leads(caller_or_id, assigned_leads_or_ids):
         if not leads:
             return
 
+        # Idempotency guard to prevent duplicate pushes for identical assignment event
+        lead_ids_sorted = sorted([l.pk for l in leads])
+        from apps.leads.models import LeadAssignmentHistory
+        history_id = LeadAssignmentHistory.objects.filter(
+            lead_id__in=lead_ids_sorted,
+            new_caller=caller,
+        ).order_by('-pk').values_list('pk', flat=True).first() or 0
+
+        event_ts = max(
+            ((l.assigned_at or getattr(l, 'updated_at', None)).isoformat()
+             if (l.assigned_at or getattr(l, 'updated_at', None)) else ''
+             for l in leads),
+            default=''
+        )
+        push_cache_key = f"notify_assigned:{caller.pk}:{','.join(str(i) for i in lead_ids_sorted[:20])}:{len(leads)}:{history_id}:{event_ts}"
+        from django.core.cache import cache
+        if cache.get(push_cache_key):
+            logger.info("[Push Assignment] duplicate notification prevented for caller_id=%s count=%s", caller.pk, len(leads))
+            return
+        cache.set(push_cache_key, True, timeout=300)
+
         from django.db import transaction
         from apps.notifications.services import create_notification
         from apps.notifications.models import Notification
-        # A bulk assignment is N logical events even when its push is a summary.
-        # Commit all inbox records before attempting any external delivery.
-        with transaction.atomic():
-            notifications = [create_notification(
-                recipient=caller, notification_type=Notification.Type.LEAD_ASSIGNED,
-                title='New Lead Assigned',
-                body=f"{(lead.name or '').strip() or 'Student'} has been assigned to you.",
-                data={'type': 'LEAD_ASSIGNED', 'lead_id': lead.pk},
-            ) for lead in leads]
+
+        if len(leads) == 1:
+            lead = leads[0]
+            lead_name = (lead.name or '').strip() or 'Student'
+            title = 'New Lead Assigned'
+            body = f"{lead_name} has been assigned to you."
+            notif_data = {'type': 'LEAD_ASSIGNED', 'lead_id': lead.pk}
+            with transaction.atomic():
+                notifications = [create_notification(
+                    recipient=caller, notification_type=Notification.Type.LEAD_ASSIGNED,
+                    title=title,
+                    body=body,
+                    data=notif_data,
+                )]
+        else:
+            import zoneinfo
+            kolkata_tz = zoneinfo.ZoneInfo("Asia/Kolkata")
+            now_str = timezone.now().astimezone(kolkata_tz).strftime("%d %b %Y, %I:%M %p")
+            title = "New Leads Assigned"
+            body = f"{len(leads)} new leads assigned to you ({now_str})."
+            notif_data = {
+                'type': 'LEAD_ASSIGNED',
+                'lead_id': leads[0].pk,
+                'count': len(leads),
+                'tab': 'assigned',
+            }
+            with transaction.atomic():
+                notifications = [create_notification(
+                    recipient=caller, notification_type=Notification.Type.LEAD_ASSIGNED,
+                    title=title,
+                    body=body,
+                    data=notif_data,
+                )]
 
         for lead in leads:
             print("[Push Assignment] assignment detected")
@@ -189,28 +234,28 @@ def notify_caller_about_assigned_leads(caller_or_id, assigned_leads_or_ids):
 
         if len(leads) == 1:
             lead = leads[0]
-            lead_name = (lead.name or '').strip() or 'Student'
-            title = "New Lead Assigned"
-            body = f"{lead_name} has been assigned to you."
-            data = {
+            push_title = title
+            push_body = body
+            push_data = {
                 "type": "LEAD_ASSIGNED",
                 "lead_id": lead.pk,
                 "notification_id": notifications[0].pk,
             }
         else:
-            title = "New Leads Assigned"
-            body = f"{len(leads)} new leads have been assigned to you"
-            data = {
+            push_title = title
+            push_body = body
+            push_data = {
                 "type": "LEAD_ASSIGNED",
                 "lead_id": leads[0].pk,
                 "notification_id": notifications[0].pk,
                 "count": len(leads),
+                "tab": "assigned",
             }
 
         payload_to_log = {
-            "title": title,
-            "body": body,
-            "data": data,
+            "title": push_title,
+            "body": push_body,
+            "data": push_data,
         }
         print(f"[Push Assignment] payload={json.dumps(payload_to_log)}")
         logger.info("[Push Assignment] payload=%s", json.dumps(payload_to_log))
@@ -222,9 +267,9 @@ def notify_caller_about_assigned_leads(caller_or_id, assigned_leads_or_ids):
 
             result = send_expo_push_notification(
                 token=device.expo_push_token,
-                title=title,
-                body=body,
-                data=data,
+                title=push_title,
+                body=push_body,
+                data=push_data,
                 channel_id='default',
             )
 

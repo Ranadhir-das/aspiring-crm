@@ -74,7 +74,8 @@ def release_stale_website_claims(timeout_minutes=None):
 
 
 def eligible_website_callers(service_id=None):
-    callers = User.objects.filter(is_active=True, role=User.Role.CALLER)
+    from apps.accounts.capabilities import eligible_callers_qs
+    callers = eligible_callers_qs()
     if service_id is not None:
         callers = callers.filter(services__pk=service_id, services__is_active=True)
     return callers.distinct()
@@ -90,7 +91,8 @@ def unclaimed_website_leads():
 
 
 def available_website_leads(caller):
-    if not caller.is_active or caller.role != User.Role.CALLER:
+    from apps.accounts.capabilities import is_caller_capable
+    if not is_caller_capable(caller):
         return Lead.objects.none()
     release_stale_website_claims()
     return unclaimed_website_leads().filter(
@@ -104,7 +106,8 @@ def claim_website_lead(lead_id, caller):
     # foreign-key checks performed by legacy manual assignment while stabilizing
     # the claimant's active/role flags for this transaction.
     caller = get_object_or_404(User.objects.select_for_update(no_key=True), pk=caller.pk)
-    if not caller.is_active or caller.role != User.Role.CALLER:
+    from apps.accounts.capabilities import is_caller_capable
+    if not is_caller_capable(caller):
         raise PermissionDenied('Only active callers can claim website leads.')
     # Same row lock as bulk_assign_leads and CallCreateView: assignment and claim
     # cannot each authorize a different owner from the same unassigned snapshot.

@@ -12,8 +12,10 @@ class CanAccessFollowUps(BasePermission):
     }
 
     def has_permission(self, request, view):
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.role in self.allowed_roles
-        )
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.role in self.allowed_roles:
+            return True
+        from apps.accounts.capabilities import is_caller_capable
+        return is_caller_capable(user)

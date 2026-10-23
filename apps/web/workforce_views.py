@@ -145,7 +145,7 @@ def employee_edit(request, pk):
     form = EmployeeForm(request.POST or None, instance=employee, actor=request.user)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        audit(request, 'EMPLOYEE', f'Updated account {employee.pk}; role {employee.role}; active {employee.is_active}')
+        audit(request, 'EMPLOYEE', f'Updated account {employee.pk}; role {employee.role}; caller_cap={employee.can_act_as_caller}; counselor_cap={employee.can_act_as_counselor}; active {employee.is_active}')
         messages.success(request, 'Employee account updated.')
         return redirect('web:employees')
     return form_page(request, f'Manage {employee_name(employee)}', form, 'employees', subtitle='Activate an approved employee account and assign their department role.')

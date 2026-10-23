@@ -71,10 +71,16 @@ class AssignmentInboxTests(TestCase):
         result = self.assign([l.pk for l in leads] + [skipped.pk, 999999])
         self.assertEqual(result['assigned_count'], 10)
         self.assertEqual(result['skipped_count'], 1)
-        self.assertEqual(Notification.objects.count(), 10)
-        self.assertEqual({n.data['lead_id'] for n in Notification.objects.all()}, {l.pk for l in leads})
+        # Bulk assignment creates one summary notification
+        self.assertEqual(Notification.objects.count(), 1)
+        item = Notification.objects.get()
+        self.assertEqual(item.recipient, self.a)
+        self.assertEqual(item.title, 'New Leads Assigned')
+        self.assertEqual(item.data['count'], 10)
+        self.assertEqual(item.data['tab'], 'assigned')
+        self.assertFalse(item.is_read)
         self.assign([l.pk for l in leads], reassign=True)
-        self.assertEqual(Notification.objects.count(), 10)
+        self.assertEqual(Notification.objects.count(), 1)
 
     def test_invalid_assignment_creates_nothing(self):
         with self.assertRaises(ValueError):
@@ -108,11 +114,15 @@ class AssignmentInboxTests(TestCase):
         PushDevice.objects.create(user=self.a, expo_push_token='ExpoPushToken[before]')
         second = Lead.objects.create(name='Second', phone='9876500033')
         def send(**kwargs):
-            self.assertEqual(Notification.objects.count(), 2)
+            self.assertEqual(Notification.objects.count(), 1)
+            item = Notification.objects.get()
+            self.assertEqual(item.title, 'New Leads Assigned')
+            self.assertEqual(item.data['count'], 2)
+            self.assertEqual(item.data['tab'], 'assigned')
             return {'success': False, 'status': 'timeout'}
         self.sender.side_effect = send
         self.assign([self.lead.pk, second.pk])
-        self.sender.assert_called_once()  # Preserve Phase 10B-A bulk summary push.
+        self.sender.assert_called_once()  # Preserve bulk summary push.
 
 
 class AssignmentCommitTests(TransactionTestCase):

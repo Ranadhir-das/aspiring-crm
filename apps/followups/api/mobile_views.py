@@ -15,8 +15,10 @@ class MobileFollowUpListView(ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        from apps.accounts.capabilities import is_caller_capable
+        caller_capable = is_caller_capable(user)
 
-        if user.role == User.Role.CALLER:
+        if caller_capable:
             from apps.followups.notifications import check_and_notify_due_followups
             check_and_notify_due_followups(caller=user)
 
@@ -32,7 +34,7 @@ class MobileFollowUpListView(ListAPIView):
         if self.request.query_params.get('due') == 'true':
             queryset = queryset.filter(scheduled_at__lte=timezone.now())
 
-        if user.role == User.Role.CALLER:
+        if caller_capable:
             return queryset.filter(caller=user).filter(Q(lead__isnull=True) | Q(lead__assigned_caller=user))
 
         if user.role in {

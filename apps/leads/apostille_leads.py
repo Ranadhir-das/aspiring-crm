@@ -28,7 +28,8 @@ class ApostilleLeadDetails(models.Model):
 
 
 def is_apostille_caller(user):
-    return bool(user and user.is_authenticated and user.is_active and user.role == 'CALLER'
+    from apps.accounts.capabilities import is_caller_capable
+    return bool(user and is_caller_capable(user)
                 and user.services.filter(code='APOSTILLE', is_active=True).exists())
 
 

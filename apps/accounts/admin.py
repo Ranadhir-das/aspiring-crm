@@ -64,6 +64,8 @@ class CustomUserAdmin(UserAdmin):
                     "manager",
                     "phone",
                     "designation",
+                    "can_act_as_caller",
+                    "can_act_as_counselor",
                 )
             },
         ),
@@ -78,6 +80,8 @@ class CustomUserAdmin(UserAdmin):
                     "manager",
                     "phone",
                     "designation",
+                    "can_act_as_caller",
+                    "can_act_as_counselor",
                 )
             },
         ),

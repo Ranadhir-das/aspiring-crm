@@ -19,7 +19,8 @@ FACE_VERIFICATION_EXEMPT_ROLES = {'ADMIN', 'SUPER_ADMIN', 'COUNSELOR'}
 
 
 def needs_onboarding(user):
-    return user.role not in FACE_VERIFICATION_EXEMPT_ROLES and not AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
+    from apps.accounts.capabilities import is_face_verification_exempt
+    return not is_face_verification_exempt(user) and not AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
 
 
 def client_ip(request):
@@ -31,8 +32,16 @@ def client_ip(request):
 
 def user_data(user):
     from apps.leads.apostille_leads import is_apostille_caller
+    from apps.accounts.capabilities import is_caller_capable, is_counselor_capable, is_dual_role
     return {'id': user.pk, 'username': user.username, 'email': user.email,
-            'name': user.get_full_name(), 'role': user.role, 'needs_onboarding': needs_onboarding(user),
+            'name': user.get_full_name(), 'role': user.role,
+            'capabilities': {
+                'caller': is_caller_capable(user),
+                'counselor': is_counselor_capable(user),
+                'dual_role': is_dual_role(user),
+                'admin': user.role in {'ADMIN', 'SUPER_ADMIN'},
+            },
+            'needs_onboarding': needs_onboarding(user),
             'can_manage_apostille_leads': is_apostille_caller(user)}
 
 
@@ -47,15 +56,17 @@ class MobileLoginView(PublicAuthView):
         approved = AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
         if user.role == User.Role.COUNSELOR and user.registration_pending:
             return Response({'status': 'PENDING', 'detail': 'Your account is awaiting administrator approval.'})
+        from apps.accounts.capabilities import is_face_verification_exempt
+        face_exempt = is_face_verification_exempt(user)
         if latest and latest.status == 'PENDING' and (user.registration_pending or
-                (user.role not in FACE_VERIFICATION_EXEMPT_ROLES and not approved)):
+                (not face_exempt and not approved)):
             return Response({'status': 'PENDING', 'detail': 'Your enrollment photo is awaiting administrator approval.'})
         action = 'ENROLL' if user.registration_pending or needs_onboarding(user) else 'IN'
         AttendancePhotoChallenge.objects.filter(employee=user, used=False).update(used=True)
         challenge = AttendancePhotoChallenge.objects.create(employee=user, action=action)
         return Response({'status': 'ENROLLMENT_REQUIRED' if action == 'ENROLL' else 'PHOTO_REQUIRED',
                          'challenge': str(challenge.pk), 'expires_in': 180,
-                         'photo_required': action == 'ENROLL' or user.role not in FACE_VERIFICATION_EXEMPT_ROLES,
+                         'photo_required': action == 'ENROLL' or not face_exempt,
                          'review_note': latest.review_note if latest and latest.status == 'REJECTED' else ''})
 
 
@@ -97,7 +108,9 @@ class MobileVerifyLoginView(PublicAuthView):
             return Response({'detail': 'Enrollment approval is required.'}, status=403)
         verification = None
         attendance = None
-        if user.role not in FACE_VERIFICATION_EXEMPT_ROLES:
+        from apps.accounts.capabilities import is_face_verification_exempt
+        face_exempt = is_face_verification_exempt(user)
+        if not face_exempt:
             reference = AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').order_by('-reviewed_at', '-pk').first()
             if not reference:
                 return Response({'detail': 'An approved enrollment photo is required.'}, status=403)
@@ -111,7 +124,7 @@ class MobileVerifyLoginView(PublicAuthView):
             if LeaveRequest.objects.filter(employee=user, status='APPROVED', start_date__lte=timezone.localdate(), end_date__gte=timezone.localdate()).exists():
                 return Response({'detail': 'You have approved leave today. Contact your administrator before checking in.'}, status=409)
         close_open_sessions(user, now)
-        if verification or user.role in FACE_VERIFICATION_EXEMPT_ROLES:
+        if verification or face_exempt:
             attendance, _ = Attendance.objects.get_or_create(employee=user, date=timezone.localdate(), defaults={'checked_in': now, 'login_remark': login_remark})
             if attendance.checked_in is None:
                 attendance.checked_in = now

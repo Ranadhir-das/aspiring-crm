@@ -38,11 +38,13 @@ def initials(user):
 
 
 def is_counselor(user):
-    return bool(user and user.is_authenticated and user.is_active and user.role == User.Role.COUNSELOR)
+    from apps.accounts.capabilities import is_counselor_capable
+    return is_counselor_capable(user)
 
 
 def eligible_counselors():
-    return User.objects.filter(role=User.Role.COUNSELOR, is_active=True, registration_pending=False)
+    from apps.accounts.capabilities import eligible_counselors_qs
+    return eligible_counselors_qs()
 
 
 def latest_interested_call(lead):
@@ -60,7 +62,8 @@ def active_assignment(lead):
 
 def forward_eligibility(lead, caller):
     """Return (can_forward, reason) for the caller-facing UI."""
-    if not caller or caller.role != User.Role.CALLER:
+    from apps.accounts.capabilities import is_caller_capable
+    if not caller or not is_caller_capable(caller):
         return False, 'Only callers can forward leads to a counselor.'
     if lead.assigned_caller_id != caller.pk:
         return False, 'Only the assigned caller can forward this lead.'
@@ -152,7 +155,8 @@ def forward_lead_to_counselor(*, lead_id, caller, counselor_id):
         lead = Lead.objects.select_for_update().filter(pk=lead_id).first()
         if lead is None:
             raise Http404
-        if caller.role != User.Role.CALLER or lead.assigned_caller_id != caller.pk:
+        from apps.accounts.capabilities import is_caller_capable
+        if not is_caller_capable(caller) or lead.assigned_caller_id != caller.pk:
             # Hide other callers' leads entirely, matching the mobile lead API.
             raise Http404
         allowed, reason = forward_eligibility(lead, caller)
@@ -180,15 +184,27 @@ def forward_lead_to_counselor(*, lead_id, caller, counselor_id):
         )
         if current:
             verb = ActivityLog.Verb.COUNSELOR_REASSIGNED
-            text = (f'Counselor changed from {display_name(current.counselor)} to '
-                    f'{display_name(counselor)} by {display_name(caller)}')
+            if current.counselor_id == caller.pk and counselor.pk == caller.pk:
+                text = f'Reassigned lead to self for counselling by {display_name(caller)}'
+            elif counselor.pk == caller.pk:
+                text = (f'Counselor changed from {display_name(current.counselor)} to self '
+                        f'by {display_name(caller)}')
+            else:
+                text = (f'Counselor changed from {display_name(current.counselor)} to '
+                        f'{display_name(counselor)} by {display_name(caller)}')
         else:
             verb = ActivityLog.Verb.COUNSELOR_FORWARDED
-            text = f'Forwarded to counselor {display_name(counselor)} by {display_name(caller)}'
+            if counselor.pk == caller.pk:
+                text = f'Assigned lead to self for counselling as counselor'
+            else:
+                text = f'Forwarded to counselor {display_name(counselor)} by {display_name(caller)}'
         ActivityLog.objects.create(lead=lead, actor=caller, verb=verb, description=text[:300])
+        notif_body = (f'You assigned {lead.name} to yourself for counselling.'
+                      if counselor.pk == caller.pk
+                      else f'{display_name(caller)} forwarded {lead.name} to you.')
         persist_and_deliver(
             User.objects.filter(pk=counselor.pk), Notification.Type.COUNSELOR_LEAD_FORWARDED,
-            'New lead for counselling', f'{display_name(caller)} forwarded {lead.name} to you.',
+            'New lead for counselling', notif_body,
             {'type': 'COUNSELOR_LEAD_FORWARDED', 'lead_id': lead.pk, 'assignment_id': assignment.pk},
         )
         return assignment, True

@@ -22,6 +22,12 @@ class CallSerializer(serializers.ModelSerializer):
     selected_course_label = serializers.CharField(read_only=True)
     expected_admission_year = serializers.IntegerField(required=False, allow_null=True, min_value=1, max_value=9999)
 
+    create_lead = serializers.BooleanField(required=False, default=False, write_only=True)
+    student_name = serializers.CharField(required=False, allow_blank=True, max_length=200, write_only=True)
+    preferred_course = serializers.CharField(required=False, allow_blank=True, max_length=20, write_only=True)
+    preferred_course_custom = serializers.CharField(required=False, allow_blank=True, max_length=150, write_only=True)
+    lead_source = serializers.CharField(required=False, allow_blank=True, max_length=100, default='Direct Call', write_only=True)
+
     lead_name = serializers.CharField(source="lead.name", read_only=True, default=None)
     lead_phone = serializers.CharField(source="lead.phone", read_only=True, default=None)
     is_external = serializers.SerializerMethodField()
@@ -48,6 +54,7 @@ class CallSerializer(serializers.ModelSerializer):
             "selected_course", "selected_course_custom", "expected_admission_year",
             "course_classification", "selected_course_label", "outcome_points",
             "whatsapp_message", "whatsapp_template",
+            "create_lead", "student_name", "preferred_course", "preferred_course_custom", "lead_source",
             "lead",
             "phone_number",
             "is_external",
@@ -127,21 +134,51 @@ class CallSerializer(serializers.ModelSerializer):
                 }
             )
 
+        create_lead = attrs.get('create_lead', False)
+        student_name = (attrs.get('student_name') or '').strip()
+        if create_lead:
+            if not student_name:
+                raise serializers.ValidationError({'student_name': 'Student name is required to create a new lead.'})
+            attrs['student_name'] = student_name
+
+            course_code = attrs.get('preferred_course') or attrs.get('selected_course')
+            custom_course = attrs.get('preferred_course_custom') or attrs.get('selected_course_custom', '')
+            if not course_code:
+                raise serializers.ValidationError({'preferred_course': 'Select a preferred course to create a new lead.'})
+            try:
+                code, custom = validate_course(course_code, custom_course)
+                attrs['preferred_course'] = code
+                attrs['preferred_course_custom'] = custom
+            except ValueError as exc:
+                raise serializers.ValidationError({'preferred_course': str(exc)})
+
+            if outcome == Call.Outcome.INTERESTED:
+                attrs['selected_course'] = code
+                attrs['selected_course_custom'] = custom
+                if not attrs.get('expected_admission_year'):
+                    raise serializers.ValidationError({'expected_admission_year': 'Enter a valid admission year (1-9999).'})
+            else:
+                attrs.pop('selected_course', None)
+                attrs.pop('selected_course_custom', None)
+                attrs.pop('expected_admission_year', None)
+
         if outcome in BLOCKED_CONTACT_OUTCOMES:
             if callback_at:
                 raise serializers.ValidationError({'callback_at': 'Follow-up is not allowed for this outcome.'})
             if attrs.get('whatsapp_message') or attrs.get('whatsapp_template'):
                 raise serializers.ValidationError({'whatsapp_message': 'WhatsApp is not allowed for this outcome.'})
-        if outcome == Call.Outcome.INTERESTED and not apostille and not (self.context.get('legacy_replay') and not attrs.get('selected_course')):
-            try:
-                attrs['selected_course'], attrs['selected_course_custom'] = validate_course(
-                    attrs.get('selected_course'), attrs.get('selected_course_custom', ''))
-            except ValueError as exc:
-                raise serializers.ValidationError({'selected_course': str(exc)})
-            if not attrs.get('expected_admission_year'):
-                raise serializers.ValidationError({'expected_admission_year': 'Enter a valid admission year (1-9999).'})
-        elif outcome != Call.Outcome.INTERESTED and (attrs.get('selected_course') or attrs.get('selected_course_custom') or attrs.get('expected_admission_year')):
-            raise serializers.ValidationError({'selected_course': 'Course and admission year are only allowed for Interested.'})
+
+        if not create_lead:
+            if outcome == Call.Outcome.INTERESTED and not apostille and not (self.context.get('legacy_replay') and not attrs.get('selected_course')):
+                try:
+                    attrs['selected_course'], attrs['selected_course_custom'] = validate_course(
+                        attrs.get('selected_course'), attrs.get('selected_course_custom', ''))
+                except ValueError as exc:
+                    raise serializers.ValidationError({'selected_course': str(exc)})
+                if not attrs.get('expected_admission_year'):
+                    raise serializers.ValidationError({'expected_admission_year': 'Enter a valid admission year (1-9999).'})
+            elif outcome != Call.Outcome.INTERESTED and (attrs.get('selected_course') or attrs.get('selected_course_custom') or attrs.get('expected_admission_year')):
+                raise serializers.ValidationError({'selected_course': 'Course and admission year are only allowed for Interested.'})
         template = attrs.get('whatsapp_template')
         request = self.context.get('request')
         if template and (not template.is_active or (template.owner_id and (not request or template.owner_id != request.user.pk))):
@@ -152,7 +189,12 @@ class CallSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         callback_at = validated_data.pop("callback_at", None)
         self._callback_at = callback_at
-    
+        validated_data.pop("create_lead", None)
+        validated_data.pop("student_name", None)
+        validated_data.pop("preferred_course", None)
+        validated_data.pop("preferred_course_custom", None)
+        validated_data.pop("lead_source", None)
+
         return super().create(validated_data)
 
     def get_caller_name(self, obj):

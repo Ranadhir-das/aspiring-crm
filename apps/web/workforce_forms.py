@@ -26,7 +26,15 @@ class EmployeeForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone', 'designation', 'role', 'manager', 'is_active', 'services']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'designation', 'role', 'manager', 'is_active', 'services', 'can_act_as_caller', 'can_act_as_counselor']
+        labels = {
+            'can_act_as_caller': 'Additional Capability: Caller',
+            'can_act_as_counselor': 'Additional Capability: Counselor',
+        }
+        help_texts = {
+            'can_act_as_caller': 'Grants access to the caller workspace, calling, leads, and follow-ups. Daily face verification is required.',
+            'can_act_as_counselor': 'Grants access to the counselor workspace, counselling workflows, and admission requests.',
+        }
 
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
@@ -36,7 +44,19 @@ class EmployeeForm(forms.ModelForm):
             self.fields['services'].initial = self.instance.services.all()
         if actor.role != 'SUPER_ADMIN':
             self.fields['role'].choices = [c for c in User.Role.choices if c[0] not in {'SUPER_ADMIN', 'ADMIN'}]
+        if actor.role not in {'SUPER_ADMIN', 'ADMIN'}:
+            self.fields.pop('can_act_as_caller', None)
+            self.fields.pop('can_act_as_counselor', None)
         self.fields['manager'].queryset = User.objects.filter(role__in=['ADMIN', 'MANAGER', 'SUPER_ADMIN'], is_active=True).exclude(pk=self.instance.pk)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        role = cleaned_data.get('role')
+        if 'can_act_as_caller' in self.fields and role == 'CALLER':
+            cleaned_data['can_act_as_caller'] = False
+        if 'can_act_as_counselor' in self.fields and role == 'COUNSELOR':
+            cleaned_data['can_act_as_counselor'] = False
+        return cleaned_data
 
     def save(self, commit=True):
         user = super().save(commit=commit)

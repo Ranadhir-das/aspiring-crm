@@ -46,15 +46,16 @@ class IsCaller(BasePermission):
     message = 'Only callers can do this.'
 
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role == User.Role.CALLER)
+        from apps.accounts.capabilities import is_caller_capable
+        return bool(request.user and is_caller_capable(request.user))
 
 
 class IsActiveCounselor(BasePermission):
     message = 'Only counselors can access the counselor workspace.'
 
     def has_permission(self, request, view):
-        user = request.user
-        return bool(user and user.is_authenticated and user.is_active and user.role == User.Role.COUNSELOR)
+        from apps.accounts.capabilities import is_counselor_capable
+        return bool(request.user and is_counselor_capable(request.user))
 
 
 def iso(value):
@@ -345,11 +346,8 @@ class CounselorCallerListView(APIView):
     permission_classes = [IsAuthenticated, IsActiveCounselor]
 
     def get(self, request):
-        callers = (
-            User.objects
-            .filter(role=User.Role.CALLER, is_active=True, registration_pending=False)
-            .order_by('first_name', 'last_name', 'username')
-        )
+        from apps.accounts.capabilities import eligible_callers_qs
+        callers = eligible_callers_qs().order_by('first_name', 'last_name', 'username')
         return Response({
             'callers': [{
                 'id': caller.pk,
@@ -416,12 +414,8 @@ class CounselorLeadCreateView(APIView):
         caller = None
         if caller_id:
             try:
-                caller = User.objects.get(
-                    pk=caller_id,
-                    role=User.Role.CALLER,
-                    is_active=True,
-                    registration_pending=False,
-                )
+                from apps.accounts.capabilities import eligible_callers_qs
+                caller = eligible_callers_qs().get(pk=caller_id)
             except (User.DoesNotExist, ValueError, TypeError):
                 raise ValidationError({'assigned_caller_id': 'Selected caller is invalid, inactive, or not a caller.'})
 
@@ -590,12 +584,8 @@ class CounselorLeadBatchCreateView(APIView):
         caller = None
         if caller_id:
             try:
-                caller = User.objects.get(
-                    pk=caller_id,
-                    role=User.Role.CALLER,
-                    is_active=True,
-                    registration_pending=False,
-                )
+                from apps.accounts.capabilities import eligible_callers_qs
+                caller = eligible_callers_qs().get(pk=caller_id)
             except (User.DoesNotExist, ValueError, TypeError):
                 raise ValidationError({'assigned_caller_id': 'Selected caller is invalid, inactive, or not a caller.'})
 
@@ -673,12 +663,8 @@ class CounselorLeadBatchCreateView(APIView):
                 lead_caller = caller
                 if item.get('assigned_caller_id'):
                     try:
-                        lead_caller = User.objects.get(
-                            pk=item['assigned_caller_id'],
-                            role=User.Role.CALLER,
-                            is_active=True,
-                            registration_pending=False,
-                        )
+                        from apps.accounts.capabilities import eligible_callers_qs
+                        lead_caller = eligible_callers_qs().get(pk=item['assigned_caller_id'])
                     except (User.DoesNotExist, ValueError, TypeError):
                         results.append({
                             'phone': raw_phone,
@@ -861,12 +847,8 @@ class CounselorCreatedLeadReassignView(APIView):
             raise ValidationError({'caller_id': 'Please select an eligible caller.'})
 
         try:
-            caller = User.objects.get(
-                pk=caller_id,
-                role=User.Role.CALLER,
-                is_active=True,
-                registration_pending=False,
-            )
+            from apps.accounts.capabilities import eligible_callers_qs
+            caller = eligible_callers_qs().get(pk=caller_id)
         except (User.DoesNotExist, ValueError, TypeError):
             raise ValidationError({'caller_id': 'Selected caller is invalid, inactive, or not a caller.'})
 

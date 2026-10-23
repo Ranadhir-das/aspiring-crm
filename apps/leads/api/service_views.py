@@ -30,8 +30,9 @@ class ActiveServicesView(ListAPIView):
 
 class IsActiveCaller(BasePermission):
     def has_permission(self, request, view):
+        from apps.accounts.capabilities import is_caller_capable
         user = request.user
-        return user.is_authenticated and user.is_active and user.role == 'CALLER'
+        return bool(user and user.is_authenticated and user.is_active and is_caller_capable(user))
 
 
 class CallerServicesView(ListAPIView):

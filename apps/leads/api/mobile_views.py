@@ -33,7 +33,8 @@ class MobileLeadListView(ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role != User.Role.CALLER:
+        from apps.accounts.capabilities import is_caller_capable
+        if not is_caller_capable(user):
             return Lead.objects.none()
         return restrict_apostille(Lead.objects.select_related("import_batch", "service_type").filter(assigned_caller=user).order_by("-created_at"), user)
 
@@ -46,7 +47,8 @@ class MobileLeadDetailView(RetrieveAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role != User.Role.CALLER:
+        from apps.accounts.capabilities import is_caller_capable
+        if not is_caller_capable(user):
             return Lead.objects.none()
         return restrict_apostille(Lead.objects.filter(assigned_caller=user), user)
 
@@ -59,7 +61,8 @@ class MobileLeadUpdateView(UpdateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role != User.Role.CALLER:
+        from apps.accounts.capabilities import is_caller_capable
+        if not is_caller_capable(user):
             return Lead.objects.none()
         return restrict_apostille(Lead.objects.filter(assigned_caller=user), user)
 
@@ -70,7 +73,8 @@ class MobileAdmissionsView(APIView):
 
     def get(self, request):
         user = request.user
-        if user.role != User.Role.CALLER and not user.is_superuser and user.role not in {"ADMIN", "SUPER_ADMIN"}:
+        from apps.accounts.capabilities import is_caller_capable
+        if not is_caller_capable(user) and not user.is_superuser and user.role not in {"ADMIN", "SUPER_ADMIN"}:
             return Response({
                 "summary": {"total": 0, "today": 0, "this_week": 0, "this_month": 0},
                 "admissions": [],

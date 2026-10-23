@@ -12,8 +12,9 @@ class CanCreateCall(BasePermission):
     }
 
     def has_permission(self, request, view):
-        return (
+        from apps.accounts.capabilities import is_caller_capable
+        return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.role in self.allowed_roles
+            and (request.user.role in self.allowed_roles or is_caller_capable(request.user))
         )

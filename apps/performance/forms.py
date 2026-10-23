@@ -1,5 +1,6 @@
 import uuid
 from django import forms
+from django.db.models import Q
 from apps.accounts.models import User
 from apps.leads.models import Lead
 from .models import LeadMilestone, PointsAdjustment
@@ -8,7 +9,7 @@ from .models import LeadMilestone, PointsAdjustment
 class AdjustmentForm(forms.Form):
     request_id = forms.UUIDField(initial=uuid.uuid4, widget=forms.HiddenInput)
     caller = forms.ModelChoiceField(
-        queryset=User.objects.filter(role__in=['CALLER', 'EMPLOYEE'], is_active=True).order_by('username'),
+        queryset=User.objects.filter(Q(role__in=['CALLER', 'EMPLOYEE']) | Q(can_act_as_caller=True), is_active=True).order_by('username'),
         label='Employee',
         required=False
     )

@@ -54,7 +54,7 @@ class CallCreateView(APIView):
                      ['lead', 'phone_number', 'started_at', 'ended_at', 'duration_seconds', 'outcome', 'notes', 'callback_at']}
         canonical['lead'] = data['lead'].pk if data.get('lead') else None
         # Keep legacy fingerprints identical when new optional fields are absent.
-        for field in ('selected_course', 'selected_course_custom', 'expected_admission_year', 'whatsapp_message', 'whatsapp_template'):
+        for field in ('selected_course', 'selected_course_custom', 'expected_admission_year', 'whatsapp_message', 'whatsapp_template', 'create_lead', 'student_name', 'preferred_course', 'preferred_course_custom', 'lead_source'):
             if data.get(field):
                 value = data[field]
                 canonical[field] = str(value.pk if field == 'whatsapp_template' else value)
@@ -78,17 +78,25 @@ class CallCreateView(APIView):
         if legacy_replay and data.get('outcome') == 'INTERESTED' and not data.get('selected_course'):
             return Response({'selected_course': 'Course is required for a new Interested outcome.'}, status=400)
 
+        create_lead_requested = bool(data.get('create_lead', False))
+        student_name = (data.get('student_name') or '').strip()
+        pref_course = data.get('preferred_course') or data.get('selected_course')
+        pref_course_custom = data.get('preferred_course_custom') or data.get('selected_course_custom', '')
+        lead_source = (data.get('lead_source') or 'Direct Call').strip()
+
         lead = data.get('lead')
         if lead:
             lead = Lead.objects.select_for_update().get(pk=lead.pk)
         elif data.get('phone_number'):
-            if data.get('outcome') == 'INTERESTED' and request.user.role == User.Role.CALLER:
+            from apps.accounts.capabilities import is_caller_capable
+            if (create_lead_requested or data.get('outcome') == 'INTERESTED') and is_caller_capable(request.user):
                 from apps.calls.phone import lock_phone_for_creation
                 lock_phone_for_creation(data['phone_number'])
             lead = matching_lead(data['phone_number'], request.user)
             if lead:
                 lead = Lead.objects.select_for_update().get(pk=lead.pk)
-        if lead and request.user.role == User.Role.CALLER and (lead.assigned_caller_id != request.user.pk or
+        from apps.accounts.capabilities import is_caller_capable
+        if lead and is_caller_capable(request.user) and (lead.assigned_caller_id != request.user.pk or
                 (is_apostille_lead(lead) and not is_apostille_caller(request.user))):
             return Response({'detail': 'You can only create calls for your assigned leads.'}, status=status.HTTP_404_NOT_FOUND)
         # Keep the dialed number snapshot even if the lead phone later changes.
@@ -101,7 +109,8 @@ class CallCreateView(APIView):
         outcome = serializer.validated_data.get("outcome")
 
         # Business Rule 1: Admission is Admin Only — Callers cannot mark Admission Done
-        if outcome == Call.Outcome.ADMISSION_DONE and request.user.role == User.Role.CALLER:
+        from apps.accounts.capabilities import is_caller_capable
+        if outcome == Call.Outcome.ADMISSION_DONE and is_caller_capable(request.user):
             return Response(
                 {
                     "detail": "Callers are not allowed to mark leads as Admitted or submit Admission Done outcome. Admission is an admin-only operation."
@@ -124,19 +133,30 @@ class CallCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Approved Direct Dialer policy: a new Interested contact becomes this
-        # caller's external lead. Its first selected course is its own preference.
-        if lead is None and outcome == 'INTERESTED' and request.user.role == User.Role.CALLER:
+        lead_created = False
+        from apps.accounts.capabilities import is_caller_capable
+        if lead is None and (create_lead_requested or (outcome == 'INTERESTED' and is_caller_capable(request.user))):
             from django.utils import timezone
             from apps.leads.models import LeadAssignmentHistory
-            lead = Lead(name=phone, phone=phone, source='EXTERNAL',
+            final_name = student_name or phone
+            final_source = lead_source if create_lead_requested else 'EXTERNAL'
+            final_course = pref_course if create_lead_requested else data.get('selected_course')
+            final_custom = pref_course_custom if create_lead_requested else data.get('selected_course_custom', '')
+            lead = Lead(name=final_name, phone=phone, source=final_source,
                         assigned_caller=request.user, assigned_at=timezone.now(),
-                        preferred_course=data['selected_course'],
-                        preferred_course_custom=data.get('selected_course_custom', ''))
+                        preferred_course=final_course,
+                        preferred_course_custom=final_custom,
+                        notes=data.get('notes', ''))
             lead._changed_by = request.user
             lead.save()
+            reason = 'Caller-created lead from call/enquiry' if create_lead_requested else 'Direct Dialer Interested contact'
             LeadAssignmentHistory.objects.create(lead=lead, new_caller=request.user,
-                assigned_by=request.user, reason='Direct Dialer Interested contact')
+                assigned_by=request.user, reason=reason)
+            lead_created = True
+        elif lead and student_name and (lead.name == lead.phone or not lead.name):
+            lead.name = student_name
+            lead._changed_by = request.user
+            lead.save(update_fields=['name', 'updated_at'])
 
         # Create the Call
         from apps.leads.courses import classify_course
@@ -199,7 +219,7 @@ class CallCreateView(APIView):
             )
 
         return Response(
-            {**CallSerializer(call).data, "completed_followup_ids": completed_followup_ids},
+            {**CallSerializer(call).data, "completed_followup_ids": completed_followup_ids, "lead_created": lead_created},
             status=status.HTTP_201_CREATED,
         )
 
@@ -220,7 +240,8 @@ class LeadCallHistoryView(ListAPIView):
         )
 
         # Caller can only see calls for their own leads
-        if user.role == User.Role.CALLER:
+        from apps.accounts.capabilities import is_caller_capable
+        if is_caller_capable(user):
             return restrict_apostille(queryset.filter(lead__assigned_caller=user, caller=user), user, 'lead__')
 
         # Management can see all call history
@@ -253,9 +274,10 @@ class ResolvePhoneView(APIView):
         serializer.is_valid(raise_exception=True)
         lead = serializer.validated_data.get('lead')
         if lead:
-            if is_apostille_lead(lead) and request.user.role == "CALLER" and not is_apostille_caller(request.user):
+            from apps.accounts.capabilities import is_caller_capable
+            if is_apostille_lead(lead) and is_caller_capable(request.user) and not is_apostille_caller(request.user):
                 return Response({"detail": "This lead is not available to your account."}, status=404)
-            if request.user.role == User.Role.CALLER and lead.assigned_caller_id != request.user.pk:
+            if is_caller_capable(request.user) and lead.assigned_caller_id != request.user.pk:
                 return Response({'detail': 'This lead is not available to your account.'}, status=404)
             return Response({'phone_number': lead.phone, 'lead': lead.pk, 'lead_name': lead.name,
                              'service_code': lead.service_type.code if lead.service_type_id else '',

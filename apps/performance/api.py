@@ -2,7 +2,8 @@ from datetime import datetime, time, timedelta
 import json
 import uuid
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
@@ -11,6 +12,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from apps.accounts.capabilities import eligible_callers_qs, is_caller_capable
 from apps.accounts.models import User
 from apps.calls.models import Call
 from apps.leads.models import Lead
@@ -49,9 +51,15 @@ class CallerPointsView(APIView):
     def get(self, request, caller_id=None):
         user = request.user
         target = caller_id or user.pk
-        if user.role not in {'CALLER', 'ADMIN', 'SUPER_ADMIN', 'MANAGER'} or (user.role == 'CALLER' and target != user.pk):
-            raise PermissionDenied()
-        caller = get_object_or_404(User, pk=target, role='CALLER')
+        is_management = user.role in {'ADMIN', 'SUPER_ADMIN', 'MANAGER'} or can_manage(user)
+
+        if not is_management:
+            if not is_caller_capable(user) or target != user.pk:
+                raise PermissionDenied()
+
+        caller = get_object_or_404(User, pk=target)
+        if not is_caller_capable(caller) and caller.role != 'CALLER':
+            raise Http404()
         form, window, valid = report_window(request.query_params)
         if not valid:
             raise ValidationError(form.errors)
@@ -82,7 +90,12 @@ class CallerPointsView(APIView):
 
 class AdjustmentSerializer(serializers.Serializer):
     request_id = serializers.UUIDField(required=False)
-    caller = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role__in=['CALLER', 'EMPLOYEE']))
+    caller = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(
+            Q(role__in=['CALLER', 'EMPLOYEE']) | Q(can_act_as_caller=True),
+            is_active=True
+        )
+    )
     reason_type = serializers.ChoiceField(
         choices=PointsAdjustment.AdjustmentReason.choices,
         default=PointsAdjustment.AdjustmentReason.OTHER
@@ -109,7 +122,7 @@ class AdjustmentView(APIView):
 
     def get(self, request):
         if not can_manage(request.user):
-            if request.user.role == User.Role.CALLER:
+            if is_caller_capable(request.user):
                 adjustments = PointsAdjustment.objects.filter(caller=request.user)
             else:
                 raise PermissionDenied()
@@ -150,7 +163,12 @@ class AdjustmentView(APIView):
 
 
 class MilestoneSerializer(serializers.Serializer):
-    caller = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role='CALLER'))
+    caller = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(
+            Q(role=User.Role.CALLER) | Q(can_act_as_caller=True),
+            is_active=True
+        )
+    )
     lead = serializers.PrimaryKeyRelatedField(queryset=Lead.objects.all())
     event = serializers.ChoiceField(choices=LeadMilestone.EVENT_CHOICES)
     reason = serializers.CharField(max_length=2000, trim_whitespace=True)
@@ -205,7 +223,7 @@ class CallerProgressView(APIView):
             window_start = timezone.make_aware(datetime.combine(start_date, time.min))
             window_end = timezone.make_aware(datetime.combine(end_date + timedelta(days=1), time.min))
 
-        callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('username')
+        callers = eligible_callers_qs().order_by('username')
         call_qs = Call.objects.filter(caller__in=callers, started_at__gte=window_start, started_at__lt=window_end)
         call_counts = dict(call_qs.values('caller').annotate(cnt=Count('id')).values_list('caller', 'cnt'))
 

@@ -1,4 +1,4 @@
-from .employee_views import PhotoChallengeView, PhotoAttendanceView
+from .employee_views import PhotoChallengeView, PhotoAttendanceView, AdminEmployeeCapabilityView
 from .employee_views import EmployeeHomeView, EmployeeLeaveView, EmployeeProjectView, EmployeeReportView, EmployeeReportPhotoView, EmployeeNoticeView, EmployeeNoticeAttachmentDownloadView
 from django.urls import include, path
 
@@ -41,5 +41,10 @@ urlpatterns = [
         "me/",
         MobileMeView.as_view(),
         name="mobile-me",
+    ),
+    path(
+        "admin/employees/<int:pk>/capabilities/",
+        AdminEmployeeCapabilityView.as_view(),
+        name="admin-employee-capabilities",
     ),
 ]
