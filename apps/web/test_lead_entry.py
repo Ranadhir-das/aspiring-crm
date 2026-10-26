@@ -72,3 +72,28 @@ class LeadEntryTests(TestCase):
         row = next(b for b in overview.context['batches'] if b.pk == batch.pk)
         self.assertEqual(row.remaining, 3)
         self.assertEqual(row.allocated, 2)
+
+    def test_import_form_caller_pending_leads_label(self):
+        from apps.web.forms import ImportForm
+        Lead.objects.create(name='P1', phone='9876543001', assigned_caller=self.a, status=Lead.Status.PENDING)
+        Lead.objects.create(name='P2', phone='9876543002', assigned_caller=self.a, status=Lead.Status.PENDING)
+        Lead.objects.create(name='P3', phone='9876543003', assigned_caller=self.a, status=Lead.Status.CALLED)
+
+        form = ImportForm()
+        choices = list(form.fields['caller'].choices)
+        self.assertEqual(choices[0][0], '')
+        self.assertEqual(choices[0][1], 'Leave unassigned')
+
+        # 'b' has 0 pending leads, so 'b' appears before 'a' (ordered by pending count ascending)
+        self.assertEqual(choices[1][0], self.b.pk)
+        self.assertIn('0 pending leads', choices[1][1])
+
+        self.assertEqual(choices[2][0], self.a.pk)
+        self.assertIn('2 pending leads', choices[2][1])
+
+        # Test GET on import page renders the pending lead labels
+        res = self.client.get('/leads/import/')
+        self.assertEqual(res.status_code, 200)
+        content = res.content.decode()
+        self.assertIn('0 pending leads', content)
+        self.assertIn('2 pending leads', content)

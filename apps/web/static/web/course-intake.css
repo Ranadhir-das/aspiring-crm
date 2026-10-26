@@ -1,82 +1,1006 @@
-/* Scoped intake controls use the workspace theme tokens. */
-.course-import-form { display:grid; gap:24px; }
-.course-selector { border:0; padding:0; margin:0; min-width:0; }
-.course-selector legend,.course-file>label { font-size:17px; font-weight:700; color:var(--text); }
-.course-chips { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:16px; }
-.course-chip { position:relative; cursor:pointer; }
-.course-chip input { position:absolute; opacity:0; width:1px; height:1px; }
-.course-chip span { display:flex; align-items:center; justify-content:center; padding:12px 8px; min-height:48px; border:1px solid var(--border); border-radius:12px; background:var(--panel); color:var(--text); transition:border-color .15s,box-shadow .15s; text-align:center; }
-.course-chip input:checked+span { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); color:var(--accent); }
-.course-chip input:focus-visible+span { outline:3px solid var(--accent); outline-offset:3px; }
-.course-file { display:grid; gap:14px; padding:24px; border:2px dashed var(--border); border-radius:16px; background:var(--bg); }
-.course-file input { width:100%; max-width:100%; }
-.course-file input::file-selector-button { background:var(--accent); color:#fff; border:0; padding:12px 16px; border-radius:10px; cursor:pointer; margin-right:12px; }
-.course-import-form [hidden] { display:none; }
-.paste-numbers-section { display:grid; gap:8px; margin-top:12px; }
+/* ==========================================================================
+   Vaani CRM — Lead Import & Batch Intake Stylesheet
+   Modern, polished UI with light/dark mode parity & clean responsive flow.
+   ========================================================================== */
+
+/* Page Header & Top Action Buttons */
+.import-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.import-header .heading-subtitle {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin-top: 6px;
+  max-width: 620px;
+}
+.import-header .actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.import-header .action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  transition: all .15s ease;
+}
+.import-header .action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(103, 81, 185, 0.05);
+}
+
+/* 2-Column Dashboard Grid */
+.import-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* Panel Containers */
+.import-main-card,
+.import-guidelines-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 26px 28px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+
+/* Card Header Block */
+.panel-header-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-icon-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(103, 81, 185, 0.09);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(103, 81, 185, 0.18);
+}
+.panel-header-block h2 {
+  font-size: 17.5px;
+  font-weight: 750;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  margin: 0;
+}
+.panel-header-block .muted {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* Form Layout */
+.course-import-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Step Card Containers */
+.step-card {
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 20px 22px;
+  background: var(--bg);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.step-card:focus-within {
+  border-color: rgba(103, 81, 185, 0.4);
+}
+.step-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.step-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  box-shadow: 0 2px 6px rgba(103, 81, 185, 0.3);
+}
+.step-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+.step-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 2px 0 0;
+  line-height: 1.45;
+}
+.optional-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 1px 7px;
+  border-radius: 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* 1. Course Chips */
+.course-chips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.course-chip {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  display: block;
+}
+.course-chip input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.chip-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  min-height: 46px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  transition: all .16s ease;
+}
+.chip-radio {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  flex-shrink: 0;
+  transition: all .15s ease;
+  background: var(--bg);
+}
+.chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.course-chip:hover .chip-inner {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+}
+.course-chip:hover .chip-radio {
+  border-color: var(--accent);
+}
+.course-chip input:checked + .chip-inner {
+  border-color: var(--accent);
+  background: rgba(103, 81, 185, 0.08);
+  color: var(--accent);
+  font-weight: 700;
+  box-shadow: 0 0 0 1px var(--accent), 0 3px 10px rgba(103, 81, 185, 0.12);
+}
+.course-chip input:checked + .chip-inner .chip-radio {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--panel);
+}
+[data-theme="dark"] .course-chip input:checked + .chip-inner {
+  background: rgba(165, 154, 255, 0.14);
+  color: #ffffff;
+}
+[data-theme="dark"] .course-chip input:checked + .chip-inner .chip-radio {
+  box-shadow: inset 0 0 0 3px #14171f;
+}
+
+/* Custom course field (animated expand) */
+.custom-course-field {
+  border-top: 1px dashed var(--border);
+  padding-top: 14px;
+  margin-top: 14px;
+}
+.custom-course-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+  display: block;
+}
+.custom-course-field input {
+  width: 100%;
+  height: 42px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  padding: 10px 14px;
+  font-size: 13px;
+  background: var(--panel);
+  color: var(--text);
+}
+.custom-course-field input:focus {
+  border-color: var(--accent);
+  outline: 2px solid rgba(103, 81, 185, 0.18);
+}
+
+/* 2. Import Method Tabs */
+.import-method-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 11px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  margin: 4px 0 16px;
+}
+.method-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.method-tab:hover {
+  color: var(--text);
+  background: rgba(103, 81, 185, 0.05);
+}
+.method-tab.active {
+  background: var(--accent);
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(103, 81, 185, 0.28);
+  font-weight: 700;
+}
+.method-tab.active svg {
+  stroke: #ffffff;
+}
+
+/* Paste Numbers Section */
+.paste-numbers-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.section-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.section-label-row label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text);
+}
+.input-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.field-description {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
 .paste-numbers-textarea {
-  width:100%;
-  min-height:160px;
-  font-family:monospace;
-  font-size:14px;
-  line-height:1.5;
-  padding:12px;
-  border:1px solid var(--border);
-  border-radius:12px;
-  background:var(--panel);
-  color:var(--text);
-  resize:vertical;
+  width: 100%;
+  min-height: 165px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color .15s, box-shadow .15s;
 }
 .paste-numbers-textarea:focus {
-  outline:2px solid var(--accent);
-  border-color:var(--accent);
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(103, 81, 185, 0.16);
 }
-.divider-or {
-  display:flex;
-  align-items:center;
-  text-align:center;
-  margin:18px 0;
-  color:var(--muted);
-  font-weight:700;
-  font-size:12px;
-  letter-spacing:1px;
+.paste-numbers-textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.65;
 }
-.divider-or::before, .divider-or::after {
-  content:'';
-  flex:1;
-  border-bottom:1px solid var(--border);
+
+/* Spreadsheet Upload Area */
+.course-file {
+  display: grid;
+  gap: 16px;
+  padding: 26px 20px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  text-align: center;
+  justify-items: center;
+  transition: border-color .15s ease, background .15s ease;
 }
-.divider-or span {
-  padding:0 12px;
+.course-file:hover {
+  border-color: var(--accent);
+  background: rgba(103, 81, 185, 0.02);
+}
+.file-upload-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.upload-icon-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(103, 81, 185, 0.1);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+.file-upload-visual label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+.file-upload-visual .muted {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.course-file input[type="file"] {
+  max-width: 100%;
+}
+.course-file input[type="file"]::file-selector-button {
+  background: var(--accent);
+  color: #ffffff;
+  border: 0;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  margin-right: 12px;
+  transition: opacity .15s ease;
+}
+.course-file input[type="file"]::file-selector-button:hover {
+  opacity: 0.9;
+}
+
+/* 3. Assignment Selector */
+.caller-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.select-wrapper {
+  position: relative;
+  width: 100%;
+}
+.select-wrapper select,
+.caller-select {
+  width: 100%;
+  height: 44px;
+  padding: 10px 38px 10px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 500;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.select-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 6px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' viewBox='0 0 10 6'%3E%3Cpath stroke='%238890a4' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m1 1 4 4 4-4'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+.select-wrapper select:focus,
+.caller-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(103, 81, 185, 0.16);
+}
+.caller-help-hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.caller-help-hint svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+/* Form Actions Bar */
+.form-actions-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.submit-import-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 28px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #ffffff !important;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 4px 14px rgba(103, 81, 185, 0.28);
+  transition: all .18s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+.submit-import-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(103, 81, 185, 0.38);
+  opacity: 0.95;
+}
+.submit-import-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(103, 81, 185, 0.25);
+}
+.preview-file-btn {
+  height: 46px;
+  padding: 0 22px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.preview-file-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.import-safety-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.45;
+}
+.import-safety-note svg {
+  color: var(--mint);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Right Column — Batch Guidelines Cards Stack
+   ========================================================================== */
+.import-guidelines-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.guidelines-header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+  margin-bottom: 2px;
+}
+.guidelines-header .eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.guidelines-header h2 {
+  font-size: 17.5px;
+  font-weight: 750;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  margin: 4px 0 0;
+}
+.guidelines-header .muted {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.guideline-cards-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.guideline-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color .15s ease;
+}
+.guideline-card:hover {
+  border-color: rgba(103, 81, 185, 0.35);
+}
+.guideline-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.guide-icon-pill {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(103, 81, 185, 0.09);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.guideline-card h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+.guideline-card p.muted {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.45;
+}
+.format-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
+.format-pill code {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11.5px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.guide-bullet-list {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.guide-bullet-list li::marker {
+  color: var(--accent);
+}
+
+/* Spreadsheet guideline column badges */
+.column-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+.badge-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.col-type-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+.col-type-tag.required {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.col-type-tag.optional {
+  background: rgba(103, 81, 185, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(103, 81, 185, 0.2);
+}
+.col-pill {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+.guide-footnote {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 4px 0 0;
+  line-height: 1.45;
+}
+
+/* ==========================================================================
+   Results & History Sections
+   ========================================================================== */
+.paste-result-panel {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  padding: 24px 28px;
+  margin-top: 24px;
 }
 .paste-metrics-grid {
-  display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));
-  gap:12px;
-  margin:16px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
 }
 .paste-metric-card {
-  padding:14px;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:12px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 .paste-metric-card .metric-label {
-  font-size:11px;
-  font-weight:600;
-  text-transform:uppercase;
-  letter-spacing:.5px;
-  color:var(--muted);
-  margin-bottom:4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+  margin-bottom: 4px;
 }
 .paste-metric-card .metric-value {
-  font-size:18px;
-  font-weight:700;
-  color:var(--text);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
 }
 .paste-metric-card .text-success {
-  color:#10b981;
+  color: #10b981;
+}
+.paste-metric-card .text-warning {
+  color: #f59e0b;
 }
 .paste-metric-card .text-danger {
-  color:#ef4444;
+  color: #ef4444;
 }
-@media(max-width:600px) { .course-chips { grid-template-columns:repeat(2,minmax(0,1fr)); } .course-file { padding:16px; } }
+.badge.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+.badge.failed {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* ==========================================================================
+   Recent Imports Table with Fixed/Sticky Header & Contained Scroll
+   ========================================================================== */
+.recent-imports-panel {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  margin-top: 28px;
+  overflow: hidden;
+  padding: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+.recent-imports-heading {
+  padding: 22px 28px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.recent-imports-heading h2 {
+  font-size: 17.5px;
+  font-weight: 750;
+  color: var(--text);
+  letter-spacing: -0.3px;
+  margin: 3px 0 0;
+}
+.recent-imports-heading .muted {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.batch-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 650;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.batch-count-badge svg {
+  color: var(--accent);
+}
+
+/* Dedicated Scroll Container for Table Rows */
+.recent-imports-scroll {
+  max-height: 440px;
+  overflow-y: auto;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(103, 81, 185, 0.3) transparent;
+}
+.recent-imports-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.recent-imports-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.recent-imports-scroll::-webkit-scrollbar-thumb {
+  background: rgba(103, 81, 185, 0.25);
+  border-radius: 999px;
+}
+.recent-imports-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* Table Styling with Sticky Header */
+.recent-imports-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  text-align: left;
+}
+.recent-imports-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 13px 20px;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+  background: #f4f6fb;
+  color: #505c73;
+  box-shadow: inset 0 -1px 0 var(--border), 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+[data-theme="dark"] .recent-imports-table thead th {
+  background: #171b26;
+  color: #9aa4bc;
+  box-shadow: inset 0 -1px 0 var(--border), 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+.recent-imports-table tbody td {
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+}
+.recent-imports-table tbody tr {
+  transition: background .12s ease;
+}
+.recent-imports-table tbody tr:hover td {
+  background: rgba(103, 81, 185, 0.04);
+}
+.recent-imports-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Action button inside table */
+.batch-assign-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  transition: all .15s ease;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.batch-assign-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(103, 81, 185, 0.06);
+}
+.batch-file-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-file-cell svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.batch-link {
+  font-weight: 600;
+  color: var(--text);
+}
+.batch-link:hover {
+  color: var(--accent);
+}
+.num-cell {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.date-cell {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Status Pills */
+.batch-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+.batch-status-pill.pending {
+  background: rgba(103, 81, 185, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(103, 81, 185, 0.25);
+}
+.batch-status-pill.completed {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.batch-status-pill.warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+/* Generic scrollable tables (e.g. preview and skipped results) */
+.table-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.table-scroll table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.table-scroll table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f4f6fb;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+[data-theme="dark"] .table-scroll table thead th {
+  background: #171b26;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1080px) {
+  .import-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .import-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .import-header .actions {
+    flex-wrap: wrap;
+  }
+  .course-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .import-main-card,
+  .import-guidelines-panel {
+    padding: 18px;
+  }
+  .step-card {
+    padding: 16px;
+  }
+  .submit-import-btn {
+    width: 100%;
+  }
+  .recent-imports-heading {
+    padding: 18px;
+  }
+}

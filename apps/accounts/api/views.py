@@ -18,8 +18,39 @@ from .session_service import close_open_sessions, close_session, next_midnight
 FACE_VERIFICATION_EXEMPT_ROLES = {'ADMIN', 'SUPER_ADMIN', 'COUNSELOR'}
 
 
+def is_face_verification_exempt(user):
+    try:
+        from apps.accounts import capabilities
+        return capabilities.is_face_verification_exempt(user)
+    except (ImportError, AttributeError):
+        return user.role in FACE_VERIFICATION_EXEMPT_ROLES
+
+
+def is_caller_capable(user):
+    try:
+        from apps.accounts import capabilities
+        return capabilities.is_caller_capable(user)
+    except (ImportError, AttributeError):
+        return user.role in {'CALLER', 'ADMIN', 'SUPER_ADMIN'}
+
+
+def is_counselor_capable(user):
+    try:
+        from apps.accounts import capabilities
+        return capabilities.is_counselor_capable(user)
+    except (ImportError, AttributeError):
+        return user.role == 'COUNSELOR'
+
+
+def is_dual_role(user):
+    try:
+        from apps.accounts import capabilities
+        return capabilities.is_dual_role(user)
+    except (ImportError, AttributeError):
+        return False
+
+
 def needs_onboarding(user):
-    from apps.accounts.capabilities import is_face_verification_exempt
     return not is_face_verification_exempt(user) and not AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
 
 
@@ -32,17 +63,26 @@ def client_ip(request):
 
 def user_data(user):
     from apps.leads.apostille_leads import is_apostille_caller
-    from apps.accounts.capabilities import is_caller_capable, is_counselor_capable, is_dual_role
-    return {'id': user.pk, 'username': user.username, 'email': user.email,
-            'name': user.get_full_name(), 'role': user.role,
-            'capabilities': {
-                'caller': is_caller_capable(user),
-                'counselor': is_counselor_capable(user),
-                'dual_role': is_dual_role(user),
-                'admin': user.role in {'ADMIN', 'SUPER_ADMIN'},
-            },
-            'needs_onboarding': needs_onboarding(user),
-            'can_manage_apostille_leads': is_apostille_caller(user)}
+    data = {
+        'id': user.pk,
+        'username': user.username,
+        'email': user.email,
+        'name': user.get_full_name(),
+        'role': user.role,
+        'needs_onboarding': needs_onboarding(user),
+        'can_manage_apostille_leads': is_apostille_caller(user),
+    }
+    try:
+        from apps.accounts import capabilities
+        data['capabilities'] = {
+            'caller': capabilities.is_caller_capable(user),
+            'counselor': capabilities.is_counselor_capable(user),
+            'dual_role': capabilities.is_dual_role(user),
+            'admin': user.role in {'ADMIN', 'SUPER_ADMIN'},
+        }
+    except (ImportError, AttributeError):
+        pass
+    return data
 
 
 class MobileLoginView(PublicAuthView):
@@ -56,7 +96,6 @@ class MobileLoginView(PublicAuthView):
         approved = AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists()
         if user.role == User.Role.COUNSELOR and user.registration_pending:
             return Response({'status': 'PENDING', 'detail': 'Your account is awaiting administrator approval.'})
-        from apps.accounts.capabilities import is_face_verification_exempt
         face_exempt = is_face_verification_exempt(user)
         if latest and latest.status == 'PENDING' and (user.registration_pending or
                 (not face_exempt and not approved)):
@@ -108,7 +147,6 @@ class MobileVerifyLoginView(PublicAuthView):
             return Response({'detail': 'Enrollment approval is required.'}, status=403)
         verification = None
         attendance = None
-        from apps.accounts.capabilities import is_face_verification_exempt
         face_exempt = is_face_verification_exempt(user)
         if not face_exempt:
             reference = AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').order_by('-reviewed_at', '-pk').first()
@@ -137,6 +175,17 @@ class MobileVerifyLoginView(PublicAuthView):
         session = CallerSession.objects.create(caller=user, verified_at=now, expires_at=next_midnight(now), attendance=attendance, verification=verification,
             ip_address=client_ip(request), latitude=values.get('latitude'), longitude=values.get('longitude'), login_remark=login_remark)
         AuditEvent.objects.create(actor=user, category='ATTENDANCE', description=f'Mobile login session {session.pk}')
+        try:
+            from apps.activity.services import handle_login_work_session
+            handle_login_work_session(user=user, attendance=attendance, login_time=now)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Failed to initialize activity work session on login for user %s (id=%s): %s",
+                user.username,
+                user.pk,
+                exc,
+            )
         return Response({'token': token.key, 'session_id': str(session.pk), 'expires_at': session.expires_at, 'user': user_data(user)})
 
 
@@ -171,6 +220,17 @@ class MobileSessionView(APIView):
             return Response({'detail': 'Session has ended.'}, status=409)
         now = timezone.now()
         if event['action'] == 'logout':
+            try:
+                from apps.activity.services import close_session_for_logout
+                close_session_for_logout(request.user, logout_time=now)
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).exception(
+                    "Failed to close activity work session on logout for user %s (id=%s): %s",
+                    request.user.username,
+                    request.user.pk,
+                    exc,
+                )
             close_session(session, now)
             Token.objects.filter(user=request.user).delete()
             AuditEvent.objects.create(actor=request.user, category='ATTENDANCE', description=f'Mobile logout session {session.pk}')

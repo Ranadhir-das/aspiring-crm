@@ -186,24 +186,124 @@ class PasteBatchServiceTests(TestCase):
             self.assertEqual(logs.count(), 1)
             self.assertEqual(logs.first().actor, self.admin)
 
-    def test_duplicates_allowed_within_paste_and_crm(self):
+    def test_duplicates_skipped_within_paste_and_crm(self):
         # Create an existing lead in CRM with 9392130350
         Lead.objects.create(name="Existing Lead", phone="9392130350", status=Lead.Status.CALLED)
 
-        # Paste block containing the existing number twice
+        # Paste block containing the existing number twice plus one new number
         pasted = "9392130350\n9392130350\n6304569634"
         result = commit_paste_import(pasted, self.admin, preferred_course="BTECH")
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["created_count"], 3)
+        self.assertEqual(result["created_count"], 1)
+        self.assertEqual(result["duplicate_count"], 2)
         self.assertEqual(result["skipped_count"], 0)
 
-        # In total, there should now be 3 leads with 9392130350 (1 existing + 2 imported)
-        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 3)
-        # All 3 in batch were created
+        # The existing lead is preserved and only ONE new lead was created
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="6304569634").count(), 1)
         batch_leads = Lead.objects.filter(import_batch_id=result["batch_id"])
-        self.assertEqual(batch_leads.count(), 3)
-        self.assertEqual(batch_leads.filter(phone="9392130350").count(), 2)
+        self.assertEqual(batch_leads.count(), 1)
+        self.assertEqual(batch_leads.first().phone, "6304569634")
+
+        # Verify duplicate reasons
+        dup_reasons = {d["phone"]: d["reason"] for d in result["duplicate_entries"]}
+        self.assertIn("9392130350", dup_reasons)
+
+    def test_all_numbers_duplicates_returns_zero_created_without_batch_leak(self):
+        Lead.objects.create(name="Existing 1", phone="9392130350")
+        Lead.objects.create(name="Existing 2", phone="6304569634")
+
+        pasted = "9392130350\n6304569634"
+        result = commit_paste_import(pasted, self.admin, preferred_course="MBBS")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["created_count"], 0)
+        self.assertEqual(result["duplicate_count"], 2)
+        self.assertIsNone(result["batch_id"])
+
+    def test_idempotency_key_replay_prevents_duplicate_batches(self):
+        pasted = "9392130350\n6304569634"
+        key = "idemp-test-uuid-12345"
+
+        result1 = commit_paste_import(pasted, self.admin, preferred_course="MBBS", idempotency_key=key)
+        self.assertTrue(result1["success"])
+        self.assertEqual(result1["created_count"], 2)
+        batch_id_1 = result1["batch_id"]
+
+        # Replay the exact same import request with same idempotency key
+        result2 = commit_paste_import(pasted, self.admin, preferred_course="MBBS", idempotency_key=key)
+        self.assertTrue(result2["success"])
+        self.assertEqual(result2["batch_id"], batch_id_1)
+        self.assertEqual(result2["created_count"], 2)
+
+        # No extra leads or batches created
+        self.assertEqual(LeadImportBatch.objects.count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 1)
+
+    def test_idempotency_key_payload_mismatch_raises_error(self):
+        pasted = "9392130350\n6304569634"
+        key = "idemp-payload-test-key"
+
+        res1 = commit_paste_import(pasted, self.admin, preferred_course="MBBS", idempotency_key=key)
+        self.assertTrue(res1["success"])
+
+        # Attempt to reuse same idempotency key with different phone numbers
+        with self.assertRaises(ValueError) as ctx:
+            commit_paste_import("7989773522\n8123456789", self.admin, preferred_course="MBBS", idempotency_key=key)
+        self.assertIn("different request payload", str(ctx.exception))
+
+        # Attempt to reuse same key with different course
+        with self.assertRaises(ValueError) as ctx:
+            commit_paste_import(pasted, self.admin, preferred_course="BTECH", idempotency_key=key)
+        self.assertIn("different request payload", str(ctx.exception))
+
+    def test_idempotency_key_cross_user_isolation(self):
+        other_admin = User.objects.create_user("other_admin_idemp", role=User.Role.ADMIN)
+        key = "shared-uuid-key-between-users"
+
+        pasted1 = "9392130350\n6304569634"
+        res1 = commit_paste_import(pasted1, self.admin, preferred_course="MBBS", idempotency_key=key)
+        self.assertTrue(res1["success"])
+        self.assertEqual(res1["created_count"], 2)
+
+        # User other_admin using same idempotency key is isolated to their user scope
+        pasted2 = "7989773522\n8123456789"
+        res2 = commit_paste_import(pasted2, other_admin, preferred_course="BTECH", idempotency_key=key)
+        self.assertTrue(res2["success"])
+        self.assertEqual(res2["created_count"], 2)
+        self.assertNotEqual(res1["batch_id"], res2["batch_id"])
+
+    def test_retry_after_simulated_timeout_prevents_crm_duplicates(self):
+        from django.core.cache import cache
+        pasted = "9392130350\n6304569634"
+        key = "timeout-test-key-999"
+
+        res1 = commit_paste_import(pasted, self.admin, preferred_course="MBBS", idempotency_key=key)
+        self.assertTrue(res1["success"])
+        self.assertEqual(res1["created_count"], 2)
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 1)
+
+        # Simulate timeout by clearing cache (cache key expired)
+        cache.clear()
+
+        # Retry with the same numbers (new key or expired key)
+        res2 = commit_paste_import(pasted, self.admin, preferred_course="MBBS", idempotency_key=key)
+        self.assertTrue(res2["success"])
+        # Business-level duplicate detection ensures 0 new leads created
+        self.assertEqual(res2["created_count"], 0)
+        self.assertEqual(res2["duplicate_count"], 2)
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 1)
+
+    def test_inactive_or_invalid_caller_rejected(self):
+        manager = User.objects.create_user("manager_user", role=User.Role.MANAGER)
+        inactive_caller = User.objects.create_user("inactive_caller", role=User.Role.CALLER, is_active=False)
+
+        with self.assertRaises(ValueError):
+            commit_paste_import("9392130350", self.admin, assigned_caller=manager, preferred_course="MBBS")
+
+        with self.assertRaises(ValueError):
+            commit_paste_import("9392130350", self.admin, assigned_caller=inactive_caller, preferred_course="MBBS")
 
     def test_commit_paste_import_with_assigned_caller(self):
         pasted = "9392130350\n6304569634\n"
@@ -220,6 +320,25 @@ class PasteBatchServiceTests(TestCase):
         self.assertEqual(leads.count(), 2)
         for lead in leads:
             self.assertEqual(lead.assigned_caller, self.caller)
+
+    def test_bulk_assignment_single_summary_notification(self):
+        from apps.accounts.push_notifications import notify_caller_about_assigned_leads
+        from apps.notifications.models import Notification
+
+        l1 = Lead.objects.create(name="Lead 1", phone="9392130350", assigned_caller=self.caller)
+        l2 = Lead.objects.create(name="Lead 2", phone="6304569634", assigned_caller=self.caller)
+        l3 = Lead.objects.create(name="Lead 3", phone="7989773522", assigned_caller=self.caller)
+
+        notify_caller_about_assigned_leads(self.caller, [l1.pk, l2.pk, l3.pk])
+
+        # Exactly ONE summary notification in DB
+        notifs = Notification.objects.filter(recipient=self.caller)
+        self.assertEqual(notifs.count(), 1)
+        notif = notifs.first()
+        self.assertEqual(notif.title, "New Leads Assigned")
+        self.assertIn("3 new leads assigned to you", notif.body)
+        self.assertEqual(notif.data.get("count"), 3)
+        self.assertEqual(notif.data.get("tab"), "assigned")
 
     def test_commit_paste_import_all_invalid(self):
         pasted = "12345\nabcdef\n+1 5551234567\n"
@@ -251,20 +370,21 @@ class PasteBatchWebViewTests(TestCase):
         self.client.force_login(self.manager)
         resp = self.client.get("/leads/import/")
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Paste phone numbers")
+        self.assertContains(resp, "Paste Numbers")
 
         # Admin should have access (200)
         self.client.force_login(self.admin)
         resp = self.client.get("/leads/import/")
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Option A: Paste phone numbers")
+        self.assertContains(resp, "Paste Numbers")
 
-    def test_post_import_paste_success(self):
+    def test_post_import_paste_success_clears_pasted_numbers_form(self):
         self.client.force_login(self.admin)
         data = {
             "preferred_course": "MBBS",
             "pasted_numbers": "9392130350\n+91 6304569634\n",
-            "action": "import_paste",
+            "action": "import",
+            "import_method": "paste",
         }
         resp = self.client.post("/leads/import/", data)
         self.assertEqual(resp.status_code, 200)
@@ -275,12 +395,33 @@ class PasteBatchWebViewTests(TestCase):
         self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 1)
         self.assertEqual(Lead.objects.filter(phone="6304569634").count(), 1)
 
+        # Form pasted_numbers must be CLEARED on success so the user cannot accidentally resubmit
+        form = resp.context["form"]
+        self.assertFalse(form.is_bound)
+        self.assertEqual(form.initial.get("pasted_numbers", ""), "")
+
+    def test_post_import_paste_preserves_pasted_numbers_on_validation_error(self):
+        self.client.force_login(self.admin)
+        data = {
+            "preferred_course": "",  # missing course triggers form validation error
+            "pasted_numbers": "9392130350\n+91 6304569634\n",
+            "action": "import",
+            "import_method": "paste",
+        }
+        resp = self.client.post("/leads/import/", data)
+        self.assertEqual(resp.status_code, 200)
+        # Form is bound and invalid; pasted_numbers is preserved
+        form = resp.context["form"]
+        self.assertTrue(form.is_bound)
+        self.assertIn("9392130350", form["pasted_numbers"].value())
+
     def test_post_import_paste_with_skipped_entries(self):
         self.client.force_login(self.admin)
         data = {
             "preferred_course": "MBBS",
             "pasted_numbers": "9392130350\n123456\n+1 5550000000\n",
-            "action": "import_paste",
+            "action": "import",
+            "import_method": "paste",
         }
         resp = self.client.post("/leads/import/", data)
         self.assertEqual(resp.status_code, 200)
@@ -294,11 +435,12 @@ class PasteBatchWebViewTests(TestCase):
         self.client.force_login(self.admin)
         data = {
             "preferred_course": "MBBS",
-            "action": "import_paste",
+            "action": "import",
+            "import_method": "paste",
         }
         resp = self.client.post("/leads/import/", data)
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Please provide either a CSV/XLSX file or paste phone numbers.")
+        self.assertContains(resp, "Please paste phone numbers to import.")
 
     def test_file_upload_backward_compatibility(self):
         self.client.force_login(self.admin)
@@ -310,18 +452,20 @@ class PasteBatchWebViewTests(TestCase):
             "preferred_course": "MBBS",
             "file": csv_file,
             "action": "preview",
+            "import_method": "file",
         }
         resp_preview = self.client.post("/leads/import/", data_preview)
         self.assertEqual(resp_preview.status_code, 200)
         self.assertContains(resp_preview, "Import preview")
         self.assertIn("preview", resp_preview.context)
 
-        # Test commit
+        # Test commit with unified 'import' action
         csv_file.seek(0)
         data_import = {
             "preferred_course": "MBBS",
             "file": csv_file,
             "action": "import",
+            "import_method": "file",
         }
         resp_import = self.client.post("/leads/import/", data_import)
         self.assertEqual(resp_import.status_code, 302)

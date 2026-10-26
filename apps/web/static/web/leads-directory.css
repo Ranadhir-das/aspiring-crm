@@ -1,0 +1,328 @@
+/* ==========================================================================
+   Vaani CRM — Leads Directory Stylesheet
+   Sticky table headers, contained scrollable rows, and polished UI.
+   ========================================================================== */
+
+/* Page Header & Top Action Buttons */
+.leads-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.leads-header .heading-subtitle {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+.leads-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.leads-header .subtle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  transition: all .15s ease;
+}
+.leads-header .subtle-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(103, 81, 185, 0.05);
+}
+.leads-header .action-new-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #ffffff !important;
+  border: 1px solid var(--accent);
+  box-shadow: 0 3px 10px rgba(103, 81, 185, 0.25);
+  transition: all .15s ease;
+}
+.leads-header .action-new-lead:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(103, 81, 185, 0.35);
+}
+
+/* Leads Panel Wrapper */
+.leads-panel {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  overflow: hidden;
+  padding: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+
+/* Bulk Assignment Bar */
+.assignment-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: rgba(103, 81, 185, 0.05);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.assignment-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.selection-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+.selection-pill strong {
+  color: var(--accent);
+}
+.assign-select-wrap select {
+  height: 36px;
+  padding: 0 30px 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+.reassignment-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.assign-submit-btn {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+}
+
+/* Dedicated Scroll Container for Table Rows */
+.leads-table-scroll {
+  display: block;
+  width: 100%;
+  max-height: 480px !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(103, 81, 185, 0.35) transparent;
+}
+.leads-table-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.leads-table-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.leads-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(103, 81, 185, 0.3);
+  border-radius: 999px;
+}
+.leads-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* Table Structure with Sticky Column Headers */
+.leads-table {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  font-size: 13px;
+  text-align: left;
+}
+.leads-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  padding: 13px 18px;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+  background: #f4f6fb !important;
+  color: #505c73 !important;
+  box-shadow: inset 0 -1px 0 var(--border), 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+}
+[data-theme="dark"] .leads-table thead th {
+  background: #171b26 !important;
+  color: #9aa4bc !important;
+  box-shadow: inset 0 -1px 0 var(--border), 0 3px 8px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Sticky Batch Headings (sticks right below the table headers) */
+.leads-table .batch-heading th {
+  position: sticky !important;
+  top: 42px !important;
+  z-index: 5 !important;
+  background: #edf0f8 !important;
+  color: var(--text) !important;
+  padding: 8px 18px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: inset 0 -1px 0 var(--border) !important;
+}
+[data-theme="dark"] .leads-table .batch-heading th {
+  background: #1b2030 !important;
+  color: #edf0f7 !important;
+  box-shadow: inset 0 -1px 0 var(--border) !important;
+}
+.batch-heading-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-heading-inner svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.batch-num-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 1px 7px;
+  border-radius: 5px;
+  margin-left: 6px;
+}
+
+/* Leads Table Body Cells */
+.leads-table tbody td {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+}
+.leads-table tbody tr {
+  transition: background .12s ease;
+}
+.leads-table tbody tr:hover td {
+  background: rgba(103, 81, 185, 0.04);
+}
+.leads-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Person Cell Details */
+.lead-person-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.lead-info-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lead-name-text {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+.lead-person-cell:hover .lead-name-text {
+  color: var(--accent);
+}
+.lead-phone-text {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lead-batch-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+  opacity: 0.8;
+}
+.lead-source-tag {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* Caller Cell */
+.caller-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+.caller-link:hover {
+  color: var(--accent);
+}
+.caller-avatar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mint);
+  flex-shrink: 0;
+}
+.unassigned-muted {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Open Lead Arrow Button */
+.open-lead-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all .15s ease;
+}
+.open-lead-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  transform: translateY(-1px);
+}
+

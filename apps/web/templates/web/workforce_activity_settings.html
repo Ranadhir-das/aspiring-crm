@@ -1,0 +1,268 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Activity Settings · Workforce Activity{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'web:workforce-activity' %}">Workforce Activity</a> / Settings
+{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>Activity & Break Settings<span class="accent">.</span></h1>
+    <p>Manage activity categories, color schemes, role defaults, and break warning thresholds for the mobile app.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'web:workforce-activity' %}">← Back to activity dashboard</a>
+  </div>
+</div>
+
+<!-- SECTION 1: ACTIVITY CATEGORIES -->
+<section class="panel spaced">
+  <div class="panel-heading" style="padding:20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <h2>Activity Categories</h2>
+      <p style="font-size:12px;color:var(--muted);margin-top:4px;">
+        Activities displayed in the mobile employee app Switch Activity sheet. Soft-disable rather than delete to preserve foreign key history.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Order</th>
+          <th>Category Name</th>
+          <th>Slug</th>
+          <th>Icon</th>
+          <th>Color</th>
+          <th>Role Defaults</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cat in categories %}
+        <tr>
+          <td>{{ cat.sort_order }}</td>
+          <td>
+            <strong style="display:flex;align-items:center;gap:8px;">
+              <span style="width:12px;height:12px;border-radius:50%;background-color:{{ cat.color_hex }};display:inline-block;box-shadow:0 0 6px {{ cat.color_hex }}40;"></span>
+              {{ cat.name }}
+            </strong>
+          </td>
+          <td><code>{{ cat.slug }}</code></td>
+          <td><span class="badge" style="background:#1e293b;color:#94a3b8;">{{ cat.icon_key }}</span></td>
+          <td><code style="font-size:11px;">{{ cat.color_hex }}</code></td>
+          <td>
+            {% if cat.is_default_for_caller %}
+              <span class="badge" style="background:#1e3a5f;color:#93c5fd;" title="Default for callers">Caller</span>
+            {% endif %}
+            {% if cat.is_default_for_counselor %}
+              <span class="badge" style="background:#2e1065;color:#d8b4fe;" title="Default for counselors">Counselor</span>
+            {% endif %}
+            {% if cat.is_default_general %}
+              <span class="badge" style="background:#064e3b;color:#6ee7b7;" title="General default">General</span>
+            {% endif %}
+            {% if not cat.is_default_for_caller and not cat.is_default_for_counselor and not cat.is_default_general %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if cat.is_active %}
+              <span class="badge" style="background:#064e3b;color:#34d399;">Active</span>
+            {% else %}
+              <span class="badge" style="background:#374151;color:#9ca3af;">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <form method="post" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="toggle_category">
+                <input type="hidden" name="category_id" value="{{ cat.id }}">
+                <button type="submit" class="button" style="padding:4px 8px;font-size:11px;">
+                  {% if cat.is_active %}Deactivate{% else %}Activate{% endif %}
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="empty">No activity categories configured yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Create Category Form -->
+  <div style="padding:20px;border-top:1px solid var(--border);background:rgba(255,255,255,0.01);">
+    <h3 style="font-size:14px;margin-bottom:14px;">＋ Add New Activity Category</h3>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_category">
+      {{ category_form.non_field_errors }}
+      <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+        <div class="field">
+          <label for="{{ category_form.name.id_for_label }}">Category Name *</label>
+          {{ category_form.name }}
+          {{ category_form.name.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ category_form.slug.id_for_label }}">Slug</label>
+          {{ category_form.slug }}
+          {{ category_form.slug.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ category_form.icon_key.id_for_label }}">Icon Key</label>
+          {{ category_form.icon_key }}
+          {{ category_form.icon_key.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ category_form.color_hex.id_for_label }}">Color Hex (e.g. #005DF2)</label>
+          {{ category_form.color_hex }}
+          {{ category_form.color_hex.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ category_form.sort_order.id_for_label }}">Sort Order</label>
+          {{ category_form.sort_order }}
+          {{ category_form.sort_order.errors }}
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:20px;margin-top:16px;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          {{ category_form.is_active }} Active
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          {{ category_form.is_default_for_caller }} Default for Caller
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          {{ category_form.is_default_for_counselor }} Default for Counselor
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          {{ category_form.is_default_general }} General Default
+        </label>
+        <div style="margin-left:auto;">
+          <button type="submit" class="button primary">Save Category</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- SECTION 2: BREAK REASON CONFIGURATIONS -->
+<section class="panel spaced">
+  <div class="panel-heading" style="padding:20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <h2>Break Reason Configurations</h2>
+      <p style="font-size:12px;color:var(--muted);margin-top:4px;">
+        Reasons employees select when taking a break. Configures warning thresholds (in minutes) and whether a mandatory note is required.
+      </p>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Order</th>
+          <th>Reason Name</th>
+          <th>Code</th>
+          <th>Warning Threshold</th>
+          <th>Requires Note</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for brk in break_reasons %}
+        <tr>
+          <td>{{ brk.sort_order }}</td>
+          <td><strong>{{ brk.name }}</strong></td>
+          <td><code>{{ brk.code }}</code></td>
+          <td>
+            <span style="color:#f59e0b;font-weight:600;">{{ brk.warning_threshold_minutes }} min</span>
+          </td>
+          <td>
+            {% if brk.requires_note %}
+              <span class="badge" style="background:#78350f;color:#fbbf24;">Required</span>
+            {% else %}
+              <span class="muted">Optional</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if brk.is_active %}
+              <span class="badge" style="background:#064e3b;color:#34d399;">Active</span>
+            {% else %}
+              <span class="badge" style="background:#374151;color:#9ca3af;">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="post" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="toggle_break_reason">
+              <input type="hidden" name="reason_id" value="{{ brk.id }}">
+              <button type="submit" class="button" style="padding:4px 8px;font-size:11px;">
+                {% if brk.is_active %}Deactivate{% else %}Activate{% endif %}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="empty">No break reason configurations found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Create Break Reason Form -->
+  <div style="padding:20px;border-top:1px solid var(--border);background:rgba(255,255,255,0.01);">
+    <h3 style="font-size:14px;margin-bottom:14px;">＋ Add New Break Reason</h3>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_break_reason">
+      {{ break_form.non_field_errors }}
+      <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+        <div class="field">
+          <label for="{{ break_form.name.id_for_label }}">Reason Name *</label>
+          {{ break_form.name }}
+          {{ break_form.name.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ break_form.code.id_for_label }}">Code (e.g. LUNCH) *</label>
+          {{ break_form.code }}
+          {{ break_form.code.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ break_form.warning_threshold_minutes.id_for_label }}">Warning Threshold (Minutes) *</label>
+          {{ break_form.warning_threshold_minutes }}
+          {{ break_form.warning_threshold_minutes.errors }}
+        </div>
+        <div class="field">
+          <label for="{{ break_form.sort_order.id_for_label }}">Sort Order</label>
+          {{ break_form.sort_order }}
+          {{ break_form.sort_order.errors }}
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:20px;margin-top:16px;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          {{ break_form.is_active }} Active
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+          {{ break_form.requires_note }} Employee Note Required
+        </label>
+        <div style="margin-left:auto;">
+          <button type="submit" class="button primary">Save Break Reason</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}
+

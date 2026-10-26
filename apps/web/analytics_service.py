@@ -226,7 +226,10 @@ def get_analytics_overview(user, params):
     total_leads_count = leads_qs.count()
     new_leads_count = leads_qs.filter(created_at__range=(start_dt, end_dt)).count()
     calls_count = calls_qs.filter(started_at__range=(start_dt, end_dt)).count()
-    interested_count = leads_qs.filter(status=Lead.Status.INTERESTED).count()
+    interested_count = leads_qs.filter(
+        Q(status=Lead.Status.INTERESTED, created_at__range=(start_dt, end_dt)) |
+        Q(calls__outcome=Call.Outcome.INTERESTED, calls__started_at__range=(start_dt, end_dt))
+    ).distinct().count()
     followups_count = followups_qs.filter(created_at__range=(start_dt, end_dt)).count()
     missed_followups_count = followups_qs.filter(
         status=FollowUp.Status.PENDING,
@@ -239,7 +242,10 @@ def get_analytics_overview(user, params):
     prev_total_leads = leads_qs.filter(created_at__lte=prev_end_dt).count()
     prev_new_leads = leads_qs.filter(created_at__range=(prev_start_dt, prev_end_dt)).count()
     prev_calls = calls_qs.filter(started_at__range=(prev_start_dt, prev_end_dt)).count()
-    prev_interested = calls_qs.filter(started_at__range=(prev_start_dt, prev_end_dt), outcome=Call.Outcome.INTERESTED).count()
+    prev_interested = leads_qs.filter(
+        Q(status=Lead.Status.INTERESTED, created_at__range=(prev_start_dt, prev_end_dt)) |
+        Q(calls__outcome=Call.Outcome.INTERESTED, calls__started_at__range=(prev_start_dt, prev_end_dt))
+    ).distinct().count()
     prev_followups = followups_qs.filter(created_at__range=(prev_start_dt, prev_end_dt)).count()
     prev_missed_followups = 0
     prev_counselling = counsellings_qs.filter(conducted_at__range=(prev_start_dt, prev_end_dt)).count()
@@ -763,7 +769,10 @@ def get_analytics_overview(user, params):
         sub_leads = leads_qs.filter(source__iexact=src_key)
         l_cnt = sub_leads.count()
         c_cnt = calls_qs.filter(lead__source__iexact=src_key, started_at__range=(start_dt, end_dt)).count()
-        i_cnt = sub_leads.filter(status=Lead.Status.INTERESTED).count()
+        i_cnt = sub_leads.filter(
+            Q(status=Lead.Status.INTERESTED, created_at__range=(start_dt, end_dt)) |
+            Q(calls__outcome=Call.Outcome.INTERESTED, calls__started_at__range=(start_dt, end_dt))
+        ).distinct().count()
         a_cnt = admissions_qs.filter(lead__source__iexact=src_key, admission_date__range=(start_dt.date(), end_dt.date())).count()
         rate = round((a_cnt / l_cnt * 100), 1) if l_cnt else 0.0
         source_matrix.append({

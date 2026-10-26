@@ -3,6 +3,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.forms import AuthenticationForm
 from apps.accounts.models import User
 from apps.leads.models import Lead
+from django.db.models import Count, Q
 
 MANAGEMENT = {User.Role.SUPER_ADMIN, User.Role.ADMIN, User.Role.MANAGER}
 CALLING = MANAGEMENT | {User.Role.CALLER}
@@ -70,7 +71,33 @@ class FollowUpForm(forms.Form):
 from apps.leads.courses import Course, validate_course
 
 
+class CallerChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        pending = getattr(obj, 'pending_lead_count', None)
+        if pending is None:
+            pending = obj.assigned_leads.filter(status=Lead.Status.PENDING).count()
+        lead_word = "lead" if pending == 1 else "leads"
+        return f"{obj} — {pending} pending {lead_word}"
+
+
 class ImportForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['caller'].queryset = (
+            User.objects.filter(
+                Q(role=User.Role.CALLER) | Q(can_act_as_caller=True),
+                is_active=True,
+            )
+            .annotate(
+                pending_lead_count=Count(
+                    'assigned_leads',
+                    filter=Q(assigned_leads__status=Lead.Status.PENDING),
+                )
+            )
+            .order_by('pending_lead_count', 'first_name', 'last_name', 'username')
+        )
+    import_method = forms.CharField(widget=forms.HiddenInput(), required=False, initial='paste')
+    idempotency_key = forms.CharField(widget=forms.HiddenInput(), required=False)
     preferred_course = forms.ChoiceField(choices=[('', 'Select a course'), *Course.choices], widget=forms.RadioSelect)
     preferred_course_custom = forms.CharField(max_length=150, required=False, label='Enter Course Name (Others)')
 
@@ -85,7 +112,7 @@ class ImportForm(forms.Form):
         help_text='One number per line. Indian mobile numbers (+91, spaces, hyphens, parentheses, optional braces) are normalized to 10 digits.',
     )
 
-    caller = forms.ModelChoiceField(
+    caller = CallerChoiceField(widget=forms.Select(attrs={'class': 'caller-select'}),
         queryset=User.objects.filter(role=User.Role.CALLER, is_active=True),
         required=False, label='Assign imported leads to',
         empty_label='Leave unassigned',
@@ -112,9 +139,15 @@ class ImportForm(forms.Form):
             except ValueError as exc:
                 self.add_error('preferred_course_custom', str(exc))
 
+        method = data.get('import_method') or 'paste'
         has_file = bool(data.get('file'))
         has_paste = bool(str(data.get('pasted_numbers') or '').strip())
-        if not has_file and not has_paste:
+
+        if method == 'file' and not has_file:
+            self.add_error('file', 'Please choose a CSV or Excel file.')
+        elif method == 'paste' and not has_paste and not has_file:
+            self.add_error('pasted_numbers', 'Please paste phone numbers to import.')
+        elif not has_file and not has_paste:
             self.add_error(None, 'Please provide either a CSV/XLSX file or paste phone numbers.')
 
         return data

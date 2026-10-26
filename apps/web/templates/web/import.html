@@ -5,105 +5,240 @@
 {% block breadcrumb %}Import leads{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/course-intake.css' %}">
+<link rel="stylesheet" href="{% static 'web/course-intake.css' %}?v=2">
 <script src="{% static 'web/course-intake.js' %}" defer></script>
 
-{% if can_manage %}
-<div class="actions spaced">
-  <a class="button" href="{% url 'web:lead-quick-entry' %}">Quick name / phone entry</a>
-  <a class="button" href="{% url 'web:lead-distribute' %}">Assign by quantity</a>
-</div>
-{% endif %}
-
-<div class="page-heading">
+<div class="page-heading import-header">
   <div>
-    <div class="eyebrow">BRING YOUR NEXT OPPORTUNITIES IN</div>
+    <div class="eyebrow">LEAD INTAKE & DISTRIBUTION</div>
     <h1>Import leads<span class="accent">.</span></h1>
-    <p>Upload a CSV/Excel workbook or paste phone numbers directly into a batch.</p>
+    <p class="heading-subtitle">Upload a CSV/Excel workbook or paste phone numbers directly to create and assign lead batches.</p>
   </div>
+  {% if can_manage %}
+  <div class="actions">
+    <a class="button action-btn" href="{% url 'web:lead-quick-entry' %}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Quick name / phone entry
+    </a>
+    <a class="button action-btn" href="{% url 'web:lead-distribute' %}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      Assign by quantity
+    </a>
+  </div>
+  {% endif %}
 </div>
 
-<div class="dashboard-grid">
-  <section class="panel form-panel">
-    <h2>Build your next lead batch</h2>
-    <p class="muted">Paste phone numbers or upload CSV / XLSX</p>
+<div class="dashboard-grid import-grid">
+  <!-- Left Column: Lead Batch Intake Form -->
+  <section class="panel form-panel import-main-card">
+    <div class="panel-header-block">
+      <div class="panel-icon-badge">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <div>
+        <h2>Build your next lead batch</h2>
+        <p class="muted">Select a target course, enter leads, and optionally assign callers.</p>
+      </div>
+    </div>
 
     <form method="post" enctype="multipart/form-data" class="course-import-form">
       {% csrf_token %}
       {{ form.non_field_errors }}
 
-      <fieldset class="course-selector">
-        <legend>1. Preferred course <span class="accent">*</span></legend>
-        <p class="muted">Applied to every new lead in this batch. Existing duplicates stay unchanged.</p>
+      <!-- Step 1: Preferred Course -->
+      <div class="step-card">
+        <div class="step-card-header">
+          <span class="step-badge">1</span>
+          <div>
+            <h3 class="step-title">Preferred Course <span class="accent">*</span></h3>
+            <p class="step-subtitle">Applied to every new lead in this batch. Existing duplicates stay unchanged.</p>
+          </div>
+        </div>
         {{ form.preferred_course.errors }}
         <div class="course-chips">
           {% for choice in form.preferred_course %}
             {% if choice.data.value %}
               <label class="course-chip">
                 {{ choice.tag }}
-                <span>{{ choice.choice_label }}</span>
+                <span class="chip-inner">
+                  <span class="chip-radio"></span>
+                  <span class="chip-label">{{ choice.choice_label }}</span>
+                </span>
               </label>
             {% endif %}
           {% endfor %}
         </div>
-      </fieldset>
 
-      <div class="field custom-course-field">
-        <label for="{{ form.preferred_course_custom.id_for_label }}">Enter Course Name</label>
-        {{ form.preferred_course_custom }}
-        {{ form.preferred_course_custom.errors }}
+        <div class="field custom-course-field">
+          <label for="{{ form.preferred_course_custom.id_for_label }}">Enter Course Name</label>
+          {{ form.preferred_course_custom }}
+          {{ form.preferred_course_custom.errors }}
+        </div>
       </div>
 
-      <fieldset class="course-selector">
-        <legend>2. Lead data source <span class="accent">*</span></legend>
-        <p class="muted">Paste phone numbers directly or choose a spreadsheet file.</p>
+      <!-- Step 2: Lead Data Source -->
+      <div class="step-card">
+        <div class="step-card-header">
+          <span class="step-badge">2</span>
+          <div>
+            <h3 class="step-title">Lead Data Source <span class="accent">*</span></h3>
+            <p class="step-subtitle">Paste phone numbers directly or choose a spreadsheet file.</p>
+          </div>
+        </div>
 
-        <div class="paste-numbers-section">
-          <label for="{{ form.pasted_numbers.id_for_label }}"><strong>Option A: Paste phone numbers</strong></label>
-          <p class="muted" style="margin:4px 0 8px;">Paste one number per line. Indian mobile numbers (+91, spaces, hyphens, optional braces) are normalized to 10 digits. Duplicates are allowed.</p>
+        {{ form.import_method }}
+        {{ form.idempotency_key }}
+
+        <div class="import-method-tabs" role="tablist">
+          <button type="button" class="method-tab active" data-method="paste" role="tab" id="tab-paste">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            Paste Numbers
+          </button>
+          <button type="button" class="method-tab" data-method="file" role="tab" id="tab-file">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            Upload File
+          </button>
+        </div>
+
+        <div class="paste-numbers-section" id="method-section-paste">
+          <div class="section-label-row">
+            <label for="{{ form.pasted_numbers.id_for_label }}">Paste phone numbers</label>
+            <span class="input-tag">1 number per line</span>
+          </div>
+          <p class="field-description">Indian mobile numbers (+91, spaces, hyphens, optional braces) are normalized to 10 digits. Duplicates within the pasted list and existing CRM leads are automatically skipped.</p>
           {{ form.pasted_numbers }}
           {{ form.pasted_numbers.errors }}
         </div>
 
-        <div class="divider-or"><span>OR</span></div>
-
-        <div class="course-file">
-          <label for="{{ form.file.id_for_label }}"><strong>Option B: Choose your CSV or Excel file</strong></label>
+        <div class="course-file" id="method-section-file" style="display:none;">
+          <div class="file-upload-visual">
+            <div class="upload-icon-circle">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <div>
+              <label for="{{ form.file.id_for_label }}">Choose your CSV or Excel file</label>
+              <div class="muted">CSV / XLSX, up to 5 MB. Preview before importing.</div>
+            </div>
+          </div>
           {{ form.file }}
           {{ form.file.errors }}
-          <small class="muted">CSV / XLSX, up to 5 MB. Preview before importing.</small>
         </div>
-      </fieldset>
-
-      <div class="field">
-        <label for="{{ form.caller.id_for_label }}">3. Assignment (optional)</label>
-        {{ form.caller }}
-        {{ form.caller.errors }}
-        <small>{{ form.caller.help_text }}</small>
       </div>
 
-      <div class="form-actions">
-        <button type="submit" name="action" value="import_paste" class="button primary">Import Pasted Numbers ↗</button>
-        <button type="submit" name="action" value="preview" class="button">Preview file</button>
-        <button type="submit" name="action" value="import" class="button">Import file ↗</button>
+      <!-- Step 3: Assignment -->
+      <div class="step-card">
+        <div class="step-card-header">
+          <span class="step-badge">3</span>
+          <div>
+            <h3 class="step-title">Assignment <span class="optional-tag">Optional</span></h3>
+            <p class="step-subtitle">Assign immediately to a caller with fewer pending leads, or leave unassigned to distribute later.</p>
+          </div>
+        </div>
+
+        <div class="caller-field">
+          <div class="select-wrapper">
+            {{ form.caller }}
+          </div>
+          {{ form.caller.errors }}
+          <div class="caller-help-hint">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Callers sorted by pending calls (lowest first). Newly imported leads are assigned; existing duplicates keep their current caller.</span>
+          </div>
+        </div>
       </div>
 
-      <p class="muted">For pasted numbers, leads are created immediately with blank names. For files, you can preview first. Duplicates in files are skipped.</p>
+      <!-- Submit Actions Bar -->
+      <div class="form-actions-bar">
+        <div class="btn-group">
+          <button type="submit" name="action" value="import" class="button primary submit-import-btn" id="submit-import-btn">
+            <span>Import Leads</span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+          </button>
+          <button type="submit" name="action" value="preview" class="button preview-file-btn" id="preview-file-btn" style="display:none;">
+            Preview file
+          </button>
+        </div>
+        <p class="import-safety-note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          For pasted numbers, leads are created immediately with blank names. For files, you can preview first. Duplicates are automatically skipped.
+        </p>
+      </div>
     </form>
   </section>
 
-  <section class="panel form-panel">
-    <span class="eyebrow">BATCH GUIDELINES</span>
-    <h2>Fast and reliable intake.</h2>
-    <div style="margin-bottom:16px;">
-      <strong>Paste Phone Numbers:</strong>
-      <p class="muted" style="margin-top:4px;">Paste 10-digit Indian numbers (e.g. <code>9392130350</code>, <code>+91 6304569634</code>, <code>9179897 73522</code>, <code>63041 53694</code>). Braces <code>{ ... }</code> or empty lines are ignored. Duplicates are accepted as separate leads with blank names.</p>
+  <!-- Right Column: Batch Guidelines & Best Practices -->
+  <section class="panel form-panel import-guidelines-panel">
+    <div class="guidelines-header">
+      <span class="eyebrow">BATCH GUIDELINES</span>
+      <h2>Fast and reliable intake.</h2>
+      <p class="muted">Follow these standards to ensure flawless parsing, zero duplicates, and fair caller workload distribution.</p>
     </div>
-    <div>
-      <strong>Spreadsheet Upload:</strong>
-      <p class="muted" style="margin-top:4px;">Accepted column headers: <code>name</code>, <code>phone</code> (or Name / Mobile). Optional columns: email, location, college, neet_status, pcb_percentage, preferred_intake, source, campaign, notes.</p>
+
+    <div class="guideline-cards-stack">
+      <!-- Guideline 1: Phone Normalization -->
+      <div class="guideline-card">
+        <div class="guideline-card-top">
+          <div class="guide-icon-pill">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          </div>
+          <h4>Paste Phone Numbers</h4>
+        </div>
+        <p class="muted">Paste 10-digit Indian numbers in any standard format:</p>
+        <div class="format-examples">
+          <span class="format-pill"><code>9392130350</code></span>
+          <span class="format-pill"><code>+91 6304569634</code></span>
+          <span class="format-pill"><code>9179897 73522</code></span>
+          <span class="format-pill"><code>63041 53694</code></span>
+        </div>
+        <ul class="guide-bullet-list">
+          <li>Braces <code>{ ... }</code> or empty lines are ignored.</li>
+          <li>Duplicates within the list and existing CRM leads are skipped.</li>
+          <li>New leads start as <strong>Pending</strong> with blank names.</li>
+        </ul>
+      </div>
+
+      <!-- Guideline 2: Spreadsheet Upload -->
+      <div class="guideline-card">
+        <div class="guideline-card-top">
+          <div class="guide-icon-pill">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+          </div>
+          <h4>Spreadsheet Upload</h4>
+        </div>
+        <p class="muted">Supported column headers for CSV or XLSX workbooks:</p>
+        <div class="column-badges">
+          <div class="badge-group">
+            <span class="col-type-tag required">Required</span>
+            <span class="col-pill">name</span>
+            <span class="col-pill">phone</span>
+            <span class="col-pill">mobile</span>
+          </div>
+          <div class="badge-group" style="margin-top: 6px;">
+            <span class="col-type-tag optional">Optional</span>
+            <span class="col-pill">email</span>
+            <span class="col-pill">location</span>
+            <span class="col-pill">college</span>
+            <span class="col-pill">neet_status</span>
+            <span class="col-pill">pcb_percentage</span>
+            <span class="col-pill">notes</span>
+          </div>
+        </div>
+        <p class="guide-footnote">Accepted formats: <code>.csv</code> or <code>.xlsx</code> up to 5 MB.</p>
+      </div>
+
+      <!-- Guideline 3: Workload Balancing -->
+      <div class="guideline-card">
+        <div class="guideline-card-top">
+          <div class="guide-icon-pill">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h4>Smart Workload Balancing</h4>
+        </div>
+        <p class="muted">
+          Caller dropdown displays current <strong>pending leads</strong> for each caller. Callers with fewer pending calls are placed at the top so you can balance calls evenly and eliminate delays.
+        </p>
+      </div>
     </div>
-    <p class="muted" style="margin-top:16px;">New leads start as Pending. Leave caller blank to distribute later, or choose a caller to assign immediately.</p>
   </section>
 </div>
 
@@ -141,10 +276,43 @@
       <div class="metric-value text-success">{{ paste_result.created_count }}</div>
     </div>
     <div class="paste-metric-card">
+      <div class="metric-label">Duplicates Skipped</div>
+      <div class="metric-value {% if paste_result.duplicate_count > 0 %}text-warning{% endif %}">{{ paste_result.duplicate_count|default:0 }}</div>
+    </div>
+    <div class="paste-metric-card">
       <div class="metric-label">Skipped (Invalid)</div>
       <div class="metric-value {% if paste_result.skipped_count > 0 %}text-danger{% endif %}">{{ paste_result.skipped_count }}</div>
     </div>
   </div>
+
+  {% if paste_result.duplicate_entries %}
+    <div class="panel-heading" style="margin-top:20px;">
+      <div>
+        <h3>Duplicates Skipped ({{ paste_result.duplicate_count }})</h3>
+        <p class="muted">These phone numbers were not imported because they already exist in the CRM or appeared earlier in the pasted list:</p>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:60px;">#</th>
+            <th>Phone Number</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in paste_result.duplicate_entries %}
+          <tr>
+            <td>{{ forloop.counter }}</td>
+            <td><code>{{ item.phone }}</code></td>
+            <td><span class="badge warning">{{ item.reason }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
 
   {% if paste_result.invalid_entries %}
     <div class="panel-heading" style="margin-top:20px;">
@@ -220,35 +388,67 @@
 </section>
 {% endif %}
 
-<section class="panel spaced">
-  <div class="panel-heading">
-    <h2>Recent imports</h2>
+<section class="panel spaced recent-imports-panel">
+  <div class="panel-heading recent-imports-heading">
+    <div>
+      <div class="eyebrow">BATCH HISTORY</div>
+      <h2>Recent imports</h2>
+      <p class="muted">List of previously created lead batches, allocation progress, and remaining pools.</p>
+    </div>
+    {% if batches %}
+      <div class="batch-count-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>{{ batches|length }} Batches</span>
+      </div>
+    {% endif %}
   </div>
-  <div class="table-scroll">
-    <table>
+  <div class="recent-imports-scroll">
+    <table class="recent-imports-table">
       <thead>
         <tr>
-          <th>Assign</th>
-          <th>File / Batch</th>
-          <th>Imported by</th>
-          <th>Created</th>
-          <th>Assigned</th>
-          <th>Left to assign</th>
-          <th>Duplicates</th>
-          <th>Date</th>
+          <th style="min-width: 140px;">Assign</th>
+          <th style="min-width: 180px;">File / Batch</th>
+          <th style="min-width: 130px;">Imported by</th>
+          <th style="min-width: 85px; text-align: right;">Created</th>
+          <th style="min-width: 85px; text-align: right;">Assigned</th>
+          <th style="min-width: 130px; text-align: center;">Left to assign</th>
+          <th style="min-width: 95px; text-align: center;">Duplicates</th>
+          <th style="min-width: 150px;">Date</th>
         </tr>
       </thead>
       <tbody>
         {% for batch in batches %}
         <tr>
-          <td><a class="button" href="{% url 'web:lead-distribute' %}?batch={{ batch.pk }}">Assign quantities</a></td>
-          <td><a class="text-link" href="{% url 'web:leads' %}?batch={{ batch.pk }}">{{ batch.filename }}</a></td>
+          <td>
+            <a class="button subtle-btn batch-assign-btn" href="{% url 'web:lead-distribute' %}?batch={{ batch.pk }}">
+              <span>Assign quantities</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+            </a>
+          </td>
+          <td>
+            <div class="batch-file-cell">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <a class="text-link batch-link" href="{% url 'web:leads' %}?batch={{ batch.pk }}">{{ batch.filename }}</a>
+            </div>
+          </td>
           <td>{% employee_link batch.imported_by %}</td>
-          <td>{{ batch.created_count }}</td>
-          <td>{{ batch.allocated }}</td>
-          <td><strong>{{ batch.remaining }}</strong></td>
-          <td>{{ batch.duplicate_count }}</td>
-          <td>{{ batch.created_at|date:'d M Y, H:i' }}</td>
+          <td style="text-align: right;"><span class="num-cell">{{ batch.created_count }}</span></td>
+          <td style="text-align: right;"><span class="num-cell">{{ batch.allocated }}</span></td>
+          <td style="text-align: center;">
+            {% if batch.remaining > 0 %}
+              <span class="batch-status-pill pending">{{ batch.remaining }} left</span>
+            {% else %}
+              <span class="batch-status-pill completed">✓ All assigned</span>
+            {% endif %}
+          </td>
+          <td style="text-align: center;">
+            {% if batch.duplicate_count > 0 %}
+              <span class="batch-status-pill warning">{{ batch.duplicate_count }}</span>
+            {% else %}
+              <span class="muted">-</span>
+            {% endif %}
+          </td>
+          <td><span class="date-cell">{{ batch.created_at|date:'d M Y, H:i' }}</span></td>
         </tr>
         {% empty %}
         <tr><td colspan="8" class="empty">Your import history will appear here.</td></tr>

@@ -1,15 +1,34 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}Lead directory{% endblock %}{% block breadcrumb %}Lead directory{% endblock %}{% block content %}{% if can_manage %}<div class="actions spaced"><a class="button" href="{% url 'web:lead-quick-entry' %}">Quick name / phone entry</a><a class="button" href="{% url 'web:lead-distribute' %}">Assign by quantity</a></div>{% endif %}
-<div class="page-heading">
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Lead directory{% endblock %}
+{% block breadcrumb %}Lead directory{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/leads-directory.css' %}?v=2">
+<div class="page-heading leads-header">
   <div>
-    <div class="eyebrow">TURN INTEREST INTO OPPORTUNITY</div>
+    <div class="eyebrow">LEAD PIPELINE & DIRECTORY</div>
     <h1>Lead directory<span class="accent">.</span></h1>
     <p>Find the right person. Make the next conversation count.</p>
   </div>
   {% if can_manage %}
-  <div class="actions">
-    <a class="button" href="{% url 'web:lead-distribute' %}">Distribute leads</a>
-    <a class="button" href="{% url 'web:lead-import' %}">⇧ Import leads</a>
-    <a class="button primary" href="{% url 'web:lead-create' %}">＋ New lead</a>
+  <div class="actions header-actions">
+    <a class="button subtle-btn" href="{% url 'web:lead-quick-entry' %}" title="Quick manual entry for name and phone">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      <span>Quick entry</span>
+    </a>
+    <a class="button subtle-btn" href="{% url 'web:lead-distribute' %}" title="Assign batches by quantity">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      <span>Distribute</span>
+    </a>
+    <a class="button subtle-btn" href="{% url 'web:lead-import' %}" title="Import new leads from file or paste">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <span>Import leads</span>
+    </a>
+    <a class="button primary action-new-lead" href="{% url 'web:lead-create' %}" title="Create a single lead">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>New lead</span>
+    </a>
   </div>
   {% endif %}
 </div>
@@ -63,6 +82,7 @@
       <select name="owner" class="filter-select" aria-label="Assigned caller">
         <option value="">All callers</option>
         <option value="unassigned" {% if selected_owner == 'unassigned' %}selected{% endif %}>Unassigned</option>
+        <option value="assigned" {% if selected_owner == 'assigned' %}selected{% endif %}>All assigned leads</option>
         {% for caller in callers %}
         <option value="{{ caller.pk }}" {% if selected_owner == caller.pk|stringformat:'s' %}selected{% endif %}>{{ caller|user_name }}</option>
         {% endfor %}
@@ -158,7 +178,7 @@
   </form>
 </div>
 
-<section class="panel">
+<section class="panel leads-panel">
   <!-- Prominent Results Summary Bar showing the exact number of leads -->
   <div class="lead-results-summary">
     <div class="summary-left" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -172,8 +192,12 @@
         <span class="filter-indicator">Caller: <strong>{% employee_link selected_owner_user %}</strong></span>
       {% elif selected_owner == 'unassigned' %}
         <span class="filter-indicator">Caller: <strong>Unassigned</strong></span>
+      {% elif selected_owner == 'assigned' %}
+        <span class="filter-indicator">Caller: <strong>All assigned</strong></span>
       {% endif %}
-      {% if selected_batch %}
+      {% if selected_batch == 'none' %}
+        <span class="filter-indicator">Batch: <strong>Manual / Unbatched</strong></span>
+      {% elif selected_batch %}
         <span class="filter-indicator">Batch: <strong>#{{ selected_batch }}</strong></span>
       {% endif %}
       {% if selected_source %}
@@ -185,11 +209,14 @@
       {% if last_call_from or last_call_to %}
         <span class="filter-indicator">Last call: <strong>{{ last_call_from|default:'*' }} to {{ last_call_to|default:'*' }}</strong></span>
       {% endif %}
-      {% if followup_status %}
-        <span class="filter-indicator">Follow-up: <strong>{{ followup_status }}</strong></span>
+      {% if followup_status_display %}
+        <span class="filter-indicator">Follow-up: <strong>{{ followup_status_display }}</strong></span>
+      {% endif %}
+      {% if followup_from or followup_to %}
+        <span class="filter-indicator">Follow-up date: <strong>{{ followup_from|default:'*' }} to {{ followup_to|default:'*' }}</strong></span>
       {% endif %}
       {% if selected_service %}
-        <span class="filter-indicator">Service: <strong>{{ selected_service }}</strong></span>
+        <span class="filter-indicator">Course / Service: <strong>{{ selected_service }}</strong></span>
       {% endif %}
     </div>
     {% if active_filters_count %}
@@ -201,44 +228,63 @@
     {% csrf_token %}
     {% if can_manage %}
     <div class="assignment-bar">
-      <span><strong id="selected-count">0</strong> selected</span>
-      <select name="caller_id" aria-label="Assign selected leads to caller" required>
+      <div class="assignment-left">
+        <span class="selection-pill"><strong id="selected-count">0</strong> selected</span>
+        <div class="assign-select-wrap">
+          <select name="caller_id" aria-label="Assign selected leads to caller" required>
         <option value="">Assign to caller…</option>
         {% for caller in callers %}
         <option value="{{ caller.pk }}">{{ caller|user_name }}</option>
         {% endfor %}
       </select>
-      <label class="checkbox"><input name="reassign" type="checkbox"> Allow reassignment</label>
-      <button class="button" type="submit">Assign selected →</button>
+        </div>
+        <label class="checkbox reassignment-checkbox">
+          <input name="reassign" type="checkbox">
+          <span>Allow reassignment</span>
+        </label>
+      </div>
+      <button class="button primary assign-submit-btn" type="submit">Assign selected →</button>
     </div>
     {% endif %}
 
-    <div class="table-scroll">
-      <table>
+    <div class="table-scroll leads-table-scroll">
+      <table class="leads-table">
         <thead>
           <tr>
-            {% if can_manage %}<th><input type="checkbox" id="select-all" aria-label="Select all leads on this page"></th>{% endif %}
-            <th>Lead</th>
-            <th>Source</th>
-            <th>Status</th>
-            <th>Assigned caller</th>
-            <th>Added</th>
-            <th></th>
+            {% if can_manage %}<th style="width: 44px; text-align: center;"><input type="checkbox" id="select-all" aria-label="Select all leads on this page"></th>{% endif %}
+            <th style="min-width: 250px;">Lead</th>
+            <th style="min-width: 120px;">Source</th>
+            <th style="min-width: 130px;">Status</th>
+            <th style="min-width: 160px;">Assigned caller</th>
+            <th style="min-width: 120px;">Added</th>
+            <th style="width: 50px; text-align: center;"></th>
           </tr>
         </thead>
         <tbody>
           {% for lead in records %}
           {% ifchanged lead.import_batch_id %}
           <tr class="batch-heading">
-            <th colspan="7">{{ lead.import_batch.filename|default:"Manual / unbatched leads" }} <small>• Batch {% if lead.import_batch_id %}#{{ lead.import_batch_id }}{% else %}—{% endif %}</small></th>
+            <th colspan="7">
+              <div class="batch-heading-inner">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</span>
+                <span class="batch-num-tag">Batch {% if lead.import_batch_id %}#{{ lead.import_batch_id }}{% else %}—{% endif %}</span>
+              </div>
+            </th>
           </tr>
           {% endifchanged %}
           <tr>
-            {% if can_manage %}<td><input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.name }}"></td>{% endif %}
+            {% if can_manage %}<td style="text-align: center;"><input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.name }}"></td>{% endif %}
             <td>
-              <a class="person" href="{% url 'web:lead-detail' lead.pk %}">
+              <a class="person lead-person-cell" href="{% url 'web:lead-detail' lead.pk %}">
                 <span class="avatar subtle">{{ lead.name|first|upper }}</span>
-                <span><small>{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</small><strong>{{ lead.name }}</strong><small>{{ lead.phone }}</small></span>
+                <span class="lead-info-wrap">
+                  <strong class="lead-name-text">{{ lead.name }}</strong>
+                  <span class="lead-phone-text">{{ lead.phone }}</span>
+                  {% if lead.import_batch %}
+                    <small class="lead-batch-sub">{{ lead.import_batch.filename }}</small>
+                  {% endif %}
+                </span>
               </a>
             </td>
             <td>{{ lead.source|default:'—' }}</td>
@@ -249,15 +295,16 @@
             </td>
             <td>
               {% if lead.assigned_caller %}
-                <a href="{% querystring owner=lead.assigned_caller_id page=None %}" title="Filter by {{ lead.assigned_caller|user_name }}" style="text-decoration:none;color:inherit">
+                <a class="caller-link" href="{% querystring owner=lead.assigned_caller_id page=None %}" title="Filter by {{ lead.assigned_caller|user_name }}">
+                  <span class="caller-avatar-dot"></span>
                   {{ lead.assigned_caller|user_name }}
                 </a>
               {% else %}
-                <span class="muted">—</span>
+                <span class="unassigned-muted">— Unassigned —</span>
               {% endif %}
             </td>
             <td>{{ lead.created_at|date:'d M Y' }}</td>
-            <td><a class="arrow-link" aria-label="Open {{ lead.name }}" href="{% url 'web:lead-detail' lead.pk %}">↗</a></td>
+            <td style="text-align: center;"><a class="open-lead-btn" aria-label="Open {{ lead.name }}" href="{% url 'web:lead-detail' lead.pk %}" title="View lead details">↗</a></td>
           </tr>
           {% empty %}
           <tr>

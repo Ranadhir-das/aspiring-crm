@@ -19,6 +19,7 @@ from . import apostille_lead_views
 from . import location_views
 from . import counselor_views
 from . import workforce_views as workforce
+from . import workforce_activity_views
 
 app_name = 'web'
 urlpatterns = [
@@ -88,6 +89,9 @@ urlpatterns = [
     path('payroll/<int:pk>/edit/', workforce.payroll_new, name='payroll-edit'),
     path('payroll/<int:pk>/query/', workforce.payroll_query, name='payroll-query'),
     path('payroll/queries/<int:pk>/resolve/', workforce.payroll_resolve, name='payroll-resolve'),
+    path('workforce/activity/', workforce_activity_views.activity_dashboard, name='workforce-activity'),
+    path('workforce/activity/<int:pk>/', workforce_activity_views.activity_detail, name='workforce-activity-detail'),
+    path('workforce/activity/settings/', workforce_activity_views.activity_settings, name='workforce-activity-settings'),
     path('activity/', workforce.activity_log, name='activity-log'),
     path('leads/<int:pk>/collaboration/', workforce.lead_collaboration, name='lead-collaboration'),
     path('consultations/', workforce.consultations, name='consultations'),

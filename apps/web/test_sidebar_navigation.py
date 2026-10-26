@@ -86,7 +86,7 @@ class SidebarNavigationTest(TestCase):
         self.assertNotIn(reverse('web:lead-routing'), content)
         self.assertNotIn(reverse('web:website-integrations'), content)
         self.assertNotIn(reverse('web:lead-import'), content)
-        self.assertNotIn(reverse('web:activity-log'), content)
+        self.assertNotIn(f'href="{reverse("web:activity-log")}"', content)
         self.assertNotIn(reverse('web:finance-overview'), content)
         self.assertNotIn(reverse('web:expenses'), content)
         self.assertNotIn(reverse('web:invoices'), content)
@@ -105,4 +105,4 @@ class SidebarNavigationTest(TestCase):
         self.assertIn(reverse('web:consultations'), content)
 
         # Manager does not see SUPER_ADMIN/ADMIN only activity-log
-        self.assertNotIn(reverse('web:activity-log'), content)
+        self.assertNotIn(f'href="{reverse("web:activity-log")}"', content)

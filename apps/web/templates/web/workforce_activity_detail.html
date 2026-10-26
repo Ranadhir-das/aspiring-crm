@@ -1,0 +1,231 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Session #{{ session.id }} · Workforce Activity{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'web:workforce-activity' %}">Workforce Activity</a> / Session #{{ session.id }}
+{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>
+      Work Session #{{ session.id }}
+      <span class="accent">.</span>
+    </h1>
+    <p>
+      Employee: <strong>{% employee_link session.user %}</strong> ({{ session.user.get_role_display }}) · Date: {{ session.date|date:'d M Y' }}
+    </p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'web:workforce-activity' %}">← Back to sessions</a>
+  </div>
+</div>
+
+<section class="metrics">
+  <div class="metric">
+    <div class="metric-top">Session Status</div>
+    <div style="margin-top:6px;">
+      {% if session.status == 'ACTIVE' %}
+        <span class="badge" style="background:#064e3b;color:#34d399;font-size:13px;padding:4px 10px;">Active (Working)</span>
+      {% elif session.status == 'PAUSED' %}
+        <span class="badge" style="background:#78350f;color:#fbbf24;font-size:13px;padding:4px 10px;">Paused (On Break)</span>
+      {% elif session.status == 'COMPLETED' %}
+        <span class="badge" style="background:#1e3a5f;color:#60a5fa;font-size:13px;padding:4px 10px;">Completed</span>
+      {% elif session.status == 'AUTO_CLOSED' %}
+        <span class="badge" style="background:#374151;color:#9ca3af;font-size:13px;padding:4px 10px;">Auto Closed</span>
+      {% endif %}
+    </div>
+    {% if session.closure_reason %}
+    <span class="muted" style="font-size:11px;display:block;margin-top:6px;">Reason: {{ session.get_closure_reason_display }}</span>
+    {% endif %}
+  </div>
+
+  <div class="metric">
+    <div class="metric-top">Gross Duration</div>
+    <strong>{{ gross_seconds|duration }}</strong>
+    <span class="muted" style="font-size:11px;display:block;margin-top:4px;">
+      {{ session.started_at|date:'H:i' }} → {% if session.ended_at %}{{ session.ended_at|date:'H:i' }}{% else %}Now{% endif %}
+    </span>
+  </div>
+
+  <div class="metric">
+    <div class="metric-top">Break Time</div>
+    <strong style="color:#f59e0b;">{{ break_seconds|duration }}</strong>
+    <span class="muted" style="font-size:11px;display:block;margin-top:4px;">
+      {{ break_percent }}% of gross session
+    </span>
+  </div>
+
+  <div class="metric">
+    <div class="metric-top">Net Work Time</div>
+    <strong style="color:var(--mint, #53e0b7);">{{ net_seconds|duration }}</strong>
+    <span class="muted" style="font-size:11px;display:block;margin-top:4px;">
+      {{ work_percent }}% productive work
+    </span>
+  </div>
+</section>
+
+{% if visual_blocks %}
+<section class="panel spaced" style="padding:20px;">
+  <div class="panel-heading" style="padding:0 0 12px;">
+    <h2>Session Timeline Distribution</h2>
+  </div>
+  <div style="display:flex;height:24px;border-radius:6px;overflow:hidden;background:#1e2230;box-shadow:inset 0 1px 3px rgba(0,0,0,0.5);">
+    {% for block in visual_blocks %}
+    <div style="width:{{ block.percentage }}%;background-color:{{ block.color }};height:100%;transition:width 0.3s ease;"
+         title="{{ block.title }}: {{ block.formatted_duration }} ({{ block.percentage }}%)">
+    </div>
+    {% endfor %}
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;font-size:12px;">
+    {% for block in visual_blocks %}
+    <span style="display:inline-flex;align-items:center;gap:6px;">
+      <span style="width:10px;height:10px;border-radius:2px;background-color:{{ block.color }};display:inline-block;"></span>
+      <span>{{ block.title }} ({{ block.formatted_duration }})</span>
+    </span>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-top:20px;">
+  <!-- Chronological Timeline -->
+  <section class="panel">
+    <div class="panel-heading" style="padding:18px 20px;border-bottom:1px solid var(--border);">
+      <h2>Chronological Timeline</h2>
+    </div>
+    <div style="padding:16px 20px;">
+      {% for item in timeline %}
+      <div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border);position:relative;">
+        <div style="display:flex;flex-direction:column;align-items:center;width:24px;">
+          <span style="width:14px;height:14px;border-radius:50%;background-color:{{ item.color }};display:inline-block;box-shadow:0 0 8px {{ item.color }}40;"></span>
+          {% if not forloop.last %}
+          <span style="width:2px;flex:1;background:var(--border);margin-top:4px;"></span>
+          {% endif %}
+        </div>
+        <div style="flex:1;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div>
+              <strong style="font-size:13px;color:var(--text);">{{ item.title }}</strong>
+              {% if item.type == 'break' %}
+                <span class="badge" style="background:#78350f;color:#fbbf24;font-size:10px;margin-left:6px;">Break</span>
+                {% if item.warning_triggered %}
+                  <span class="badge" style="background:#7f1d1d;color:#fca5a5;font-size:10px;margin-left:4px;">⚠️ Exceeded Threshold</span>
+                {% endif %}
+              {% else %}
+                <span class="badge" style="background:#1e3a5f;color:#93c5fd;font-size:10px;margin-left:6px;">Work</span>
+              {% endif %}
+            </div>
+            <div style="text-align:right;">
+              <strong style="font-size:12px;color:var(--text);">{{ item.formatted_duration }}</strong>
+              <small class="muted" style="display:block;font-size:10px;">
+                {{ item.started_at|date:'H:i:s' }} → {% if item.ended_at %}{{ item.ended_at|date:'H:i:s' }}{% else %}<span style="color:#34d399;">Ongoing</span>{% endif %}
+              </small>
+            </div>
+          </div>
+
+          {% if item.note %}
+          <p style="margin:6px 0 0;font-size:12px;color:var(--muted);background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;">
+            📝 {{ item.note }}
+          </p>
+          {% endif %}
+
+          {% if item.type == 'break' and item.closure_reason %}
+          <div style="margin-top:4px;font-size:11px;" class="muted">
+            Ended via: {{ item.closure_reason }}
+            {% if item.closed_by %}by {{ item.closed_by.get_full_name|default:item.closed_by.username }}{% endif %}
+            {% if item.admin_note %}· <em>"{{ item.admin_note }}"</em>{% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty">
+        <p>No activity segments or breaks recorded for this session.</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Session Details & Actions -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+    <section class="panel">
+      <div class="panel-heading" style="padding:18px 20px;border-bottom:1px solid var(--border);">
+        <h2>Session Metadata</h2>
+      </div>
+      <div style="padding:16px 20px;font-size:12px;display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <span class="muted" style="display:block;">Session ID</span>
+          <strong>#{{ session.id }}</strong>
+        </div>
+        <div>
+          <span class="muted" style="display:block;">Employee</span>
+          <strong>{% employee_link session.user %}</strong> ({{ session.user.username }})
+        </div>
+        <div>
+          <span class="muted" style="display:block;">Session Date</span>
+          <span>{{ session.date|date:'l, d F Y' }}</span>
+        </div>
+        <div>
+          <span class="muted" style="display:block;">Started At</span>
+          <span>{{ session.started_at|date:'d M Y H:i:s' }}</span>
+        </div>
+        <div>
+          <span class="muted" style="display:block;">Ended At</span>
+          <span>{% if session.ended_at %}{{ session.ended_at|date:'d M Y H:i:s' }}{% else %}Still Ongoing{% endif %}</span>
+        </div>
+        {% if session.attendance %}
+        <div>
+          <span class="muted" style="display:block;">Linked Attendance</span>
+          <span>Record #{{ session.attendance.id }} · {{ session.attendance.date }} ({{ session.attendance.get_shift_type_display|default:'Standard' }})</span>
+        </div>
+        {% endif %}
+        {% if session.closure_reason %}
+        <div>
+          <span class="muted" style="display:block;">Closure Reason</span>
+          <span>{{ session.get_closure_reason_display }}</span>
+          {% if session.closed_by %}
+          <small class="muted" style="display:block;">Closed by: {{ session.closed_by.get_full_name|default:session.closed_by.username }}</small>
+          {% endif %}
+          {% if session.admin_closure_note %}
+          <div style="margin-top:6px;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:6px;font-style:italic;">
+            "{{ session.admin_closure_note }}"
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <!-- Administrative Close Panel -->
+    {% if can_admin_close %}
+    <section class="panel" style="border:1px solid #78350f;background:rgba(120,53,15,0.05);">
+      <div class="panel-heading" style="padding:18px 20px;border-bottom:1px solid #78350f;">
+        <h2 style="color:#fbbf24;">Administrative Closure</h2>
+      </div>
+      <div style="padding:16px 20px;">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+          This session is currently active or paused. As a manager or administrator, you may close it if the employee forgot to end shift or logout.
+        </p>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="close_session">
+          <div class="field" style="margin-bottom:12px;">
+            <label for="id_admin_note" style="display:block;font-size:12px;margin-bottom:6px;">
+              Closure note (min 10 chars):
+            </label>
+            {{ close_form.admin_note }}
+            {{ close_form.admin_note.errors }}
+          </div>
+          <button type="submit" class="button" style="background:#78350f;color:#fef3c7;border:1px solid #b45309;width:100%;"
+                  onclick="return confirm('Are you sure you want to administratively terminate this session?');">
+            Force Close Session (Admin Override)
+          </button>
+        </form>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+

@@ -18,3 +18,6 @@ private-call-recordings/
 face_models/
 *.log
 *.apk
+ 
+backups/
+*.dump

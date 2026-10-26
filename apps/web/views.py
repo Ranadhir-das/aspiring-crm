@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from functools import wraps
+import re
 from zipfile import BadZipFile
 
 from django import forms
@@ -124,9 +125,13 @@ def leads(request):
     # Text Search (name, phone, email)
     search = request.GET.get('q', '').strip()
     if search:
-        base_query = base_query.filter(
-            Q(name__icontains=search) | Q(phone__icontains=search) | Q(email__icontains=search)
-        )
+        search_filter = Q(name__icontains=search) | Q(phone__icontains=search) | Q(email__icontains=search)
+        digits = re.sub(r'\D', '', search)
+        if len(digits) >= 5:
+            search_filter |= Q(phone__icontains=digits)
+            if len(digits) >= 10:
+                search_filter |= Q(phone__icontains=digits[-10:])
+        base_query = base_query.filter(search_filter)
 
     # Import Batch Filter
     batch = request.GET.get('batch', '').strip()
@@ -150,14 +155,24 @@ def leads(request):
     if source:
         base_query = base_query.filter(source=source)
 
-    # Service / Service Type Filter
+    # Service / Course Filter
     service = request.GET.get('service', '').strip()
     if service:
+        course_norm = service.replace(' ', '_').upper()
+        course_q = (
+            Q(preferred_course__iexact=service) |
+            Q(preferred_course__iexact=course_norm) |
+            Q(preferred_course__icontains=service) |
+            Q(preferred_course_custom__icontains=service)
+        )
         if service.isdigit():
-            base_query = base_query.filter(Q(service_type_id=int(service)) | Q(service=service))
+            base_query = base_query.filter(Q(service_type_id=int(service)) | Q(service=service) | course_q)
         else:
             base_query = base_query.filter(
-                Q(service_type__code__iexact=service) | Q(service__iexact=service) | Q(service_type__name__iexact=service)
+                Q(service_type__code__iexact=service) |
+                Q(service__icontains=service) |
+                Q(service_type__name__icontains=service) |
+                course_q
             )
 
     # Creation Date Range Filter
@@ -185,6 +200,8 @@ def leads(request):
     # Last Call Date Range Filter (subquery avoids join multiplication)
     last_call_from_str = request.GET.get('last_call_from', '').strip()
     last_call_to_str = request.GET.get('last_call_to', '').strip()
+    lcf = None
+    lct = None
     if (last_call_from_str or last_call_to_str) and not date_error:
         call_subfilter = Q()
         if last_call_from_str:
@@ -199,6 +216,8 @@ def leads(request):
                 call_subfilter &= Q(started_at__date__lte=lct)
             except ValueError:
                 date_error = f"Invalid last call to date '{last_call_to_str}'."
+        if lcf and lct and lcf > lct and not date_error:
+            date_error = "Last call 'From' date cannot be after 'To' date."
         if not date_error:
             called_lead_ids = Call.objects.filter(call_subfilter).values('lead_id')
             base_query = base_query.filter(pk__in=called_lead_ids)
@@ -223,6 +242,8 @@ def leads(request):
             elif followup_status == 'upcoming':
                 fu_subfilter &= Q(scheduled_at__gt=now_local)
 
+            fuf = None
+            fut = None
             if followup_from_str:
                 try:
                     fuf = datetime.strptime(followup_from_str, '%Y-%m-%d').date()
@@ -235,6 +256,8 @@ def leads(request):
                     fu_subfilter &= Q(scheduled_at__date__lte=fut)
                 except ValueError:
                     date_error = f"Invalid follow-up to date '{followup_to_str}'."
+            if fuf and fut and fuf > fut and not date_error:
+                date_error = "Follow-up 'From' date cannot be after 'To' date."
 
             if not date_error:
                 matching_fu_lead_ids = FollowUp.objects.filter(fu_subfilter).values('lead_id')
@@ -272,14 +295,42 @@ def leads(request):
     selected_owner_user = User.objects.filter(pk=int(owner)).first() if owner.isdigit() else None
 
     batches = LeadImportBatch.objects.filter(leads__in=visible_leads(request.user)).distinct().order_by('-created_at')
-    sources = visible_leads(request.user).exclude(source='').values_list('source', flat=True).distinct()
-    callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else []
+    sources = visible_leads(request.user).exclude(source='').values_list('source', flat=True).distinct().order_by('source')
+    callers = (
+
+        User.objects.filter(
+
+            Q(role=User.Role.CALLER) | Q(can_act_as_caller=True),
+
+            is_active=True,
+
+        ).order_by('first_name', 'username')
+
+        if request.user.role in MANAGEMENT else []
+
+    )
 
     active_filters_count = sum(1 for v in [
         search, batch, status, (owner if owner != 'all' else ''), source, service,
         start_date_str, end_date_str, last_call_from_str, last_call_to_str,
         followup_status, followup_from_str, followup_to_str
     ] if v)
+
+    FOLLOWUP_STATUS_LABELS = {
+
+        'due_today': 'Due Today',
+
+        'overdue': 'Overdue',
+
+        'upcoming': 'Upcoming',
+
+        'no_followup': 'No Pending Follow-up',
+
+    }
+
+    followup_status_display = FOLLOWUP_STATUS_LABELS.get(followup_status, followup_status)
+
+
 
     return page(request, 'leads', 'leads',
                 records=paginate(request, query),
@@ -293,7 +344,7 @@ def leads(request):
                 selected_service=service,
                 start_date=start_date_str, end_date=end_date_str,
                 last_call_from=last_call_from_str, last_call_to=last_call_to_str,
-                followup_status=followup_status,
+                followup_status=followup_status, followup_status_display=followup_status_display,
                 followup_from=followup_from_str, followup_to=followup_to_str,
                 callers=callers,
                 date_error=date_error,
