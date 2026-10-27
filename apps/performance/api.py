@@ -43,6 +43,8 @@ class LedgerSerializer(serializers.ModelSerializer):
 
 class LedgerPagination(PageNumberPagination):
     page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
 
 
 class CallerPointsView(APIView):
@@ -63,7 +65,13 @@ class CallerPointsView(APIView):
         form, window, valid = report_window(request.query_params)
         if not valid:
             raise ValidationError(form.errors)
-        entries = between(PointsEntry.objects.filter(caller=caller), 'occurred_at', window)
+
+        all_time_param = request.query_params.get('all_time', '').lower() in {'true', '1'}
+        if all_time_param:
+            entries = PointsEntry.objects.filter(caller=caller)
+        else:
+            entries = between(PointsEntry.objects.filter(caller=caller), 'occurred_at', window)
+
         pagination = LedgerPagination()
         items = pagination.paginate_queryset(entries, request, view=self)
 
@@ -72,13 +80,59 @@ class CallerPointsView(APIView):
         peer_summary = get_peer_appreciation_summary(caller.pk)
         summary['peer_appreciation'] = peer_summary
         summary['performance_points'] = summary.get('lifetime_points', 0)
+        if all_time_param:
+            summary['total_points'] = summary.get('lifetime_points', 0)
+
+        # Compute work category breakups
+        event_dict = dict(PointsEntry.Event.choices)
+
+        # Filtered range breakup
+        breakup_qs = entries.values('event').annotate(
+            total_points=Sum('points'),
+            count=Count('id')
+        ).order_by('-total_points')
+
+        positive_pts = sum(b['total_points'] for b in breakup_qs if (b['total_points'] or 0) > 0) or 1
+        breakup = []
+        for b in breakup_qs:
+            pts = b['total_points'] or 0
+            breakup.append({
+                'event': b['event'],
+                'event_display': event_dict.get(b['event'], b['event']),
+                'points': pts,
+                'count': b['count'],
+                'percentage': round((pts / positive_pts) * 100, 1) if pts > 0 else 0,
+            })
+        summary['breakup'] = breakup
+
+        # Lifetime breakup across all time
+        all_time_entries = PointsEntry.objects.filter(caller=caller)
+        all_time_breakup_qs = all_time_entries.values('event').annotate(
+            total_points=Sum('points'),
+            count=Count('id')
+        ).order_by('-total_points')
+
+        lifetime_positive = sum(b['total_points'] for b in all_time_breakup_qs if (b['total_points'] or 0) > 0) or 1
+        lifetime_breakup = []
+        for b in all_time_breakup_qs:
+            pts = b['total_points'] or 0
+            lifetime_breakup.append({
+                'event': b['event'],
+                'event_display': event_dict.get(b['event'], b['event']),
+                'points': pts,
+                'count': b['count'],
+                'percentage': round((pts / lifetime_positive) * 100, 1) if pts > 0 else 0,
+            })
+        summary['lifetime_breakup'] = lifetime_breakup
 
         return Response({
             'caller': caller.pk,
-            'start': window.start,
-            'end_exclusive': window.end,
+            'start': None if all_time_param else window.start,
+            'end_exclusive': None if all_time_param else window.end,
             'interval': window.interval,
             'summary': summary,
+            'breakup': breakup,
+            'lifetime_breakup': lifetime_breakup,
             'trend': trend(caller, window),
             'peer_appreciation': peer_summary,
             'count': pagination.page.paginator.count,

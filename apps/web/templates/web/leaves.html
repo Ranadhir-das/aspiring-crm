@@ -1,1 +1,195 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}Leave requests{% endblock %}{% block breadcrumb %}Leave requests{% endblock %}{% block content %}<div class="page-heading"><div><h1>Leave requests<span class="accent">.</span></h1><p>{% if can_manage %}Review employee requests and track your own leave.{% else %}Apply for leave and track approval decisions.{% endif %}</p></div><a class="button primary" href="{% url 'web:leave-apply' %}">＋ Apply for leave</a></div><section class="panel">{% include 'web/period_filter.html' %}<nav class="tabs"><a href="{% querystring status='' page=1 %}">All</a><a href="{% querystring status='PENDING' page=1 %}">Pending</a><a href="{% querystring status='APPROVED' page=1 %}">Approved</a><a href="{% querystring status='REJECTED' page=1 %}">Rejected</a><a href="{% querystring status='CANCELLED' page=1 %}">Cancelled</a></nav><div class="table-scroll"><table><thead><tr><th>Employee</th><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th>Review</th><th>Action</th></tr></thead><tbody>{% for leave in records %}<tr><td>{% employee_link leave.employee %}</td><td>{{ leave.start_date }} – {{ leave.end_date }}</td><td>{{ leave.days }}</td><td class="notes-cell">{{ leave.reason }}</td><td><span class="badge">{{ leave.get_status_display }}</span></td><td class="notes-cell">{% if leave.reviewer %}{% employee_link leave.reviewer %} · {{ leave.review_note }}{% else %}—{% endif %}</td><td>{% if leave.status == 'PENDING' %}<form method="post" action="{% url 'web:leave-action' leave.pk %}">{% csrf_token %}{% if leave.employee_id == request.user.pk %}<button class="button" name="action" value="cancel">Cancel request</button>{% elif can_manage %}<input name="review_note" placeholder="Review note (optional)" aria-label="Review note"><div class="actions"><button class="button primary" name="action" value="approve">Approve</button><button class="button" name="action" value="reject">Reject</button></div>{% endif %}</form>{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="empty">No leave requests found.</td></tr>{% endfor %}</tbody></table></div>{% include 'web/pagination.html' %}</section>{% endblock %}
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Leave requests{% endblock %}
+{% block breadcrumb %}Leave requests{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/leaves-page.css' %}?v=1">
+
+<div class="leaves-page">
+  <!-- Header -->
+  <div class="leaves-header">
+    <div>
+      <div class="eyebrow">WORKFORCE LEAVE MANAGEMENT</div>
+      <h1>Leave requests<span class="accent">.</span></h1>
+      <p>{% if can_manage %}Review employee absence requests and track your own leave.{% else %}Apply for leave and track approval decisions in real time.{% endif %}</p>
+    </div>
+    <div class="actions">
+      <a class="button primary" href="{% url 'web:leave-apply' %}">＋ Apply for leave</a>
+    </div>
+  </div>
+
+  <!-- Filter Card Toolbar -->
+  <section class="leaves-filter-card">
+    <form method="get" class="leaves-filter-form">
+      <div class="leaves-search-field">
+        <span class="search-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input type="text" name="q" placeholder="Search employee, name or reason..." value="{{ search_query }}">
+      </div>
+
+      <div class="leaves-filter-field">
+        <select name="status" onchange="this.form.submit()">
+          <option value="">All statuses</option>
+          <option value="PENDING" {% if selected_status == 'PENDING' %}selected{% endif %}>Pending review</option>
+          <option value="APPROVED" {% if selected_status == 'APPROVED' %}selected{% endif %}>Approved</option>
+          <option value="REJECTED" {% if selected_status == 'REJECTED' %}selected{% endif %}>Rejected</option>
+          <option value="CANCELLED" {% if selected_status == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+        </select>
+      </div>
+
+      <div class="leaves-filter-field" style="flex: 0 1 140px;">
+        <input type="date" name="start_date" value="{{ filters.start_date.value|default:'' }}" title="From date">
+      </div>
+
+      <div class="leaves-filter-field" style="flex: 0 1 140px;">
+        <input type="date" name="end_date" value="{{ filters.end_date.value|default:'' }}" title="To date">
+      </div>
+
+      <div class="leaves-filter-actions">
+        {% if active_filters_count %}
+        <span class="leaves-active-badge">{{ active_filters_count }} filter{{ active_filters_count|pluralize }} active</span>
+        {% endif %}
+        <button class="leaves-apply-btn" type="submit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Apply filter
+        </button>
+        {% if search_query or selected_status or filters.start_date.value or filters.end_date.value %}
+        <a class="leaves-reset-btn" href="{% url 'web:leaves' %}">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
+  <!-- 4 KPI Metrics Grid -->
+  <div class="leaves-metrics-grid">
+    <div class="leaves-metric-card">
+      <div class="leaves-metric-header">
+        <span>Total Requests</span>
+        <span class="leaves-metric-icon blue">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </span>
+      </div>
+      <div class="leaves-metric-value">{{ total_requests }}</div>
+      <div class="leaves-metric-label">Applications recorded</div>
+    </div>
+
+    <div class="leaves-metric-card">
+      <div class="leaves-metric-header">
+        <span>Pending Approval</span>
+        <span class="leaves-metric-icon amber">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </span>
+      </div>
+      <div class="leaves-metric-value">{{ pending_requests }}</div>
+      <div class="leaves-metric-label">Awaiting decision</div>
+    </div>
+
+    <div class="leaves-metric-card">
+      <div class="leaves-metric-header">
+        <span>Approved</span>
+        <span class="leaves-metric-icon green">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+      </div>
+      <div class="leaves-metric-value">{{ approved_requests }}</div>
+      <div class="leaves-metric-label">Leave days granted</div>
+    </div>
+
+    <div class="leaves-metric-card">
+      <div class="leaves-metric-header">
+        <span>Rejected / Cancelled</span>
+        <span class="leaves-metric-icon rose">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        </span>
+      </div>
+      <div class="leaves-metric-value">{{ rejected_requests }}</div>
+      <div class="leaves-metric-label">Declined or retracted</div>
+    </div>
+  </div>
+
+  <!-- Contained Scrollable Table -->
+  <section class="leaves-table-card">
+    <div class="leaves-card-header">
+      <h2>Applications &amp; review history</h2>
+      <span class="badge">{{ records.paginator.count|default:records|length }} record{{ records.paginator.count|default:records|length|pluralize }}</span>
+    </div>
+
+    <div class="leaves-table-scroll">
+      <table class="leaves-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Leave dates</th>
+            <th>Days</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Review details</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for leave in records %}
+          <tr>
+            <td>
+              <strong>{% employee_link leave.employee %}</strong>
+            </td>
+            <td>
+              <span>{{ leave.start_date }} – {{ leave.end_date }}</span>
+            </td>
+            <td>
+              <strong class="accent">{{ leave.days }}</strong>
+            </td>
+            <td class="notes-cell" style="max-width: 260px; color: var(--text-muted); font-size: 0.88rem;">
+              {{ leave.reason }}
+            </td>
+            <td>
+              <span class="leaves-status-badge {% if leave.status == 'PENDING' %}pending{% elif leave.status == 'APPROVED' %}approved{% elif leave.status == 'REJECTED' %}rejected{% else %}cancelled{% endif %}">
+                {{ leave.get_status_display }}
+              </span>
+            </td>
+            <td class="notes-cell" style="max-width: 240px; font-size: 0.85rem;">
+              {% if leave.reviewer %}
+              {% employee_link leave.reviewer %}
+              {% if leave.review_note %}
+              <div style="color: var(--text-muted); margin-top: 2px;">{{ leave.review_note }}</div>
+              {% endif %}
+              {% else %}
+              <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">
+              {% if leave.status == 'PENDING' %}
+              <form method="post" action="{% url 'web:leave-action' leave.pk %}" class="leaves-action-form" style="align-items: flex-end;">
+                {% csrf_token %}
+                {% if leave.employee_id == request.user.pk %}
+                <button class="button" name="action" value="cancel" style="font-size: 0.82rem;">Cancel request</button>
+                {% elif can_manage %}
+                <input name="review_note" placeholder="Review note (optional)" aria-label="Review note" style="max-width: 180px;">
+                <div class="leaves-action-buttons">
+                  <button class="button primary" name="action" value="approve" style="font-size: 0.82rem; padding: 4px 10px;">Approve</button>
+                  <button class="button" name="action" value="reject" style="font-size: 0.82rem; padding: 4px 10px;">Reject</button>
+                </div>
+                {% endif %}
+              </form>
+              {% else %}
+              <span class="muted" style="font-size: 0.82rem;">Completed</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="empty" style="text-align: center; padding: 40px; color: var(--text-muted);">
+              No leave requests found.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% include 'web/pagination.html' %}
+  </section>
+</div>
+{% endblock %}

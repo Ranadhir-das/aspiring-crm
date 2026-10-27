@@ -158,6 +158,16 @@ class CounselorWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('course and year', str(response.data))
 
+    def test_forward_b2b_lead_succeeds_without_course_and_year(self):
+        Call.objects.create(lead=self.lead, caller=self.caller, started_at=timezone.now(), outcome='B2B')
+        Lead.objects.filter(pk=self.lead.pk).update(status='B2B')
+        response = self.forward(self.counselor)
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data['changed'])
+        assignment = LeadCounselorAssignment.objects.get(lead=self.lead, is_active=True)
+        self.assertEqual(assignment.counselor, self.counselor)
+        self.assertEqual(assignment.source_call.outcome, 'B2B')
+
     def test_lead_counselor_status_endpoint(self):
         response = self.as_user(self.caller).get(f'/api/v1/mobile/leads/{self.lead.pk}/counselor/')
         self.assertEqual(response.status_code, 200)
@@ -200,7 +210,7 @@ class CounselorWorkflowTests(TestCase):
         self.assertEqual(data['interested']['expected_admission_year'], 2027)
         self.assertEqual(data['caller']['id'], self.caller.pk)
         self.assertEqual(data['calls'][0]['notes'], 'Interested in MBBS')
-        self.assertEqual(data['permissions'], {'can_edit_lead': False, 'can_forward': False})
+        self.assertEqual(data['permissions'], {'can_edit_lead': False, 'can_forward': False, 'can_contact_via_message': False})
 
     def test_counselor_cannot_edit_lead_create_calls_or_use_caller_endpoints(self):
         self.save_interested()
@@ -466,3 +476,83 @@ class CounselorWorkflowTests(TestCase):
         self.assertEqual(counselor_b_detail_after['counselor_contact_status'], 'CONTACTED')
         self.assertEqual(counselor_b_detail_after['last_call_duration'], 180)
         self.assertEqual(counselor_b_detail_after['counselor_call_count'], 1)
+
+    def test_counselor_contact_by_message_flow_and_permission(self):
+        self.save_interested()
+        self.forward(self.counselor)
+
+        # 1. Without permission, attempt to mark contacted by message -> 403 Forbidden
+        self.counselor.can_contact_via_message = False
+        self.counselor.save()
+
+        res_forbidden = self.as_user(self.counselor).post(
+            f'/api/v1/mobile/counselor/leads/{self.lead.pk}/message-contact/',
+            {'notes': 'Sent WhatsApp brochure for next year intake'},
+            format='json',
+        )
+        self.assertEqual(res_forbidden.status_code, 403)
+        self.assertIn('permission', res_forbidden.data['detail'].lower())
+
+        # 2. Admin grants permission to counselor
+        self.counselor.can_contact_via_message = True
+        self.counselor.save()
+
+        # Check permission reflected in lead detail
+        detail_res = self.as_user(self.counselor).get(f'/api/v1/mobile/counselor/leads/{self.lead.pk}/')
+        self.assertTrue(detail_res.data['permissions']['can_contact_via_message'])
+        self.assertEqual(detail_res.data['counselor_contact_status'], 'PENDING')
+
+        # 3. Counselor marks lead contacted via message
+        res_success = self.as_user(self.counselor).post(
+            f'/api/v1/mobile/counselor/leads/{self.lead.pk}/message-contact/',
+            {'notes': 'Student interested in 2027 MBBS intake. Shared details on WhatsApp.'},
+            format='json',
+        )
+        self.assertEqual(res_success.status_code, 201)
+        self.assertEqual(res_success.data['counselor_contact_status'], 'CONTACTED_BY_MESSAGE')
+        self.assertEqual(res_success.data['note']['kind'], 'MESSAGE')
+        self.assertEqual(res_success.data['note']['kind_display'], 'Counselor message')
+
+        # 4. Verify lead detail has transitioned to CONTACTED_BY_MESSAGE
+        detail_after = self.as_user(self.counselor).get(f'/api/v1/mobile/counselor/leads/{self.lead.pk}/').data
+        self.assertEqual(detail_after['counselor_contact_status'], 'CONTACTED_BY_MESSAGE')
+        self.assertEqual(detail_after['lead']['counselor_contact_status'], 'CONTACTED_BY_MESSAGE')
+        self.assertIsNotNone(detail_after['last_contacted_at'])
+        self.assertEqual(detail_after['counselor_message_count'], 1)
+        self.assertEqual(detail_after['counselor_call_count'], 0)
+
+        # 5. Verify lead list reflects CONTACTED_BY_MESSAGE
+        list_res = self.as_user(self.counselor).get('/api/v1/mobile/counselor/leads/').data
+        self.assertEqual(list_res['leads'][0]['counselor_contact_status'], 'CONTACTED_BY_MESSAGE')
+
+        # 6. Verify counselor dashboard stats reflect contacted_by_message and today_contacted
+        dash_res = self.as_user(self.counselor).get('/api/v1/mobile/counselor/dashboard/').data
+        self.assertEqual(dash_res['stats']['pending_leads'], 0)
+        self.assertEqual(dash_res['stats']['contacted_leads'], 0)
+        self.assertEqual(dash_res['stats']['contacted_by_message'], 1)
+        self.assertEqual(dash_res['stats']['today_contacted'], 1)
+        self.assertTrue(dash_res['counselor']['can_contact_via_message'])
+
+        # 7. When counselor subsequently makes a CALL, status upgrades to CONTACTED
+        call_time = timezone.now()
+        self.as_user(self.counselor).post(
+            f'/api/v1/mobile/counselor/leads/{self.lead.pk}/notes/',
+            {
+                'notes': 'Followed up via voice call',
+                'call': {
+                    'started_at': (call_time - timedelta(seconds=120)).isoformat(),
+                    'ended_at': call_time.isoformat(),
+                    'duration_seconds': 120,
+                },
+            },
+            format='json',
+        )
+
+        detail_called = self.as_user(self.counselor).get(f'/api/v1/mobile/counselor/leads/{self.lead.pk}/').data
+        self.assertEqual(detail_called['counselor_contact_status'], 'CONTACTED')
+        self.assertEqual(detail_called['counselor_call_count'], 1)
+        self.assertEqual(detail_called['counselor_message_count'], 1)
+
+        dash_called = self.as_user(self.counselor).get('/api/v1/mobile/counselor/dashboard/').data
+        self.assertEqual(dash_called['stats']['contacted_leads'], 1)
+        self.assertEqual(dash_called['stats']['contacted_by_message'], 0)

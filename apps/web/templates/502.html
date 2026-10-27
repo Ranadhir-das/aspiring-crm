@@ -1,0 +1,37 @@
+{% extends 'web/error_base.html' %}
+
+{% block error_title %}502 · Bad Gateway{% endblock %}
+{% block glow_class %}glow-502{% endblock %}
+
+{% block error_content %}
+  <div class="error-icon-orb orb-502">
+    <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    </svg>
+  </div>
+
+  <div>
+    <span class="error-code-tag code-502">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      HTTP 502 • BAD GATEWAY
+    </span>
+  </div>
+
+  <h1 class="error-title">Gateway Disconnected</h1>
+  <p class="error-desc">
+    {{ error_message|default:"The CRM edge gateway was unable to contact the backend service. The application server may be restarting or completing a live deployment." }}
+  </p>
+
+  <div class="error-actions">
+    <button type="button" onclick="window.location.reload()" class="btn-error-primary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      <span>Retry Connection</span>
+    </button>
+    <a href="{% url 'web:dashboard' %}" class="btn-error-secondary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span>Dashboard</span>
+    </a>
+  </div>
+{% endblock %}
+

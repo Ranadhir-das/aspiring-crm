@@ -254,7 +254,7 @@ def get_existing_phone_map():
 def check_duplicate_from_map(phone, phone_map):
     """
     Check for a duplicate using an in-memory phone map.
-    Matches exact normalized phone as well as standard Indian prefixes (91, 0).
+    Matches exact normalized phone as well as standard Indian (91, 0) and Bangladesh (880, 88, 0) prefixes.
     """
 
     normalized = normalize_phone(phone)
@@ -265,12 +265,57 @@ def check_duplicate_from_map(phone, phone_map):
     if normalized in phone_map:
         return phone_map[normalized]
 
-    if len(normalized) == 10:
-        return phone_map.get(f"91{normalized}") or phone_map.get(f"0{normalized}")
-    elif len(normalized) == 12 and normalized.startswith("91"):
-        return phone_map.get(normalized[2:])
-    elif len(normalized) == 11 and normalized.startswith("0"):
-        return phone_map.get(normalized[1:])
+    # Indian formats (10 digits starting with 6-9)
+    if len(normalized) == 10 and normalized[0] in "6789":
+        match = phone_map.get(f"91{normalized}") or phone_map.get(f"0{normalized}")
+        if match:
+            return match
+    elif len(normalized) == 12 and normalized.startswith("91") and normalized[2] in "6789":
+        match = phone_map.get(normalized[2:])
+        if match:
+            return match
+    elif len(normalized) == 11 and normalized.startswith("0") and normalized[1] in "6789":
+        match = phone_map.get(normalized[1:])
+        if match:
+            return match
+
+    # Bangladesh formats (13, 12, 11, or 10 digits starting with BD mobile prefixes)
+    if len(normalized) == 13 and normalized.startswith("8801"):
+        national_11 = normalized[2:]  # 01XXXXXXXXX
+        national_10 = normalized[3:]  # 1XXXXXXXXX
+        code_88_12 = f"88{national_10}"
+        return (
+            phone_map.get(national_11)
+            or phone_map.get(national_10)
+            or phone_map.get(code_88_12)
+        )
+    elif len(normalized) == 12 and normalized.startswith("881"):
+        national_10 = normalized[2:]  # 1XXXXXXXXX
+        full_13 = f"880{national_10}"
+        national_11 = f"0{national_10}"
+        return (
+            phone_map.get(full_13)
+            or phone_map.get(national_11)
+            or phone_map.get(national_10)
+        )
+    elif len(normalized) == 11 and normalized.startswith("01"):
+        national_10 = normalized[1:]  # 1XXXXXXXXX
+        full_13 = f"88{normalized}"
+        code_88_12 = f"88{national_10}"
+        return (
+            phone_map.get(full_13)
+            or phone_map.get(national_10)
+            or phone_map.get(code_88_12)
+        )
+    elif len(normalized) == 10 and normalized.startswith("1"):
+        full_13 = f"880{normalized}"
+        national_11 = f"0{normalized}"
+        code_88_12 = f"88{normalized}"
+        return (
+            phone_map.get(full_13)
+            or phone_map.get(national_11)
+            or phone_map.get(code_88_12)
+        )
 
     return None
 

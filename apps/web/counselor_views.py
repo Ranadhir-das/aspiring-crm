@@ -45,22 +45,83 @@ def counselor_desk(request):
     if selected:
         query = query.filter(counselor_id=selected) if selected.isdigit() else query.none()
 
+    pending_requests = AdmissionRequest.objects.filter(status=AdmissionRequest.Status.PENDING).count()
+    active_forwarded = LeadCounselorAssignment.objects.filter(is_active=True).count()
+    total_notes = CounselorNote.objects.count()
+
+    active_filters_count = 0
+    if view != 'active':
+        active_filters_count += 1
+    if selected:
+        active_filters_count += 1
+    if search:
+        active_filters_count += 1
+
+    metrics = [
+        {'label': 'Counselor Staff', 'value': len(counselors), 'pill': 'Team', 'desc': 'Dedicated student advisors'},
+        {'label': 'Active Forwarded Leads', 'value': active_forwarded, 'pill': 'Active', 'desc': 'Leads currently in counseling'},
+        {'label': 'Pending Admissions', 'value': pending_requests, 'pill': 'Action Needed' if pending_requests else 'Clear', 'desc': 'Requests awaiting review'},
+        {'label': 'Counseling Notes', 'value': total_notes, 'pill': 'Logs', 'desc': 'Total advisory notes recorded'},
+    ]
+
     return page(request, 'counselor_desk', 'counselor-desk', counselors=counselors, records=paginate(request, query),
                 view=view, selected_counselor=selected, search=search,
-                pending_requests=AdmissionRequest.objects.filter(status=AdmissionRequest.Status.PENDING).count())
+                pending_requests=pending_requests, active_filters_count=active_filters_count,
+                metrics=metrics)
 
 
 @workspace(management=True)
 @require_GET
 def admission_requests(request):
-    status_filter = request.GET.get('status', AdmissionRequest.Status.PENDING)
-    query = AdmissionRequest.objects.select_related('lead', 'counselor', 'reviewed_by')
+    base_query = AdmissionRequest.objects.all()
+    query = AdmissionRequest.objects.select_related('lead', 'counselor', 'reviewed_by').order_by('-created_at')
+    status_filter = request.GET.get('status', AdmissionRequest.Status.PENDING).strip()
+    search = request.GET.get('q', '').strip()
+    active_filters_count = 0
+
+    if search:
+        active_filters_count += 1
+        query = query.filter(
+            Q(lead__name__icontains=search)
+            | Q(lead__phone__icontains=search)
+            | Q(counselor__first_name__icontains=search)
+            | Q(counselor__username__icontains=search)
+            | Q(message__icontains=search)
+            | Q(review_note__icontains=search)
+        )
     if status_filter in AdmissionRequest.Status.values:
+        if status_filter != AdmissionRequest.Status.PENDING:
+            active_filters_count += 1
         query = query.filter(status=status_filter)
+    elif status_filter == 'all':
+        active_filters_count += 1
     else:
-        status_filter = ''
-    return page(request, 'admission_requests', 'admission-requests', records=paginate(request, query),
-                status_filter=status_filter, statuses=AdmissionRequest.Status.choices)
+        status_filter = AdmissionRequest.Status.PENDING
+        query = query.filter(status=status_filter)
+
+    total_reqs = base_query.count()
+    pending_reqs = base_query.filter(status=AdmissionRequest.Status.PENDING).count()
+    approved_reqs = base_query.filter(status=AdmissionRequest.Status.APPROVED).count()
+    rejected_reqs = base_query.filter(status=AdmissionRequest.Status.REJECTED).count()
+
+    metrics = [
+        {'label': 'Total Requests', 'value': total_reqs, 'pill': 'Total', 'desc': 'All admission submissions'},
+        {'label': 'Pending Review', 'value': pending_reqs, 'pill': 'Action Needed', 'desc': 'Awaiting management review'},
+        {'label': 'Approved', 'value': approved_reqs, 'pill': 'Approved', 'desc': 'Cleared for registration'},
+        {'label': 'Rejected', 'value': rejected_reqs, 'pill': 'Declined', 'desc': 'Denied admission requests'},
+    ]
+
+    return page(
+        request,
+        'admission_requests',
+        'admission-requests',
+        records=paginate(request, query),
+        status_filter=status_filter,
+        statuses=AdmissionRequest.Status.choices,
+        search=search,
+        active_filters_count=active_filters_count,
+        metrics=metrics,
+    )
 
 
 @workspace(management=True)

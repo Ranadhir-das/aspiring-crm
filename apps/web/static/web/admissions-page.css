@@ -1,0 +1,543 @@
+/* ==========================================================================
+   Vaani CRM — Admissions Stylesheet
+   Sticky table headers, contained scrollable rows, top filter toolbar,
+   dynamic KPI metric cards, and responsive layout.
+   ========================================================================== */
+
+.admissions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.admissions-header .heading-subtitle {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.admissions-header .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admissions-header .action-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #121024 !important;
+  text-decoration: none;
+  box-shadow: 0 2px 10px rgba(103, 81, 185, 0.25);
+  transition: all .15s ease;
+}
+
+.admissions-header .action-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(103, 81, 185, 0.35);
+}
+
+[data-theme="light"] .admissions-header .action-btn-primary {
+  background: #4f46e5;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.25);
+}
+
+[data-theme="light"] .admissions-header .action-btn-primary:hover {
+  background: #4338ca;
+  color: #ffffff !important;
+}
+
+/* --------------------------------------------------------------------------
+   1. Filter Section (Top)
+   -------------------------------------------------------------------------- */
+.admissions-filter-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  transition: border-color .15s ease;
+}
+
+.admissions-filter-card:focus-within {
+  border-color: rgba(103, 81, 185, 0.4);
+}
+
+.admissions-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admissions-filter-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.2px;
+}
+
+.admissions-filter-title svg {
+  color: var(--accent);
+}
+
+.admissions-active-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(103, 81, 185, 0.12);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(103, 81, 185, 0.25);
+}
+
+.admissions-active-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.admissions-filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.admissions-search-box {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.admissions-search-box input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12.5px;
+  transition: all .15s ease;
+}
+
+.admissions-search-box input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(103, 81, 185, 0.15);
+}
+
+.admissions-search-box svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.admissions-select-field {
+  flex: 0 1 160px;
+  min-width: 130px;
+}
+
+.admissions-select-field select {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.admissions-select-field select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(103, 81, 185, 0.15);
+}
+
+.admissions-date-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  height: 38px;
+}
+
+.admissions-date-field input[type="date"] {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  padding: 0 2px;
+  outline: none;
+}
+
+.admissions-date-field .date-sep {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.admissions-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.btn-filter-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  font-weight: 700;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #121024 !important;
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(165, 154, 255, 0.25);
+  transition: all .15s ease;
+}
+
+.btn-filter-submit:hover {
+  background: #c3b7ff;
+  border-color: #c3b7ff;
+  color: #121024 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(165, 154, 255, 0.35);
+}
+
+[data-theme="light"] .btn-filter-submit {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+}
+
+[data-theme="light"] .btn-filter-submit:hover {
+  background: #4338ca;
+  border-color: #4338ca;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.btn-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 38px;
+  padding: 0 13px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  transition: all .15s ease;
+}
+
+.btn-filter-clear:hover {
+  color: var(--text);
+  border-color: var(--text);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] .btn-filter-clear:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* --------------------------------------------------------------------------
+   2. Four Metric KPI Cards (Below filter section)
+   -------------------------------------------------------------------------- */
+.admissions-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.admission-metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  text-decoration: none;
+  color: var(--text);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.admission-metric-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: transparent;
+}
+
+.admission-metric-card:nth-child(1)::before { background: #6751b9; }
+.admission-metric-card:nth-child(2)::before { background: #10b981; }
+.admission-metric-card:nth-child(3)::before { background: #8b5cf6; }
+.admission-metric-card:nth-child(4)::before { background: #3b82f6; }
+
+.admission-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+  border-color: rgba(103, 81, 185, 0.4);
+}
+
+.metric-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.metric-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(103, 81, 185, 0.08);
+  color: var(--accent);
+  border: 1px solid rgba(103, 81, 185, 0.2);
+}
+
+.metric-number {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text);
+  margin-bottom: 6px;
+  font-feature-settings: "tnum" 1;
+}
+
+.metric-bottom-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* --------------------------------------------------------------------------
+   3. Contained Scroll Table & Sticky Header
+   -------------------------------------------------------------------------- */
+.admissions-panel {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  overflow: hidden;
+  padding: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+
+.admissions-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.admissions-panel-head h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+
+.admissions-panel-head p {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 3px 0 0 0;
+}
+
+.admissions-table-scroll {
+  width: 100%;
+  max-height: 580px;
+  overflow-y: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admissions-table-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+  background: transparent;
+}
+
+.admissions-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(103, 81, 185, 0.3);
+  border-radius: 999px;
+}
+
+.admissions-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+.admissions-table {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  font-size: 13px;
+  text-align: left;
+}
+
+.admissions-table thead th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+  padding: 13px 18px;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+  background: #f4f6fb !important;
+  color: #505c73 !important;
+  box-shadow: inset 0 -1px 0 var(--border), 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="dark"] .admissions-table thead th {
+  background: #171b26 !important;
+  color: #9aa4bc !important;
+  box-shadow: inset 0 -1px 0 var(--border), 0 3px 8px rgba(0, 0, 0, 0.25) !important;
+}
+
+.admissions-table tbody td {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  font-size: 13px;
+  color: var(--text);
+  background: transparent;
+}
+
+.admissions-table tbody tr {
+  transition: background .12s ease;
+}
+
+.admissions-table tbody tr:hover td {
+  background: rgba(103, 81, 185, 0.04);
+}
+
+.admissions-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Badges for lead vs external */
+.channel-pill-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.channel-pill-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .admissions-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .admissions-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admissions-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .admissions-filter-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .admissions-search-box,
+  .admissions-select-field,
+  .admissions-date-field,
+  .admissions-filter-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+  .btn-filter-submit,
+  .btn-filter-clear {
+    flex: 1;
+    justify-content: center;
+  }
+}
+

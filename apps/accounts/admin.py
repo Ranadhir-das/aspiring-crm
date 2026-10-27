@@ -41,6 +41,9 @@ class CustomUserAdmin(UserAdmin):
         "role",
         "is_active",
         "is_staff",
+        "can_act_as_caller",
+        "can_act_as_counselor",
+        "can_contact_via_message",
     )
 
     search_fields = (
@@ -66,6 +69,7 @@ class CustomUserAdmin(UserAdmin):
                     "designation",
                     "can_act_as_caller",
                     "can_act_as_counselor",
+                    "can_contact_via_message",
                 )
             },
         ),
@@ -82,6 +86,7 @@ class CustomUserAdmin(UserAdmin):
                     "designation",
                     "can_act_as_caller",
                     "can_act_as_counselor",
+                    "can_contact_via_message",
                 )
             },
         ),

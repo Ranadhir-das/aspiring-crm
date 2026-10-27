@@ -207,11 +207,24 @@ class ServiceManagementAndRoutingWebTests(TestCase):
         self.assertContains(resp, 'caller_two')
         self.assertContains(resp, 'Caller workload &amp; queue capacity')
 
-        # Test Filters
+        # Test Filters & Dynamic Card Counting
         resp = self.client.get(reverse('web:lead-routing') + '?service=APOSTILLE')
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'No Caller Lead')
         self.assertNotContains(resp, 'Available Lead')
+        self.assertEqual(resp.context['total_website_leads'], 1)
+        self.assertEqual(resp.context['no_caller_count'], 1)
+        self.assertEqual(resp.context['available_count'], 0)
+        self.assertEqual(resp.context['claimed_count'], 0)
+        self.assertEqual(resp.context['active_filters_count'], 1)
+
+        # Test Search Filter Dynamic Counts
+        resp_q = self.client.get(reverse('web:lead-routing') + '?q=Available')
+        self.assertEqual(resp_q.status_code, 200)
+        self.assertEqual(resp_q.context['total_website_leads'], 1)
+        self.assertEqual(resp_q.context['available_count'], 1)
+        self.assertEqual(resp_q.context['claimed_count'], 0)
+        self.assertEqual(resp_q.context['no_caller_count'], 0)
 
     def test_admin_service_and_routing_apis(self):
         from rest_framework.test import APIClient

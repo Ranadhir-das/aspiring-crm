@@ -280,8 +280,6 @@ def lead_routing_view(request):
         .values_list('pk', flat=True)
     )
 
-    total_website_leads = base_query.count()
-
     # Pre-diagnose leads in memory or filter queryset
     service_param = request.GET.get('service', '').strip()
     caller_param = request.GET.get('caller', '').strip()
@@ -293,10 +291,12 @@ def lead_routing_view(request):
     q_param = request.GET.get('q', '').strip()
     tab_param = request.GET.get('tab', 'all').strip()
 
-    filtered_query = base_query
+    # Scoped query: applies user search, service, caller, status, date filters
+    # Cards and tab counts reflect the active filter selection
+    scoped_query = base_query
 
     if q_param:
-        filtered_query = filtered_query.filter(
+        scoped_query = scoped_query.filter(
             Q(name__icontains=q_param)
             | Q(phone__icontains=q_param)
             | Q(email__icontains=q_param)
@@ -304,14 +304,14 @@ def lead_routing_view(request):
         )
 
     if service_param:
-        filtered_query = filtered_query.filter(
+        scoped_query = scoped_query.filter(
             Q(service_type__code=service_param) | Q(service=service_param)
         )
 
     if caller_param:
         try:
             caller_id = int(caller_param)
-            filtered_query = filtered_query.filter(
+            scoped_query = scoped_query.filter(
                 Q(assigned_caller_id=caller_id)
                 | Q(availability__claimed_by_id=caller_id)
             )
@@ -319,60 +319,44 @@ def lead_routing_view(request):
             pass
 
     if source_param:
-        filtered_query = filtered_query.filter(source__icontains=source_param)
+        scoped_query = scoped_query.filter(source__icontains=source_param)
 
     if status_param and status_param != 'all':
-        filtered_query = filtered_query.filter(status=status_param)
+        scoped_query = scoped_query.filter(status=status_param)
 
+    d_from = None
+    d_to = None
     if date_from_param:
         try:
             d_from = datetime.strptime(date_from_param, '%Y-%m-%d').date()
-            filtered_query = filtered_query.filter(created_at__date__gte=d_from)
         except ValueError:
             pass
 
     if date_to_param:
         try:
             d_to = datetime.strptime(date_to_param, '%Y-%m-%d').date()
-            filtered_query = filtered_query.filter(created_at__date__lte=d_to)
         except ValueError:
             pass
 
-    # Quick view tabs
-    if tab_param == 'no_caller':
-        filtered_query = filtered_query.filter(
-            service_type_id__in=services_with_no_callers,
-            assigned_caller__isnull=True,
-            availability__claimed_at__isnull=True,
-        )
-    elif tab_param == 'available':
-        filtered_query = filtered_query.filter(
-            availability__isnull=False,
-            availability__claimed_at__isnull=True,
-            availability__available_at__lte=now,
-            assigned_caller__isnull=True,
-            service_type__is_active=True,
-        ).exclude(service_type_id__in=services_with_no_callers)
-    elif tab_param == 'claimed':
-        filtered_query = filtered_query.filter(
-            Q(availability__claimed_at__isnull=False)
-            | Q(assigned_caller__isnull=False)
-        )
+    if d_from and d_to and d_from > d_to:
+        d_from, d_to = d_to, d_from
 
-    # Attach diagnosis info to page records
-    paginated_page = paginate(request, filtered_query)
-    for lead in paginated_page:
-        lead.diagnosis = diagnose_lead_availability(lead, now=now)
+    if d_from:
+        scoped_query = scoped_query.filter(created_at__date__gte=d_from)
+    if d_to:
+        scoped_query = scoped_query.filter(created_at__date__lte=d_to)
 
-    # Metric counts for cards
-    no_caller_count = base_query.filter(
+    # Dynamic metrics calculated on the scoped/filtered query
+    total_website_leads = scoped_query.count()
+
+    no_caller_count = scoped_query.filter(
         service_type_id__in=services_with_no_callers,
         assigned_caller__isnull=True,
         availability__claimed_at__isnull=True,
     ).count()
 
     available_count = (
-        base_query.filter(
+        scoped_query.filter(
             availability__isnull=False,
             availability__claimed_at__isnull=True,
             availability__available_at__lte=now,
@@ -383,10 +367,48 @@ def lead_routing_view(request):
         .count()
     )
 
-    claimed_count = base_query.filter(
+    claimed_count = scoped_query.filter(
         Q(availability__claimed_at__isnull=False)
         | Q(assigned_caller__isnull=False)
     ).count()
+
+    # Active filters count for UI pill
+    active_filters_count = sum([
+        bool(q_param),
+        bool(service_param),
+        bool(caller_param),
+        bool(status_param and status_param != 'all'),
+        bool(source_param),
+        bool(date_from_param),
+        bool(date_to_param),
+    ])
+
+    # Quick view tabs applied on top of scoped query
+    filtered_query = scoped_query
+    if tab_param == 'no_caller':
+        filtered_query = scoped_query.filter(
+            service_type_id__in=services_with_no_callers,
+            assigned_caller__isnull=True,
+            availability__claimed_at__isnull=True,
+        )
+    elif tab_param == 'available':
+        filtered_query = scoped_query.filter(
+            availability__isnull=False,
+            availability__claimed_at__isnull=True,
+            availability__available_at__lte=now,
+            assigned_caller__isnull=True,
+            service_type__is_active=True,
+        ).exclude(service_type_id__in=services_with_no_callers)
+    elif tab_param == 'claimed':
+        filtered_query = scoped_query.filter(
+            Q(availability__claimed_at__isnull=False)
+            | Q(assigned_caller__isnull=False)
+        )
+
+    # Attach diagnosis info to page records
+    paginated_page = paginate(request, filtered_query)
+    for lead in paginated_page:
+        lead.diagnosis = diagnose_lead_availability(lead, now=now)
 
     all_services = Service.objects.all().order_by('name')
     all_callers = User.objects.filter(role=User.Role.CALLER).order_by(
@@ -415,4 +437,5 @@ def lead_routing_view(request):
         date_to=date_to_param,
         search_query=q_param,
         workloads=workloads,
+        active_filters_count=active_filters_count,
     )

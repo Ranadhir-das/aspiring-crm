@@ -432,7 +432,10 @@ def lead_import(request):
         pasted_text = form.cleaned_data.get('pasted_numbers')
         action = request.POST.get('action')
 
-        if action == 'import_paste':
+        import_method = request.POST.get('import_method') or form.cleaned_data.get('import_method')
+        is_paste_action = (action == 'import_paste') or (action == 'import' and (import_method == 'paste' or (pasted_text and not upload)))
+
+        if is_paste_action:
             if not pasted_text:
                 form.add_error('pasted_numbers', 'Please paste phone numbers to import.')
             else:
@@ -450,6 +453,7 @@ def lead_import(request):
                         messages.success(request, f"Assigned {result['created_count']} new leads to {caller_name}.")
                     messages.success(request, f"Created batch \"{result['batch_name']}\" with {result['created_count']} leads." +
                                      (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else ""))
+                    form = ImportForm()
                 else:
                     messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
         elif action in ('preview', 'import'):
@@ -598,6 +602,19 @@ def calls(request):
     outcome_counts = dict(base_query.order_by().values('outcome').annotate(n=Count('pk')).values_list('outcome', 'n'))
     total_matching_calls = sum(outcome_counts.values())
 
+    from django.db.models import Sum
+    total_duration_seconds = base_query.aggregate(s=Sum('duration_seconds'))['s'] or 0
+    interested_calls_count = outcome_counts.get(Call.Outcome.INTERESTED, 0)
+    callback_calls_count = outcome_counts.get(Call.Outcome.CALL_BACK, 0)
+    connected_calls_count = base_query.filter(duration_seconds__gt=0).count()
+
+    hours = total_duration_seconds // 3600
+    minutes = (total_duration_seconds % 3600) // 60
+    if hours > 0:
+        total_talk_time_display = f"{hours}h {minutes}m"
+    else:
+        total_talk_time_display = f"{minutes}m {total_duration_seconds % 60}s"
+
     outcome_choices_with_counts = [
         (key, label, outcome_counts.get(key, 0))
         for key, label in Call.Outcome.choices
@@ -647,6 +664,11 @@ def calls(request):
                 has_followup=has_followup,
                 outcome_choices_with_counts=outcome_choices_with_counts,
                 total_matching_calls=total_matching_calls,
+                interested_calls_count=interested_calls_count,
+                callback_calls_count=callback_calls_count,
+                connected_calls_count=connected_calls_count,
+                total_talk_time_display=total_talk_time_display,
+                total_duration_seconds=total_duration_seconds,
                 callers=callers,
                 date_error=date_error,
                 active_filters_count=active_filters_count)
@@ -654,13 +676,108 @@ def calls(request):
 
 @workspace()
 def followups(request):
-    query = visible_followups(request.user).order_by('lead__import_batch_id', 'scheduled_at', 'pk')
+    base_query = visible_followups(request.user)
+    query = base_query.order_by('lead__import_batch_id', 'scheduled_at', 'pk')
+
     selected = request.GET.get('status', 'PENDING')
+    search = request.GET.get('q', '').strip()
+    selected_caller = request.GET.get('caller', '').strip()
+    date_from = request.GET.get('date_from', '').strip()
+    date_to = request.GET.get('date_to', '').strip()
+
+    active_filters_count = 0
+    if search:
+        active_filters_count += 1
+        query = query.filter(
+            Q(lead__name__icontains=search)
+            | Q(lead__phone__icontains=search)
+            | Q(phone_number__icontains=search)
+            | Q(notes__icontains=search)
+        )
+
+    if request.user.role in MANAGEMENT and selected_caller and selected_caller.isdigit():
+        active_filters_count += 1
+        query = query.filter(caller_id=int(selected_caller))
+
+    if date_from:
+        try:
+            df = datetime.strptime(date_from, '%Y-%m-%d').date()
+            query = query.filter(scheduled_at__date__gte=df)
+            active_filters_count += 1
+        except (ValueError, TypeError):
+            pass
+
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, '%Y-%m-%d').date()
+            query = query.filter(scheduled_at__date__lte=dt)
+            active_filters_count += 1
+        except (ValueError, TypeError):
+            pass
+
+    now = timezone.now()
+    today = timezone.localdate()
+
     if selected == 'overdue':
-        query = query.filter(status='PENDING', scheduled_at__lt=timezone.now())
+        query = query.filter(status='PENDING', scheduled_at__lt=now)
+        active_filters_count += 1
     elif selected in FollowUp.Status.values:
         query = query.filter(status=selected)
-    return page(request, 'followups', 'followups', records=paginate(request, query), selected_status=selected)
+        if selected != 'PENDING':
+            active_filters_count += 1
+    elif selected == 'all':
+        active_filters_count += 1
+
+    # Base for KPI counts (respecting search, caller, and date filters if provided)
+    kpi_base = base_query
+    if search:
+        kpi_base = kpi_base.filter(
+            Q(lead__name__icontains=search)
+            | Q(lead__phone__icontains=search)
+            | Q(phone_number__icontains=search)
+            | Q(notes__icontains=search)
+        )
+    if request.user.role in MANAGEMENT and selected_caller and selected_caller.isdigit():
+        kpi_base = kpi_base.filter(caller_id=int(selected_caller))
+    if date_from:
+        try:
+            kpi_base = kpi_base.filter(scheduled_at__date__gte=datetime.strptime(date_from, '%Y-%m-%d').date())
+        except (ValueError, TypeError):
+            pass
+    if date_to:
+        try:
+            kpi_base = kpi_base.filter(scheduled_at__date__lte=datetime.strptime(date_to, '%Y-%m-%d').date())
+        except (ValueError, TypeError):
+            pass
+
+    pending_count = kpi_base.filter(status='PENDING').count()
+    overdue_count = kpi_base.filter(status='PENDING', scheduled_at__lt=now).count()
+    today_count = kpi_base.filter(status='PENDING', scheduled_at__date=today).count()
+    completed_count = kpi_base.filter(status='COMPLETED').count()
+
+    metrics = [
+        {'label': 'Pending Follow-ups', 'value': pending_count, 'pill': 'Scheduled', 'desc': 'Awaiting action'},
+        {'label': 'Overdue Follow-ups', 'value': overdue_count, 'pill': 'Action Needed', 'desc': 'Past scheduled time'},
+        {'label': 'Due Today', 'value': today_count, 'pill': 'Today', 'desc': 'Scheduled for today'},
+        {'label': 'Completed', 'value': completed_count, 'pill': 'Done', 'desc': 'Successfully closed'},
+    ]
+
+    callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else []
+
+    return page(
+        request,
+        'followups',
+        'followups',
+        records=paginate(request, query),
+        selected_status=selected,
+        search=search,
+        selected_caller=selected_caller,
+        date_from=date_from,
+        date_to=date_to,
+        callers=callers,
+        active_filters_count=active_filters_count,
+        metrics=metrics,
+    )
 
 
 @require_POST
@@ -677,12 +794,47 @@ def followup_complete(request, pk):
 
 @workspace(management=True)
 def team(request):
-    callers = User.objects.filter(role=User.Role.CALLER).annotate(
+    query = User.objects.filter(role=User.Role.CALLER).annotate(
         lead_count=Count('assigned_leads', distinct=True),
         interested_count=Count('assigned_leads', filter=Q(assigned_leads__status='INTERESTED'), distinct=True),
         call_count=Count('calls_made', distinct=True),
     ).order_by('-call_count', 'username')
-    return page(request, 'team', 'team', records=paginate(request, callers))
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        query = query.filter(
+            Q(username__icontains=q)
+            | Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
+            | Q(email__icontains=q)
+        )
+
+    status = request.GET.get('status', '').strip()
+    if status == 'active':
+        query = query.filter(is_active=True)
+    elif status == 'inactive':
+        query = query.filter(is_active=False)
+
+    callers_list = list(query)
+    total_callers = len(callers_list)
+    active_callers = sum(1 for c in callers_list if c.is_active)
+    total_assigned_leads = sum(c.lead_count for c in callers_list)
+    total_calls = sum(c.call_count for c in callers_list)
+    active_filters_count = sum(1 for v in [q, status] if v)
+
+    return page(
+        request,
+        'team',
+        'team',
+        records=paginate(request, query),
+        total_callers=total_callers,
+        active_callers=active_callers,
+        total_assigned_leads=total_assigned_leads,
+        total_calls=total_calls,
+        search_query=q,
+        selected_status=status,
+        active_filters_count=active_filters_count,
+    )
 
 
 @workspace(employee=True)
@@ -725,12 +877,15 @@ def caller_detail(request, pk):
     context = profile_data(caller, window)
     from apps.performance.models import PointsAdjustment
     adjustments = PointsAdjustment.objects.filter(caller=caller).select_related('recorded_by').order_by('-created_at')
+    from .performance_views import build_individual_caller_chart_data
+    caller_chart_data = build_individual_caller_chart_data(caller)
     query = between(ActivityLog.objects.filter(actor=caller).select_related('lead'), 'created_at', window).order_by('-created_at')
     ledger_page = Paginator(context.pop('ledger'), 25).get_page(request.GET.get('ledger_page'))
     return page(request, 'caller_detail', 'performance', caller=caller, records=paginate(request, query),
                 filters=filters, window=window, report_valid=valid, ledger=ledger_page,
                 adjustments=adjustments, adjustment_form=adjustment_form, milestone_form=milestone_form,
-                can_adjust=can_manage(request.user) and caller.role == User.Role.CALLER, **context)
+                can_adjust=can_manage(request.user) and caller.role == User.Role.CALLER,
+                caller_chart_data=caller_chart_data, **context)
 
 
 @workspace(management=True)
@@ -773,51 +928,111 @@ class SessionFilterForm(forms.Form):
 @workspace(management=True)
 def caller_sessions(request):
     from apps.accounts.models import CallerSession
+    from django.db.models import Sum
+
     form = SessionFilterForm(request.GET or None)
     query = CallerSession.objects.select_related('caller').order_by('-logged_in_at')
+    active_filters_count = 0
+
     if form.is_valid():
         if form.cleaned_data.get('start_date'):
             query = query.filter(logged_in_at__date__gte=form.cleaned_data['start_date'])
+            active_filters_count += 1
         if form.cleaned_data.get('end_date'):
             query = query.filter(logged_in_at__date__lte=form.cleaned_data['end_date'])
+            active_filters_count += 1
         if form.cleaned_data.get('caller'):
             query = query.filter(caller=form.cleaned_data['caller'])
-    return page(request, 'caller_sessions', 'team', records=paginate(request, query), filters=form)
+            active_filters_count += 1
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        query = query.filter(
+            Q(caller__username__icontains=q)
+            | Q(caller__first_name__icontains=q)
+            | Q(caller__last_name__icontains=q)
+            | Q(ip_address__icontains=q)
+        )
+        active_filters_count += 1
+
+    status = request.GET.get('status', '').strip()
+    if status == 'active':
+        query = query.filter(logged_out_at__isnull=True)
+        active_filters_count += 1
+    elif status == 'ended':
+        query = query.filter(logged_out_at__isnull=False)
+        active_filters_count += 1
+
+    total_sessions = query.count()
+    active_now = query.filter(logged_out_at__isnull=True).count()
+    signed_out = total_sessions - active_now
+    total_seconds = query.aggregate(total=Sum('active_seconds'))['total'] or 0.0
+    total_hours = f"{int(total_seconds // 3600)}h {int((total_seconds % 3600) // 60)}m"
+
+    can_manage_employees = request.user.role in (User.Role.ADMIN, User.Role.MANAGER) or request.user.is_staff
+    all_callers = User.objects.filter(is_active=True).order_by('first_name', 'username')
+
+    return page(
+        request,
+        'caller_sessions',
+        'team',
+        records=paginate(request, query),
+        filters=form,
+        total_sessions=total_sessions,
+        active_now=active_now,
+        signed_out=signed_out,
+        total_active_hours=total_hours,
+        search_query=q,
+        selected_status=status,
+        active_filters_count=active_filters_count,
+        can_manage_employees=can_manage_employees,
+        all_callers=all_callers,
+    )
 
 
 @workspace()
 def admissions_view(request):
     from apps.leads.models import Admission
+    from django.db.models import Sum
     user = request.user
     query = Admission.objects.select_related('lead', 'caller', 'created_by').order_by('-admission_date', '-created_at')
+    active_filters_count = 0
+
+    caller_id = request.GET.get('caller', '').strip()
     if user.role == User.Role.CALLER:
         query = query.filter(caller=user)
-    elif request.GET.get('caller') and request.GET.get('caller').isdigit():
-        query = query.filter(caller_id=int(request.GET.get('caller')))
+    elif caller_id and caller_id.isdigit():
+        query = query.filter(caller_id=int(caller_id))
+        active_filters_count += 1
 
-    start_date = request.GET.get('start_date') or request.GET.get('date_from')
-    end_date = request.GET.get('end_date') or request.GET.get('date_to')
+    start_date = (request.GET.get('start_date') or request.GET.get('date_from') or '').strip()
+    end_date = (request.GET.get('end_date') or request.GET.get('date_to') or '').strip()
     if start_date:
         try:
-            sd = datetime.strptime(start_date.strip(), '%Y-%m-%d').date()
+            sd = datetime.strptime(start_date, '%Y-%m-%d').date()
             query = query.filter(admission_date__gte=sd)
+            active_filters_count += 1
         except (ValueError, TypeError):
             pass
     if end_date:
         try:
-            ed = datetime.strptime(end_date.strip(), '%Y-%m-%d').date()
+            ed = datetime.strptime(end_date, '%Y-%m-%d').date()
             query = query.filter(admission_date__lte=ed)
+            active_filters_count += 1
         except (ValueError, TypeError):
             pass
 
-    channel = request.GET.get('channel') or request.GET.get('type')
+    channel = (request.GET.get('channel') or request.GET.get('type') or '').strip()
     if channel == 'lead':
         query = query.filter(lead__isnull=False)
+        active_filters_count += 1
     elif channel == 'external':
         query = query.filter(lead__isnull=True)
+        active_filters_count += 1
 
     search = request.GET.get('q', '').strip()
     if search:
+        active_filters_count += 1
         query = query.filter(
             Q(lead__name__icontains=search)
             | Q(lead__phone__icontains=search)
@@ -827,6 +1042,20 @@ def admissions_view(request):
             | Q(course__icontains=search)
         )
 
+    # 4 KPI metrics reflecting current filters
+    total_admissions = query.count()
+    lead_conversions = query.filter(lead__isnull=False).count()
+    external_students = query.filter(lead__isnull=True).count()
+    total_fees_val = query.aggregate(total=Sum('fees'))['total'] or 0
+    total_fees_display = f'₹{total_fees_val:,.2f}'
+
+    metrics = [
+        {'label': 'Total Admissions', 'value': total_admissions, 'pill': 'Verified', 'desc': 'All enrolled students'},
+        {'label': 'Lead Conversions', 'value': lead_conversions, 'pill': 'CRM Leads', 'desc': 'Converted pipeline leads'},
+        {'label': 'External Students', 'value': external_students, 'pill': 'Direct', 'desc': 'Direct / walk-in students'},
+        {'label': 'Total Fees Value', 'value': total_fees_display, 'pill': 'Revenue', 'desc': 'Gross enrolled fees'},
+    ]
+
     callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if user.role in MANAGEMENT else []
     return page(
         request,
@@ -835,10 +1064,12 @@ def admissions_view(request):
         records=paginate(request, query),
         search=search,
         callers=callers,
-        selected_caller=request.GET.get('caller', ''),
-        selected_channel=channel or '',
-        start_date=start_date or '',
-        end_date=end_date or '',
+        selected_caller=caller_id,
+        selected_channel=channel,
+        start_date=start_date,
+        end_date=end_date,
+        active_filters_count=active_filters_count,
+        metrics=metrics,
     )
 
 

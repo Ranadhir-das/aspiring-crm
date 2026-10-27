@@ -1,0 +1,32 @@
+{% extends 'web/error_base.html' %}
+
+{% block error_title %}503 · Service Unavailable · Maintenance{% endblock %}
+{% block glow_class %}glow-503{% endblock %}
+
+{% block error_content %}
+  <div class="error-icon-orb orb-503">
+    <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+    </svg>
+  </div>
+
+  <div>
+    <span class="error-code-tag code-503">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      HTTP 503 • SYSTEM MAINTENANCE
+    </span>
+  </div>
+
+  <h1 class="error-title">Scheduled Upgrades</h1>
+  <p class="error-desc">
+    {{ error_message|default:"Vaani CRM is temporarily paused for routine database maintenance and platform performance optimizations. We will be back online in just a few minutes." }}
+  </p>
+
+  <div class="error-actions">
+    <button type="button" onclick="window.location.reload()" class="btn-error-primary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+      <span>Check Status &amp; Refresh</span>
+    </button>
+  </div>
+{% endblock %}
+

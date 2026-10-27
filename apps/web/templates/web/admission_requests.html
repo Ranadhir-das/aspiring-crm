@@ -1,38 +1,199 @@
 {% extends 'web/base.html' %}
+{% load static %}
 {% load web_tags %}
+
 {% block title %}Admission Requests{% endblock %}
 {% block breadcrumb %}Admission Requests{% endblock %}
+
 {% block content %}
-<div class="page-heading">
-  <div><div class="eyebrow">COUNSELLING</div><h1>Admission Requests<span class="accent">.</span></h1><p>Counselor requests for admission review. Approving a request does not create an admission — use “Create admission” to record it.</p></div>
-  <a class="button" href="{% url 'web:counselor-desk' %}">Counselor Desk</a>
+<link rel="stylesheet" href="{% static 'web/admission-requests.css' %}?v=1">
+
+<!-- Page Heading -->
+<div class="page-heading requests-header">
+  <div>
+    <div class="eyebrow">COUNSELLING WORKSPACE</div>
+    <h1>Admission Requests<span class="accent">.</span></h1>
+    <p class="heading-subtitle">Counselor requests for admission review. Approving a request clears it for official admission enrollment.</p>
+  </div>
+  <div class="actions header-actions">
+    <a class="button action-btn" href="{% url 'web:counselor-desk' %}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      <span>Counselor Desk ↗</span>
+    </a>
+    <a class="button action-btn" href="{% url 'web:admissions' %}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+      <span>Admissions Roster ↗</span>
+    </a>
+  </div>
 </div>
-<section class="panel">
-  <form class="filters" method="get">
-    <select name="status" aria-label="Status"><option value="all" {% if not status_filter %}selected{% endif %}>All statuses</option>{% for value, label in statuses %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-    <button class="button" type="submit">Filter</button>
+
+<!-- 1. Top Filter Section (Placed above cards) -->
+<section class="requests-filter-card">
+  <div class="requests-filter-head">
+    <div class="requests-filter-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span>Filter &amp; Search Admission Requests</span>
+    </div>
+    {% if active_filters_count > 0 %}
+    <span class="requests-active-pill">
+      <span class="dot"></span>
+      {{ active_filters_count }} filter{% if active_filters_count > 1 %}s{% endif %} active
+    </span>
+    {% endif %}
+  </div>
+
+  <form method="get" class="requests-filter-form" action="{% url 'web:admission-requests' %}">
+    <!-- Keyword Search -->
+    <div class="requests-search-box">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" name="q" value="{{ search }}" placeholder="Search student, phone, counselor or note…" aria-label="Search">
+    </div>
+
+    <!-- Status Filter -->
+    <div class="requests-select-field">
+      <select name="status" aria-label="Status filter">
+        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+        {% for value, label in statuses %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="requests-filter-actions">
+      <button type="submit" class="btn-filter-submit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        <span>Apply Filter</span>
+      </button>
+      <a href="{% url 'web:admission-requests' %}" class="btn-filter-clear">Reset</a>
+    </div>
   </form>
-  <div class="table-scroll"><table>
-    <thead><tr><th>Lead</th><th>Counselor</th><th>Message</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead>
-    <tbody>{% for item in records %}<tr>
-      <td><a class="text-link" href="{% url 'web:lead-detail' item.lead_id %}">{{ item.lead.name }}</a><br><small>{{ item.lead.phone }} · {{ item.lead.get_status_display }}</small></td>
-      <td>{% employee_link item.counselor %}</td>
-      <td>{{ item.message|default:'—'|linebreaksbr }}</td>
-      <td><span class="badge">{{ item.get_status_display }}</span>{% if item.reviewed_by %}<br><small>by {{ item.reviewed_by|user_name }} · {{ item.reviewed_at|date:'d M Y, H:i' }}</small>{% endif %}{% if item.review_note %}<br><small>{{ item.review_note }}</small>{% endif %}</td>
-      <td>{{ item.created_at|date:'d M Y, H:i' }}</td>
-      <td><div class="actions">
-        {% if item.status == 'PENDING' %}
-        <form method="post" action="{% url 'web:admission-request-review' item.pk %}">{% csrf_token %}
-          <input type="hidden" name="next" value="{{ request.get_full_path }}">
-          <input name="review_note" aria-label="Review note" placeholder="Note (optional)" maxlength="500">
-          <button class="button primary" name="decision" value="approve" type="submit">Approve</button>
-          <button class="button" name="decision" value="reject" type="submit">Reject</button>
-        </form>
-        {% endif %}
-        <a class="text-link" href="{% url 'web:admission-new' %}?lead={{ item.lead_id }}&source_type=existing">Create admission</a>
-      </div></td>
-    </tr>{% empty %}<tr><td colspan="6" class="empty">No admission requests found.</td></tr>{% endfor %}</tbody>
-  </table></div>
-  {% include 'web/pagination.html' %}
+</section>
+
+<!-- 2. Four KPI Metric Cards (Placed directly below filter section) -->
+{% if metrics %}
+<section class="requests-metrics-grid">
+  {% for metric in metrics %}
+  <div class="request-metric-card">
+    <div class="metric-top-bar">
+      <span class="metric-label">{{ metric.label }}</span>
+      <span class="count-pill">{{ metric.pill }}</span>
+    </div>
+    <div class="metric-number">{{ metric.value }}</div>
+    <div class="metric-bottom-bar">
+      <span>{{ metric.desc }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- 3. Contained Scrollable Table with Sticky Header -->
+<section class="requests-panel">
+  <div class="requests-panel-head">
+    <div>
+      <h2>Counselor Review Queue</h2>
+      <p>Decide on counselor submissions before creating verified student admissions.</p>
+    </div>
+    <span class="count-pill">
+      {{ records.paginator.count|default:records|length }} request{% if records.paginator.count != 1 %}s{% endif %}
+    </span>
+  </div>
+
+  <div class="requests-table-scroll">
+    <table class="requests-table">
+      <thead>
+        <tr>
+          <th>Student / Contact</th>
+          <th>Submitting Counselor</th>
+          <th>Counselor Message</th>
+          <th>Review Status</th>
+          <th>Requested At</th>
+          <th style="text-align: right;">Review Decisions &amp; Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in records %}
+        <tr>
+          <td>
+            <a class="person" href="{% url 'web:lead-detail' item.lead_id %}">
+              <span class="avatar subtle">{{ item.lead.name|first|upper }}</span>
+              <span>
+                <strong>{{ item.lead.name }}</strong>
+                <small>{{ item.lead.phone }} · {{ item.lead.get_status_display }}</small>
+              </span>
+            </a>
+          </td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="avatar small">{{ item.counselor.first_name|default:item.counselor.username|first|upper }}</span>
+              <span>{% employee_link item.counselor %}</span>
+            </div>
+          </td>
+          <td class="notes-cell" style="max-width: 280px; font-size: 12.5px; line-height: 1.4;">
+            {{ item.message|default:'—'|linebreaksbr }}
+          </td>
+          <td>
+            {% if item.status == 'PENDING' %}
+            <span class="badge" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; font-weight: 700;">Pending Review</span>
+            {% elif item.status == 'APPROVED' %}
+            <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #10b981; font-weight: 700;">Approved</span>
+            {% elif item.status == 'REJECTED' %}
+            <span class="badge" style="background: rgba(239, 68, 68, 0.12); color: #ef4444; font-weight: 700;">Rejected</span>
+            {% else %}
+            <span class="badge">{{ item.get_status_display }}</span>
+            {% endif %}
+
+            {% if item.reviewed_by %}
+            <div style="margin-top: 4px;">
+              <small class="muted" style="font-size: 10px;">
+                by {{ item.reviewed_by|user_name }} · {{ item.reviewed_at|date:'d M Y, H:i' }}
+              </small>
+            </div>
+            {% endif %}
+            {% if item.review_note %}
+            <div style="margin-top: 2px;">
+              <small style="color: var(--text); font-size: 11px;">"{{ item.review_note }}"</small>
+            </div>
+            {% endif %}
+          </td>
+          <td>
+            <span style="white-space: nowrap; font-size: 12px;">{{ item.created_at|date:'d M Y, H:i' }}</span>
+          </td>
+          <td style="text-align: right;">
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+              {% if item.status == 'PENDING' %}
+              <form method="post" action="{% url 'web:admission-request-review' item.pk %}" class="review-actions-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <input name="review_note" aria-label="Review note" placeholder="Note (optional)" maxlength="500" class="review-note-input">
+                <button class="btn-approve-request" name="decision" value="approve" type="submit">Approve</button>
+                <button class="btn-reject-request" name="decision" value="reject" type="submit">Reject</button>
+              </form>
+              {% endif %}
+              <a class="text-link" href="{% url 'web:admission-new' %}?lead={{ item.lead_id }}&source_type=existing" style="font-size: 11.5px; font-weight: 600;">
+                + Create Admission ↗
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="empty" style="padding: 48px 20px; text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 8px;">🎓</div>
+            <strong style="font-size: 15px; display: block; margin-bottom: 4px;">No admission requests found</strong>
+            <p style="color: var(--muted); font-size: 13px; max-width: 420px; margin: 0 auto;">No counselor review submissions matching the current filter.</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if records %}
+  <div style="padding: 12px 18px; border-top: 1px solid var(--border);">
+    {% include 'web/pagination.html' %}
+  </div>
+  {% endif %}
 </section>
 {% endblock %}

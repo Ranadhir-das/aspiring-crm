@@ -1,342 +1,411 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}Performance{% endblock %}{% block breadcrumb %}Performance{% endblock %}{% block content %}
-<div class="futuristic-hero">
-  <div>
-    <div class="cyber-badge"><span class="pulse-dot"></span> TEAM TELEMETRY</div>
-    <h1>Performance Command<span class="accent">.</span></h1>
-    <p>Real-time caller leaderboard, call outcomes, conversion analytics, and lead backlog tracking.</p>
-  </div>
-</div>
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Performance Command{% endblock %}
+{% block breadcrumb %}Performance{% endblock %}
 
-{% include 'web/performance_filter.html' %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/performance-command.css' %}?v=2">
 
-<div class="futuristic-metrics">
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Net Team Points</span>
-      <span class="card-icon violet">✦</span>
-    </div>
-    <div class="card-value">{{ team_stats.total_points }}</div>
-    <div class="card-subtext">
-      <span class="positive">+{{ team_stats.positive_points }} awarded</span> · <span class="negative">{{ team_stats.negative_points }} deducted</span>
-    </div>
-  </div>
-
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Calls &amp; Talk Time</span>
-      <span class="card-icon cyan">📞</span>
-    </div>
-    <div class="card-value">{{ team_calls }} <small>/ {{ team_stats.connected_calls }} connected</small></div>
-    <div class="card-subtext">
-      <span>{{ team_stats.talk_time|duration }} cumulative talk time</span>
-    </div>
-  </div>
-
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Applications &amp; Admissions</span>
-      <span class="card-icon emerald">🎓</span>
-    </div>
-    <div class="card-value">{{ team_stats.conversions }} <small>admissions</small></div>
-    <div class="card-subtext">
-      <span>{{ team_stats.interested }} interested calls · {{ team_stats.not_interested }} not interested</span>
-    </div>
-  </div>
-
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Calling Backlog</span>
-      <span class="card-icon amber">⏳</span>
-    </div>
-    <div class="card-value">{{ team_left_to_call }} <small>pending backlog</small></div>
-    <div class="card-subtext">
-      <span>{{ team_stats.assigned_pending }} assigned to callers · {{ team_stats.unassigned_pending }} unassigned</span>
-    </div>
-  </div>
-
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Follow-ups Execution</span>
-      <span class="card-icon rose">🗓</span>
-    </div>
-    <div class="card-value">{{ team_stats.completed_followups }} <small>completed</small></div>
-    <div class="card-subtext">
-      <span class="negative">{{ team_stats.missed_followups }} missed follow-ups</span>
-    </div>
-  </div>
-</div>
-
-<div class="cyber-horizon-grid">
-  <div class="cyber-horizon-card today">
+<div class="performance-page">
+  <!-- Hero Heading -->
+  <div class="performance-hero">
     <div>
-      <div class="label">Today's Points</div>
-      <div class="timeframe">Current workspace day</div>
+      <div class="eyebrow"><span class="pulse-dot"></span> TEAM TELEMETRY &amp; CALL PERFORMANCE</div>
+      <h1>Performance Command<span class="accent">.</span></h1>
+      <p>Real-time caller leaderboard, call activity trends, conversion analytics, and team lead backlog.</p>
     </div>
-    <div class="points-val">{{ team_stats.daily_points }}</div>
   </div>
-  <div class="cyber-horizon-card week">
-    <div>
-      <div class="label">This Week's Points</div>
-      <div class="timeframe">Monday onward</div>
-    </div>
-    <div class="points-val">{{ team_stats.weekly_points }}</div>
-  </div>
-  <div class="cyber-horizon-card month">
-    <div>
-      <div class="label">This Month's Points</div>
-      <div class="timeframe">1st of month to date</div>
-    </div>
-    <div class="points-val">{{ team_stats.monthly_points }}</div>
-  </div>
-</div>
 
-<section class="panel spaced cyber-bars-panel">
-  <div class="panel-heading">
-    <div>
-      <h2>Caller progress</h2>
-      <p>Net points distribution across active callers in the selected range. Click any caller to view full profile.</p>
-    </div>
-    <span class="pill violet">{{ rows|length }} callers</span>
-  </div>
-  <div class="cyber-bars-track" role="img" aria-label="Vertical bar chart of caller points">
-    {% for row in rows %}
-    <a class="cyber-bar-item" href="{% url 'web:caller-detail' row.caller.pk %}{% querystring page=None ledger_page=None %}" title="{{ row.caller|user_name }}: {{ row.total_points }} points">
-      <div class="cyber-bar-zone">
-        {% if row.total_points >= 0 %}
-          <div class="cyber-bar-pill" style="height:{{ row.bar_percent }}%">
-            <span class="cyber-bar-score">{{ row.total_points }}</span>
-          </div>
-        {% else %}
-          <div class="cyber-bar-pill negative negative-bar" style="height:{{ row.bar_percent }}%">
-            <span class="cyber-bar-score">{{ row.total_points }}</span>
-          </div>
-        {% endif %}
+  <!-- Top Filter Controls -->
+  {% include 'web/performance_filter.html' %}
+
+  <!-- 5 KPI Metrics Grid -->
+  <div class="performance-metrics-grid">
+    <div class="performance-metric-card">
+      <div class="performance-metric-head">
+        <span>Net Team Points</span>
+        <span class="performance-metric-icon violet">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </span>
       </div>
-      <span class="cyber-bar-name">{{ row.caller|user_name }}</span>
-      <span class="cyber-bar-calls">{{ row.calls }} calls</span>
-    </a>
-    {% empty %}
-    <p class="empty">No callers registered yet.</p>
-    {% endfor %}
-  </div>
-</section>
-
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>Caller Leaderboard</h2>
-      <p>Ranked by net points and call activity. Select callers to compare trends.</p>
-    </div>
-    <button class="button primary" form="report-filter">Compare selected</button>
-  </div>
-  <div class="futuristic-table-wrap">
-    <table class="futuristic-table">
-      <thead>
-        <tr>
-          <th>Compare</th>
-          <th>#</th>
-          <th>Caller</th>
-          <th>Points (+ / −)</th>
-          <th>Calls / connected</th>
-          <th>Talk / avg</th>
-          <th>Follow-ups done / missed</th>
-          <th>Interested</th>
-          <th>Not Interested</th>
-          <th>Conversions</th>
-          <th>Assigned leads</th>
-          <th>Left to call</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        <tr>
-          <td>
-            <input form="report-filter" type="checkbox" name="compare" value="{{ row.caller.pk }}" {% if row.caller.pk in compare_ids %}checked{% endif %} aria-label="Compare {{ row.caller|user_name }}">
-          </td>
-          <td>
-            <span class="rank-badge {% if row.rank == 1 %}rank-1{% elif row.rank == 2 %}rank-2{% elif row.rank == 3 %}rank-3{% else %}rank-other{% endif %}">
-              {{ row.rank }}
-            </span>
-          </td>
-          <td>
-            <a class="person" href="{% url 'web:caller-detail' row.caller.pk %}{% querystring page=None ledger_page=None %}">
-              <span class="avatar subtle">{{ row.caller|user_name|first|upper }}</span>
-              <span>
-                <strong>{{ row.caller|user_name }}</strong>
-                <small>{{ row.caller.email|default:row.caller.username }}{% if not row.caller.is_active %} · inactive{% endif %}</small>
-              </span>
-            </a>
-          </td>
-          <td>
-            <strong class="accent" style="font-size:15px">{{ row.total_points }}</strong>
-            <small class="points-split">+{{ row.positive_points }} / {{ row.negative_points }}</small>
-          </td>
-          <td>
-            <strong>{{ row.calls }}</strong> <small>/ {{ row.connected_calls }}</small>
-          </td>
-          <td>
-            {{ row.talk_time|duration }}
-            <small class="points-split">Avg {{ row.avg_duration|duration }}</small>
-          </td>
-          <td>
-            {{ row.completed_followups }} <small>/ {{ row.missed_followups }}</small>
-          </td>
-          <td>
-            <a href="{% url 'web:calls' %}?outcome=INTERESTED&caller={{ row.caller.pk }}" class="pill mint" style="text-decoration:none" title="View {{ row.interested }} interested calls">{{ row.interested }}</a>
-          </td>
-          <td>
-            <a href="{% url 'web:calls' %}?outcome=NOT_INTERESTED&caller={{ row.caller.pk }}" class="pill rose" style="text-decoration:none" title="View {{ row.not_interested }} not interested calls">{{ row.not_interested }}</a>
-          </td>
-          <td>
-            <a href="{% url 'web:leads' %}?status=ADMISSION_DONE&owner={{ row.caller.pk }}" class="pill emerald" style="text-decoration:none" title="View {{ row.conversions }} admissions">{{ row.conversions }}</a>
-          </td>
-          <td>
-            <a href="{% url 'web:leads' %}?owner={{ row.caller.pk }}" style="text-decoration:none;color:inherit;font-weight:600" title="View assigned leads">{{ row.leads_assigned }}</a>
-          </td>
-          <td>
-            <a href="{% url 'web:leads' %}?status=PENDING&owner={{ row.caller.pk }}" class="left-to-call-pill {% if row.left_to_call > 0 %}has-pending{% else %}zero-pending{% endif %}" style="text-decoration:none" title="View pending leads">
-              <span class="dot"></span>{{ row.left_to_call }}
-            </a>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="12" class="empty">No caller accounts yet.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-{% if compare_rows %}
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>Caller Activity Comparison Graph</h2>
-      <p>{% if window.interval == 'hour' %}Hourly{% else %}Daily{% endif %} calls in the selected window</p>
-    </div>
-  </div>
-  <div id="compare-chart" class="activity-chart"></div>
-  <div class="legend">
-    {% for row in compare_rows %}
-    <a href="{% url 'web:caller-detail' row.caller.pk %}{% querystring %}">
-      <span class="legend-dot" style="background:{{ row.color }}"></span>{{ row.caller|user_name }} <strong>{{ row.calls }}</strong>
-    </a>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
-
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>Call Outcomes Donut</h2>
-      <p>Distribution of call outcomes across the team in the selected window</p>
-    </div>
-    <span class="pill cyan">{{ team_call_total }} Calls in Window</span>
-  </div>
-  <div class="futuristic-donut-container">
-    <div class="futuristic-donut-hud">
-      <div id="team-call-donut" class="futuristic-donut-disc" aria-hidden="true"></div>
-      <div class="futuristic-donut-center">
-        <strong id="team-call-total">{{ team_call_total }}</strong>
-        <span>Total Calls</span>
+      <div class="performance-metric-val">{{ team_stats.total_points }}</div>
+      <div class="performance-metric-subtext">
+        <span class="positive">+{{ team_stats.positive_points }} awarded</span> · <span class="negative">{{ team_stats.negative_points }} deducted</span>
       </div>
     </div>
-    <div class="cyber-breakdown-grid">
-      {% for item in team_call_pipeline %}
-      <a href="{% if item.key %}{% url 'web:calls' %}?outcome={{ item.key }}{% else %}{% url 'web:calls' %}{% endif %}" class="cyber-breakdown-chip" title="View {{ item.value }} {{ item.name }} calls">
-        <div class="chip-identity">
-          <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
-          <span class="chip-label">{{ item.name }}</span>
+
+    <div class="performance-metric-card">
+      <div class="performance-metric-head">
+        <span>Calls &amp; Talk Time</span>
+        <span class="performance-metric-icon cyan">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </span>
+      </div>
+      <div class="performance-metric-val">{{ team_calls }} <small>/ {{ team_stats.connected_calls }} connected</small></div>
+      <div class="performance-metric-subtext">
+        <span>{{ team_stats.talk_time|duration }} cumulative talk time</span>
+      </div>
+    </div>
+
+    <div class="performance-metric-card">
+      <div class="performance-metric-head">
+        <span>Admissions &amp; Conversions</span>
+        <span class="performance-metric-icon emerald">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        </span>
+      </div>
+      <div class="performance-metric-val">{{ team_stats.conversions }} <small>admissions</small></div>
+      <div class="performance-metric-subtext">
+        <span>{{ team_stats.interested }} interested · {{ team_stats.not_interested }} not interested</span>
+      </div>
+    </div>
+
+    <div class="performance-metric-card">
+      <div class="performance-metric-head">
+        <span>Calling Backlog</span>
+        <span class="performance-metric-icon amber">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </span>
+      </div>
+      <div class="performance-metric-val">{{ team_left_to_call }} <small>pending</small></div>
+      <div class="performance-metric-subtext">
+        <span>{{ team_stats.assigned_pending }} assigned · {{ team_stats.unassigned_pending }} unassigned</span>
+      </div>
+    </div>
+
+    <div class="performance-metric-card">
+      <div class="performance-metric-head">
+        <span>Follow-ups Execution</span>
+        <span class="performance-metric-icon rose">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+      </div>
+      <div class="performance-metric-val">{{ team_stats.completed_followups }} <small>completed</small></div>
+      <div class="performance-metric-subtext">
+        <span class="negative">{{ team_stats.missed_followups }} missed follow-ups</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Horizon Cards -->
+  <div class="performance-horizon-grid">
+    <div class="performance-horizon-card">
+      <div>
+        <div class="label">Today's Points</div>
+        <div class="timeframe">Current workspace day</div>
+      </div>
+      <div class="points-val">{{ team_stats.daily_points }}</div>
+    </div>
+    <div class="performance-horizon-card">
+      <div>
+        <div class="label">This Week's Points</div>
+        <div class="timeframe">Monday onward</div>
+      </div>
+      <div class="points-val">{{ team_stats.weekly_points }}</div>
+    </div>
+    <div class="performance-horizon-card">
+      <div>
+        <div class="label">This Month's Points</div>
+        <div class="timeframe">1st of month to date</div>
+      </div>
+      <div class="points-val">{{ team_stats.monthly_points }}</div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MULTI-CALLER TELEMETRY GRAPH (All Callers in a Single Unified Chart)       -->
+  <!-- ========================================================================= -->
+  <section class="performance-chart-panel">
+    <div class="performance-chart-header">
+      <div>
+        <div class="eyebrow" style="margin-bottom: 3px;">CALL ACTIVITY TRAJECTORY</div>
+        <h2>Unified Call Activity Comparison Graph</h2>
+        <p>Interactive call volume telemetry of every caller across time. Switch timeframes or click any caller below to isolate lines.</p>
+      </div>
+      <div class="chart-range-switcher">
+        <button type="button" class="chart-range-btn {% if selected_range == '1h' %}active{% endif %}" data-preset="1h">1 Hour</button>
+        <button type="button" class="chart-range-btn {% if selected_range == 'today' %}active{% endif %}" data-preset="today">Today (24h)</button>
+        <button type="button" class="chart-range-btn {% if selected_range == '7d' %}active{% endif %}" data-preset="7d">Last 7 Days</button>
+        <button type="button" class="chart-range-btn {% if selected_range == '30d' %}active{% endif %}" data-preset="30d">Last 30 Days</button>
+      </div>
+    </div>
+
+    <!-- Chart Viewport (Cartesian Grid Matching Screenshot) -->
+    <div class="chart-viewport-card">
+      <div class="chart-y-axis-label">Measured in Calls</div>
+      <div id="all-callers-telemetry-chart" class="telemetry-chart-container"></div>
+      <div id="chart-tooltip" class="telemetry-chart-tooltip" style="display: none;"></div>
+    </div>
+
+    <!-- Chart Legend & Controls -->
+    <div class="chart-legend-container">
+      <div class="chart-legend-top">
+        <span class="legend-help">Click caller to toggle line visibility:</span>
+        <div class="legend-quick-actions">
+          <button type="button" id="chart-select-all" class="legend-action-btn">Show all</button>
+          <button type="button" id="chart-deselect-all" class="legend-action-btn">Hide all</button>
         </div>
-        <span class="chip-count">{{ item.value }}</span>
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-{{ team_call_pipeline|json_script:'team-call-data' }}
-
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>Leads by status · Pipeline Donut</h2>
-      <p>Live lead inventory across all pipeline stages, independent of the date filter.</p>
-    </div>
-    <span class="pill blue">All Leads</span>
-  </div>
-  <div class="futuristic-donut-container">
-    <div class="futuristic-donut-hud">
-      <div id="team-status-donut" class="futuristic-donut-disc" aria-hidden="true"></div>
-      <div class="futuristic-donut-center">
-        <strong id="team-status-total">—</strong>
-        <span>Total Leads</span>
       </div>
+      <div id="telemetry-chart-legend" class="telemetry-chart-legend-items"></div>
     </div>
-    <div class="cyber-breakdown-grid">
-      {% for item in status_bars %}
-      <a href="{% url 'web:leads' %}?status={{ item.key }}" class="cyber-breakdown-chip" title="View {{ item.value }} {{ item.name }} leads">
-        <div class="chip-identity">
-          <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
-          <span class="chip-label">{{ item.name }}</span>
-        </div>
-        <span class="chip-count">{{ item.value }}</span>
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-{{ status_bars|json_script:'team-status-data' }}
+  </section>
 
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>Other Employees Output</h2>
-      <p>Attendance and project performance for non-calling team members</p>
+  <!-- Caller Progress Bars -->
+  <section class="panel spaced cyber-bars-panel">
+    <div class="panel-heading">
+      <div>
+        <h2>Caller progress</h2>
+        <p>Net points distribution across active callers in the selected range.</p>
+      </div>
+      <span class="pill violet">{{ rows|length }} callers</span>
     </div>
-  </div>
-  <div class="futuristic-table-wrap">
-    <table class="futuristic-table">
-      <thead>
-        <tr>
-          <th>Employee</th>
-          <th>Role</th>
-          <th>Attendance Rate</th>
-          <th>Reports submitted</th>
-          <th>Projects completed</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in others %}
-        <tr>
-          <td>
-            <div class="person">
-              <span class="avatar subtle">{{ row.employee|user_name|first|upper }}</span>
-              <span>
-                <strong>{% employee_link row.employee %}</strong>
-                <small>{{ row.employee.email|default:row.employee.username }}</small>
-              </span>
+    <div class="cyber-bars-track" role="img" aria-label="Vertical bar chart of caller points">
+      {% for row in rows %}
+      <a class="cyber-bar-item" href="{% url 'web:caller-detail' row.caller.pk %}{% querystring page=None ledger_page=None %}" title="{{ row.caller|user_name }}: {{ row.total_points }} points">
+        <div class="cyber-bar-zone">
+          {% if row.total_points >= 0 %}
+            <div class="cyber-bar-pill" style="height:{{ row.bar_percent }}%">
+              <span class="cyber-bar-score">{{ row.total_points }}</span>
             </div>
-          </td>
-          <td>{{ row.employee.get_role_display }}</td>
-          <td>
-            <div class="progress" style="max-width:140px"><span style="width:{{ row.attendance_rate }}%"></span></div>
-            <small>{{ row.present }}/{{ row.total_days }} days · {{ row.attendance_rate }}%</small>
-          </td>
-          <td>{{ row.reports }}</td>
-          <td>{{ row.completed_projects }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="5" class="empty">No other employee accounts yet.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
+          {% else %}
+            <div class="cyber-bar-pill negative negative-bar" style="height:{{ row.bar_percent }}%">
+              <span class="cyber-bar-score">{{ row.total_points }}</span>
+            </div>
+          {% endif %}
+        </div>
+        <span class="cyber-bar-name">{{ row.caller|user_name }}</span>
+        <span class="cyber-bar-calls">{{ row.calls }} calls</span>
+      </a>
+      {% empty %}
+      <p class="empty">No callers registered yet.</p>
+      {% endfor %}
+    </div>
+  </section>
 
+  <!-- Caller Leaderboard Table -->
+  <section class="performance-table-card">
+    <div class="performance-card-header">
+      <div>
+        <h2>Caller Leaderboard</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">Ranked by net points and call activity. Select callers to compare trends.</p>
+      </div>
+      <button class="button primary" form="report-filter">Compare selected</button>
+    </div>
+    <div class="performance-table-scroll">
+      <table class="performance-table">
+        <thead>
+          <tr>
+            <th>Compare</th>
+            <th>#</th>
+            <th>Caller</th>
+            <th>Points (+ / −)</th>
+            <th>Calls / connected</th>
+            <th>Talk / avg</th>
+            <th>Follow-ups done / missed</th>
+            <th>Interested</th>
+            <th>Not Interested</th>
+            <th>Conversions</th>
+            <th>Assigned leads</th>
+            <th>Left to call</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>
+              <input form="report-filter" type="checkbox" name="compare" value="{{ row.caller.pk }}" {% if row.caller.pk in compare_ids %}checked{% endif %} aria-label="Compare {{ row.caller|user_name }}">
+            </td>
+            <td>
+              <span class="rank-badge {% if row.rank == 1 %}rank-1{% elif row.rank == 2 %}rank-2{% elif row.rank == 3 %}rank-3{% else %}rank-other{% endif %}">
+                {{ row.rank }}
+              </span>
+            </td>
+            <td>
+              <a class="person" href="{% url 'web:caller-detail' row.caller.pk %}{% querystring page=None ledger_page=None %}">
+                <span class="avatar subtle">{{ row.caller|user_name|first|upper }}</span>
+                <span>
+                  <strong>{{ row.caller|user_name }}</strong>
+                  <small>{{ row.caller.email|default:row.caller.username }}{% if not row.caller.is_active %} · inactive{% endif %}</small>
+                </span>
+              </a>
+            </td>
+            <td>
+              <strong class="accent" style="font-size:15px">{{ row.total_points }}</strong>
+              <small class="points-split">+{{ row.positive_points }} / {{ row.negative_points }}</small>
+            </td>
+            <td>
+              <strong>{{ row.calls }}</strong> <small>/ {{ row.connected_calls }}</small>
+            </td>
+            <td>
+              {{ row.talk_time|duration }}
+              <small class="points-split">Avg {{ row.avg_duration|duration }}</small>
+            </td>
+            <td>
+              {{ row.completed_followups }} <small>/ {{ row.missed_followups }}</small>
+            </td>
+            <td>
+              <a href="{% url 'web:calls' %}?outcome=INTERESTED&caller={{ row.caller.pk }}" class="pill mint" style="text-decoration:none" title="View {{ row.interested }} interested calls">{{ row.interested }}</a>
+            </td>
+            <td>
+              <a href="{% url 'web:calls' %}?outcome=NOT_INTERESTED&caller={{ row.caller.pk }}" class="pill rose" style="text-decoration:none" title="View {{ row.not_interested }} not interested calls">{{ row.not_interested }}</a>
+            </td>
+            <td>
+              <a href="{% url 'web:leads' %}?status=ADMISSION_DONE&owner={{ row.caller.pk }}" class="pill emerald" style="text-decoration:none" title="View {{ row.conversions }} admissions">{{ row.conversions }}</a>
+            </td>
+            <td>
+              <a href="{% url 'web:leads' %}?owner={{ row.caller.pk }}" style="text-decoration:none;color:inherit;font-weight:600" title="View assigned leads">{{ row.leads_assigned }}</a>
+            </td>
+            <td>
+              <a href="{% url 'web:leads' %}?status=PENDING&owner={{ row.caller.pk }}" class="left-to-call-pill {% if row.left_to_call > 0 %}has-pending{% else %}zero-pending{% endif %}" style="text-decoration:none" title="View pending leads">
+                <span class="dot"></span>{{ row.left_to_call }}
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="12" class="empty" style="text-align: center; padding: 40px; color: var(--text-muted);">No caller accounts yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Legacy Comparison Chart (if specific checkboxes selected) -->
+  {% if compare_rows %}
+  <section class="panel spaced">
+    <div class="panel-heading">
+      <div>
+        <h2>Focused Comparison Sub-Chart</h2>
+        <p>{% if window.interval == 'hour' %}Hourly{% else %}Daily{% endif %} calls for {{ compare_rows|length }} checked caller{{ compare_rows|length|pluralize }}</p>
+      </div>
+    </div>
+    <div id="compare-chart" class="activity-chart"></div>
+    <div class="legend">
+      {% for row in compare_rows %}
+      <a href="{% url 'web:caller-detail' row.caller.pk %}{% querystring %}">
+        <span class="legend-dot" style="background:{{ row.color }}"></span>{{ row.caller|user_name }} <strong>{{ row.calls }}</strong>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Call Outcomes Donut -->
+  <section class="panel spaced">
+    <div class="panel-heading">
+      <div>
+        <h2>Call Outcomes Donut</h2>
+        <p>Distribution of call outcomes across the team in the selected window</p>
+      </div>
+      <span class="pill cyan">{{ team_call_total }} Calls in Window</span>
+    </div>
+    <div class="futuristic-donut-container">
+      <div class="futuristic-donut-hud">
+        <div id="team-call-donut" class="futuristic-donut-disc" aria-hidden="true"></div>
+        <div class="futuristic-donut-center">
+          <strong id="team-call-total">{{ team_call_total }}</strong>
+          <span>Total Calls</span>
+        </div>
+      </div>
+      <div class="cyber-breakdown-grid">
+        {% for item in team_call_pipeline %}
+        <a href="{% if item.key %}{% url 'web:calls' %}?outcome={{ item.key }}{% else %}{% url 'web:calls' %}{% endif %}" class="cyber-breakdown-chip" title="View {{ item.value }} {{ item.name }} calls">
+          <div class="chip-identity">
+            <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
+            <span class="chip-label">{{ item.name }}</span>
+          </div>
+          <span class="chip-count">{{ item.value }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {{ team_call_pipeline|json_script:'team-call-data' }}
+
+  <!-- Leads by Pipeline Stage Donut -->
+  <section class="panel spaced">
+    <div class="panel-heading">
+      <div>
+        <h2>Leads by Status · Pipeline Donut</h2>
+        <p>Live lead inventory across all pipeline stages, independent of the date filter.</p>
+      </div>
+      <span class="pill blue">All Leads</span>
+    </div>
+    <div class="futuristic-donut-container">
+      <div class="futuristic-donut-hud">
+        <div id="team-status-donut" class="futuristic-donut-disc" aria-hidden="true"></div>
+        <div class="futuristic-donut-center">
+          <strong id="team-status-total">0</strong>
+          <span>Total Leads</span>
+        </div>
+      </div>
+      <div class="cyber-breakdown-grid">
+        {% for item in status_bars %}
+        <a href="{% url 'web:leads' %}?status={{ item.key }}" class="cyber-breakdown-chip" title="View {{ item.value }} {{ item.name }} leads">
+          <div class="chip-identity">
+            <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
+            <span class="chip-label">{{ item.name }}</span>
+          </div>
+          <span class="chip-count">{{ item.value }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {{ status_bars|json_script:'team-status-data' }}
+
+  <!-- Non-Calling Employees -->
+  <section class="performance-table-card">
+    <div class="performance-card-header">
+      <div>
+        <h2>Other Employees Output</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">Attendance and project performance for non-calling team members.</p>
+      </div>
+    </div>
+    <div class="performance-table-scroll">
+      <table class="performance-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Role</th>
+            <th>Attendance Rate</th>
+            <th>Reports submitted</th>
+            <th>Projects completed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in others %}
+          <tr>
+            <td>
+              <div class="person">
+                <span class="avatar subtle">{{ row.employee|user_name|first|upper }}</span>
+                <span>
+                  <strong>{% employee_link row.employee %}</strong>
+                  <small>{{ row.employee.email|default:row.employee.username }}</small>
+                </span>
+              </div>
+            </td>
+            <td>{{ row.employee.get_role_display }}</td>
+            <td>
+              <div class="progress" style="max-width:140px"><span style="width:{{ row.attendance_rate }}%"></span></div>
+              <small>{{ row.present }}/{{ row.total_days }} days · {{ row.attendance_rate }}%</small>
+            </td>
+            <td>{{ row.reports }}</td>
+            <td>{{ row.completed_projects }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="empty" style="text-align: center; padding: 40px; color: var(--text-muted);">No other employee accounts yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+{{ all_callers_chart_data|json_script:'all-callers-chart-data' }}
 {{ chart_data|json_script:'performance-data' }}
+<script src="{% static 'web/performance-chart.js' %}?v=3"></script>
 {% endblock %}

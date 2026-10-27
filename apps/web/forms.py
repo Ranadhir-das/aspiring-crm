@@ -104,12 +104,12 @@ class ImportForm(forms.Form):
     pasted_numbers = forms.CharField(
         widget=forms.Textarea(attrs={
             'rows': 8,
-            'placeholder': 'Paste phone numbers here, one per line...\ne.g.\n9392130350\n+91 6304569634\n9179897 73522',
+            'placeholder': 'Paste phone numbers here, one per line...\ne.g.\n9392130350\n+91 6304569634\n+880 1712345678\n8801712345678\n01712345678',
             'class': 'paste-numbers-textarea',
         }),
         required=False,
         label='Paste phone numbers',
-        help_text='One number per line. Indian mobile numbers (+91, spaces, hyphens, parentheses, optional braces) are normalized to 10 digits.',
+        help_text='One number per line. Indian (+91) and Bangladesh (+880, 88) mobile numbers are automatically recognized and normalized.',
     )
 
     caller = CallerChoiceField(widget=forms.Select(attrs={'class': 'caller-select'}),

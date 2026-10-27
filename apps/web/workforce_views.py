@@ -145,7 +145,7 @@ def employee_edit(request, pk):
     form = EmployeeForm(request.POST or None, instance=employee, actor=request.user)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        audit(request, 'EMPLOYEE', f'Updated account {employee.pk}; role {employee.role}; caller_cap={employee.can_act_as_caller}; counselor_cap={employee.can_act_as_counselor}; active {employee.is_active}')
+        audit(request, 'EMPLOYEE', f'Updated account {employee.pk}; role {employee.role}; caller_cap={employee.can_act_as_caller}; counselor_cap={employee.can_act_as_counselor}; message_cap={employee.can_contact_via_message}; active {employee.is_active}')
         messages.success(request, 'Employee account updated.')
         return redirect('web:employees')
     return form_page(request, f'Manage {employee_name(employee)}', form, 'employees', subtitle='Activate an approved employee account and assign their department role.')
@@ -153,12 +153,62 @@ def employee_edit(request, pk):
 
 @workspace(employee=True)
 def leaves(request):
-    query = scoped(LeaveRequest.objects.select_related('employee', 'reviewer'), request.user)
-    query, filters = filtered(request, query, 'start_date')
-    status = request.GET.get('status', '')
+    base_query = scoped(LeaveRequest.objects.select_related('employee', 'reviewer'), request.user)
+    date_filtered_query, filters = filtered(request, base_query, 'start_date')
+    query = date_filtered_query
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        query = query.filter(
+            Q(employee__username__icontains=q)
+            | Q(employee__first_name__icontains=q)
+            | Q(employee__last_name__icontains=q)
+            | Q(reason__icontains=q)
+        )
+
+    status = request.GET.get('status', '').strip()
     if status in LeaveRequest.Status.values:
         query = query.filter(status=status)
-    return page(request, 'leaves', 'leaves', records=paginate(request, query.order_by('-created_at')), filters=filters, selected_status=status)
+
+    stats_query = date_filtered_query
+    if q:
+        stats_query = stats_query.filter(
+            Q(employee__username__icontains=q)
+            | Q(employee__first_name__icontains=q)
+            | Q(employee__last_name__icontains=q)
+            | Q(reason__icontains=q)
+        )
+
+    total_requests = stats_query.count()
+    pending_requests = stats_query.filter(status=LeaveRequest.Status.PENDING).count()
+    approved_requests = stats_query.filter(status=LeaveRequest.Status.APPROVED).count()
+    rejected_requests = stats_query.filter(status__in=[LeaveRequest.Status.REJECTED, LeaveRequest.Status.CANCELLED]).count()
+
+    active_filters_count = sum(
+        1 for v in [
+            q,
+            status,
+            request.GET.get('period'),
+            request.GET.get('start_date'),
+            request.GET.get('end_date'),
+            request.GET.get('employee'),
+        ] if v
+    )
+
+    return page(
+        request,
+        'leaves',
+        'leaves',
+        records=paginate(request, query.order_by('-created_at')),
+        filters=filters,
+        selected_status=status,
+        search_query=q,
+        total_requests=total_requests,
+        pending_requests=pending_requests,
+        approved_requests=approved_requests,
+        rejected_requests=rejected_requests,
+        active_filters_count=active_filters_count,
+    )
 
 
 @workspace(employee=True)
@@ -540,12 +590,51 @@ def lead_collaboration(request, pk):
 
 @workspace(management=True)
 def consultations(request):
-    query = LeadCollaboration.objects.filter(consult_admin=True).select_related('lead', 'author').order_by('resolved', '-created_at')
+    base_query = LeadCollaboration.objects.filter(consult_admin=True).select_related('lead', 'author')
+    query = base_query.order_by('resolved', '-created_at')
+    search = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', 'all').strip()
+    active_filters_count = 0
+
+    if search:
+        active_filters_count += 1
+        query = query.filter(
+            Q(lead__name__icontains=search)
+            | Q(lead__phone__icontains=search)
+            | Q(author__first_name__icontains=search)
+            | Q(author__username__icontains=search)
+            | Q(note__icontains=search)
+        )
+    if status_filter == 'open':
+        active_filters_count += 1
+        query = query.filter(resolved=False)
+    elif status_filter == 'resolved':
+        active_filters_count += 1
+        query = query.filter(resolved=True)
+
+    total_count = base_query.count()
+    open_count = base_query.filter(resolved=False).count()
+    resolved_count = base_query.filter(resolved=True).count()
+    unique_leads = base_query.values('lead_id').distinct().count()
+
+    metrics = [
+        {'label': 'Total Consultations', 'value': total_count, 'pill': 'Total', 'desc': 'All manager consultation flags'},
+        {'label': 'Open Requests', 'value': open_count, 'pill': 'Pending', 'desc': 'Requiring admin review'},
+        {'label': 'Resolved', 'value': resolved_count, 'pill': 'Closed', 'desc': 'Addressed by management'},
+        {'label': 'Leads Involved', 'value': unique_leads, 'pill': 'Candidates', 'desc': 'Distinct student leads'},
+    ]
+
     records = paginate(request, query)
-    rows = [{'cells': [r.lead.name, r.author if r.author else '—', r.note, 'Resolved' if r.resolved else 'Open'],
-             'url': reverse('web:lead-collaboration', args=[r.lead_id]), 'label': 'View lead',
-             'post_url': reverse('web:consult-resolve', args=[r.pk]) if not r.resolved else '', 'post_label': 'Resolve'} for r in records]
-    return table_page(request, 'Lead consultations', 'consultations', ['Lead', 'Requested by', 'Note', 'Status'], rows, records=records)
+    return page(
+        request,
+        'consultations',
+        'consultations',
+        records=records,
+        search=search,
+        status_filter=status_filter,
+        active_filters_count=active_filters_count,
+        metrics=metrics,
+    )
 
 
 @require_POST
@@ -682,21 +771,99 @@ def distribute(request):
 @workspace(management=True)
 def people_overview(request):
     today = timezone.localdate()
-    employees = User.objects.filter(is_active=True).order_by('first_name', 'username')
+    all_employees = User.objects.filter(is_active=True).order_by('first_name', 'username')
     attendance_map = {r.employee_id: r for r in Attendance.objects.filter(date=today)}
     on_leave = set(LeaveRequest.objects.filter(status='APPROVED', start_date__lte=today, end_date__gte=today).values_list('employee_id', flat=True))
     holiday = Holiday.objects.filter(date=today).first()
-    rows = []
-    summary = {'Present': 0, 'Work from home': 0, 'Leave': 0, 'Week off': 0, 'Holiday': 0, 'Not marked': 0}
-    for employee in employees:
+
+    all_rows = []
+    summary = {'PRESENT': 0, 'WFH': 0, 'LEAVE': 0, 'WEEK_OFF': 0, 'HOLIDAY': 0, 'NOT_MARKED': 0}
+
+    for employee in all_employees:
         record = attendance_map.get(employee.pk)
-        status = record.get_status_display() if record else 'Leave' if employee.pk in on_leave else 'Holiday' if holiday else 'Not marked'
-        summary[status] = summary.get(status, 0) + 1
-        rows.append({'cells': [employee, employee.get_role_display(), status, record.hours if record else '—']})
-    return table_page(request, 'People overview', 'people-overview', ['Employee', 'Role', 'Today', 'Elapsed hours'], rows,
-        subtitle=f'Today: {today}. Unmarked attendance is not automatically classified as absence.',
-        metrics=[{'label': k, 'count': v} for k,v in summary.items()],
-        pending_approvals=User.objects.filter(is_active=False).count(), pending_leaves=LeaveRequest.objects.filter(status='PENDING').count())
+        if record:
+            status_code = record.status
+            status_label = record.get_status_display()
+        elif employee.pk in on_leave:
+            status_code = 'LEAVE'
+            status_label = 'On Leave'
+        elif holiday:
+            status_code = 'HOLIDAY'
+            status_label = f'Holiday ({holiday.name})'
+        else:
+            status_code = 'NOT_MARKED'
+            status_label = 'Not marked yet'
+
+        summary[status_code] = summary.get(status_code, 0) + 1
+
+        all_rows.append({
+            'employee': employee,
+            'role': employee.role,
+            'role_display': employee.get_role_display(),
+            'designation': employee.designation or ('Admission Counselor' if employee.role == User.Role.CALLER else employee.get_role_display()),
+            'status_code': status_code,
+            'status_label': status_label,
+            'record': record,
+            'checked_in': record.checked_in if record else None,
+            'checked_out': record.checked_out if record else None,
+            'hours': record.hours if record else 0,
+            'is_late': record.is_late if record else False,
+            'remark': record.login_remark if record else '',
+            'is_caller': employee.role == User.Role.CALLER,
+        })
+
+    q = request.GET.get('q', '').strip().lower()
+    selected_status = request.GET.get('status', '').strip()
+    selected_role = request.GET.get('role', '').strip()
+
+    filtered_rows = all_rows
+    if q:
+        filtered_rows = [
+            r for r in filtered_rows
+            if q in (r['employee'].get_full_name() or '').lower()
+            or q in (r['employee'].username or '').lower()
+            or q in (r['employee'].email or '').lower()
+            or q in (r['designation'] or '').lower()
+        ]
+
+    if selected_status:
+        filtered_rows = [r for r in filtered_rows if r['status_code'] == selected_status]
+
+    if selected_role:
+        filtered_rows = [r for r in filtered_rows if r['role'] == selected_role]
+
+    active_filters_count = sum(1 for v in [q, selected_status, selected_role] if v)
+
+    total_team = len(all_employees)
+    on_duty = summary.get('PRESENT', 0) + summary.get('WFH', 0)
+    on_leave_count = summary.get('LEAVE', 0)
+    not_marked_count = summary.get('NOT_MARKED', 0)
+
+    pending_approvals = User.objects.filter(is_active=False).count()
+    pending_leaves = LeaveRequest.objects.filter(status='PENDING').count()
+
+    roles_list = sorted(list({e.role for e in all_employees if e.role}))
+
+    return page(
+        request,
+        'people_overview',
+        'people-overview',
+        records=paginate(request, filtered_rows),
+        total_team=total_team,
+        on_duty=on_duty,
+        on_leave_count=on_leave_count,
+        not_marked_count=not_marked_count,
+        summary=summary,
+        today=today,
+        holiday=holiday,
+        pending_approvals=pending_approvals,
+        pending_leaves=pending_leaves,
+        search_query=request.GET.get('q', '').strip(),
+        selected_status=selected_status,
+        selected_role=selected_role,
+        roles_list=roles_list,
+        active_filters_count=active_filters_count,
+    )
 
 
 @roles(FINANCE)

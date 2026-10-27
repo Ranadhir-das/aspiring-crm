@@ -1,394 +1,407 @@
-{% load web_tags %}
+{% load web_tags static %}
+
+<!-- Performance Report Filter Card -->
 {% include 'web/performance_filter.html' %}
 
-<div class="caller-profile-header">
-  <div class="caller-profile-meta">
+<!-- Caller Profile Hero Card -->
+<div class="caller-profile-card">
+  <div class="caller-profile-info">
     <div class="caller-avatar-huge">{{ caller|user_name|first|upper }}</div>
-    <div>
-      <div class="cyber-badge"><span class="pulse-dot"></span> {{ caller.get_role_display|upper }}</div>
-      <h2>{% employee_link caller %}</h2><span class="badge">{% if caller.is_active %}Active{% else %}Inactive{% endif %}</span>
-      <p>{{ caller.email|default:caller.username }} · Manager: {% employee_link caller.manager %} · Joined {{ caller.created_at|date:'d M Y' }}</p>
+    <div class="caller-profile-text">
+      <div class="caller-profile-eyebrow">
+        <span class="status-dot {% if latest_session.online %}green{% else %}blue{% endif %}"></span>
+        <span>{{ caller.get_role_display|upper }}</span>
+      </div>
+      <h1>
+        {% employee_link caller %}
+        <span class="badge {% if caller.is_active %}interested{% else %}busy{% endif %}" style="font-size: 0.75rem; vertical-align: middle;">
+          {% if caller.is_active %}Active{% else %}Inactive{% endif %}
+        </span>
+      </h1>
+      <div class="caller-meta-row">
+        <span>{{ caller.email|default:caller.username }}</span>
+        <span>·</span>
+        <span>Manager: {% employee_link caller.manager %}</span>
+        <span>·</span>
+        <span>Joined {{ caller.created_at|date:'d M Y' }}</span>
+      </div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-    <span class="pill {% if latest_session.online %}mint{% else %}violet{% endif %}" style="padding:6px 14px;font-size:11px;font-weight:700">
+
+  <div class="caller-profile-stats">
+    <span class="pill {% if latest_session.online %}mint{% else %}violet{% endif %}" style="padding:6px 14px;font-size:0.8rem;font-weight:700">
       {% if latest_session.online %}● ONLINE{% else %}○ OFFLINE{% endif %}
     </span>
-    <div style="text-align:right">
-      <span style="font-size:11px;color:var(--muted);display:block">Selected Period Points</span>
-      <strong style="font-size:28px;font-family:'Manrope',sans-serif;color:var(--accent)">{{ stats.total_points }}</strong>
-      <div style="font-size:11px">
-        <span class="positive">+{{ stats.positive_points }}</span> · <span class="negative">{{ stats.negative_points }}</span>
+    <div class="caller-points-box">
+      <span style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Selected Window Points</span>
+      <div class="caller-points-val">{{ stats.total_points }}</div>
+      <div class="caller-points-split">
+        <span class="pos">+{{ stats.positive_points }} awarded</span>
+        <span>·</span>
+        <span class="neg">{{ stats.negative_points }} deducted</span>
       </div>
+    </div>
+  </div>
+  <!-- Quick Call Metrics Summary Strip in Hero -->
+  <div class="caller-hero-telemetry-strip">
+    <div class="hero-call-item">
+      <span class="hero-call-dot blue"></span>
+      <span class="hero-call-lbl">Calls:</span>
+      <strong>{{ stats.calls }}</strong>
+    </div>
+    <div class="hero-call-divider">·</div>
+    <div class="hero-call-item">
+      <span class="hero-call-dot emerald"></span>
+      <span class="hero-call-lbl">Connected:</span>
+      <strong>{{ stats.connected_calls }}</strong>
+      <span class="hero-call-rate">({% if stats.calls %}{% widthratio stats.connected_calls stats.calls 100 %}%{% else %}0%{% endif %})</span>
+    </div>
+    <div class="hero-call-divider">·</div>
+    <div class="hero-call-item">
+      <span class="hero-call-dot cyan"></span>
+      <span class="hero-call-lbl">Talk Time:</span>
+      <strong>{{ stats.talk_time|duration }}</strong>
+    </div>
+    <div class="hero-call-divider">·</div>
+    <div class="hero-call-item">
+      <span class="hero-call-dot amber"></span>
+      <span class="hero-call-lbl">Avg Talk Time:</span>
+      <strong>{{ stats.avg_duration|duration }}</strong>
     </div>
   </div>
 </div>
 
-<!-- Calendar Period Horizon Cards (Today / Week / Month) -->
-<div class="cyber-horizon-grid">
-  <div class="cyber-horizon-card today">
+<!-- ========================================================================= -->
+<!-- PRIMARY CALL PERFORMANCE & TALK TIME SPOTLIGHT (Prominent & Easy to Find)  -->
+<!-- ========================================================================= -->
+<section class="caller-spotlight-panel">
+  <div class="caller-spotlight-head">
+    <div class="caller-spotlight-title">
+      <span class="spotlight-pulse-dot"></span>
+      <div>
+        <h3>Call Performance &amp; Duration Metrics</h3>
+        <p>Real-time calls, connected outcomes, talk time &amp; average conversation duration for {{ caller|user_name }}</p>
+      </div>
+    </div>
+    <span class="pill cyan">{{ stats.calls }} total calls in window</span>
+  </div>
+
+  <div class="caller-spotlight-grid">
+    <!-- 1. Total Calls Made -->
+    <div class="spotlight-stat-card blue">
+      <div class="spotlight-stat-head">
+        <span class="spotlight-stat-label">Total Calls</span>
+        <span class="spotlight-stat-icon blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </span>
+      </div>
+      <div class="spotlight-stat-val">{{ stats.calls }} <small>calls</small></div>
+      <div class="spotlight-stat-meta">
+        <span>Selected report window</span>
+        <span class="spotlight-sub-badge">Dialer</span>
+      </div>
+    </div>
+
+    <!-- 2. Connected Calls -->
+    <div class="spotlight-stat-card emerald">
+      <div class="spotlight-stat-head">
+        <span class="spotlight-stat-label">Connected Calls</span>
+        <span class="spotlight-stat-icon emerald">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </span>
+      </div>
+      <div class="spotlight-stat-val">{{ stats.connected_calls }} <small>connected</small></div>
+      <div class="spotlight-stat-meta">
+        <span class="spotlight-rate-pill {% if stats.calls and stats.connected_calls %}{% widthratio stats.connected_calls stats.calls 100 as crate %}{% if crate >= '50' %}high{% else %}mid{% endif %}{% else %}zero{% endif %}">
+          {% if stats.calls %}{% widthratio stats.connected_calls stats.calls 100 %}% connection rate{% else %}0% connection rate{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- 3. Cumulative Talk Time -->
+    <div class="spotlight-stat-card cyan">
+      <div class="spotlight-stat-head">
+        <span class="spotlight-stat-label">Cumulative Talk Time</span>
+        <span class="spotlight-stat-icon cyan">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </span>
+      </div>
+      <div class="spotlight-stat-val">{{ stats.talk_time|duration }}</div>
+      <div class="spotlight-stat-meta">
+        <span>Total conversation duration</span>
+      </div>
+    </div>
+
+    <!-- 4. Average Talk Time -->
+    <div class="spotlight-stat-card amber">
+      <div class="spotlight-stat-head">
+        <span class="spotlight-stat-label">Average Talk Time</span>
+        <span class="spotlight-stat-icon amber">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </span>
+      </div>
+      <div class="spotlight-stat-val">{{ stats.avg_duration|duration }}</div>
+      <div class="spotlight-stat-meta">
+        <span>Avg duration / connected call</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 Horizon Cards (Today / Week / Month / Peer Appreciation) -->
+<div class="caller-horizon-grid">
+  <div class="caller-horizon-card">
     <div>
       <div class="label">Today's Points</div>
       <div class="timeframe">Current workspace day</div>
     </div>
     <div class="points-val">{{ stats.daily_points }}</div>
   </div>
-  <div class="cyber-horizon-card week">
+
+  <div class="caller-horizon-card">
     <div>
       <div class="label">This Week's Points</div>
       <div class="timeframe">Monday onward</div>
     </div>
     <div class="points-val">{{ stats.weekly_points }}</div>
   </div>
-  <div class="cyber-horizon-card month">
+
+  <div class="caller-horizon-card">
     <div>
       <div class="label">This Month's Points</div>
       <div class="timeframe">1st of month to date</div>
     </div>
     <div class="points-val">{{ stats.monthly_points }}</div>
   </div>
-  <div class="cyber-horizon-card" style="border-left: 3px solid var(--accent)">
+
+  <div class="caller-horizon-card" style="border-left: 3px solid var(--accent)">
     <div>
       <div class="label">Peer Appreciation</div>
       <div class="timeframe">{{ peer_appreciation.month }} ({{ peer_appreciation.review_count }} review{{ peer_appreciation.review_count|pluralize }})</div>
     </div>
-    <div class="points-val">{% if peer_appreciation.average_score %}{{ peer_appreciation.average_score }} <span style="font-size:13px;color:var(--muted);font-weight:normal">/ 10</span>{% else %}—{% endif %}</div>
+    <div class="points-val">
+      {% if peer_appreciation.average_score %}
+        {{ peer_appreciation.average_score }} <small style="font-size:12px;color:var(--text-muted);font-weight:normal">/ 10</small>
+      {% else %}
+        —
+      {% endif %}
+    </div>
   </div>
 </div>
 
+<!-- ========================================================================= -->
+<!-- INDIVIDUAL CALLER ACTIVITY TELEMETRY GRAPH                                -->
+<!-- ========================================================================= -->
+<section class="caller-graph-panel">
+  <div class="caller-graph-header">
+    <div>
+      <div class="eyebrow" style="font-size: 0.72rem; margin-bottom: 2px;">CALL ACTIVITY TRAJECTORY</div>
+      <h2>Call Activity Telemetry Graph</h2>
+      <p>Precision call volume &amp; connection telemetry for {{ caller|user_name }}. Switch timeframes below.</p>
+    </div>
+    <div class="caller-range-switcher">
+      <button type="button" class="caller-range-btn" data-preset="1h">1 Hour</button>
+      <button type="button" class="caller-range-btn" data-preset="today">Today (24h)</button>
+      <button type="button" class="caller-range-btn active" data-preset="7d">Last 7 Days</button>
+      <button type="button" class="caller-range-btn" data-preset="30d">Last 30 Days</button>
+    </div>
+  </div>
+
+  <div class="caller-viewport-card">
+    <div class="caller-y-axis-label">Measured in Calls</div>
+    <div id="individual-caller-chart" class="caller-chart-container"></div>
+    <div id="caller-chart-tooltip" class="caller-chart-tooltip" style="display: none;"></div>
+  </div>
+
+  <div class="caller-chart-summary-strip">
+    <div class="caller-chart-legend-pills">
+      <div class="caller-legend-pill">
+        <span class="caller-legend-line" style="background: #2563eb;"></span>
+        <span>Total Calls Made</span>
+      </div>
+      <div class="caller-legend-pill">
+        <span class="caller-legend-line" style="background: #10b981;"></span>
+        <span>Connected Calls</span>
+      </div>
+    </div>
+    <div class="caller-chart-metrics-row">
+      <div class="caller-chart-meta-stat">
+        Period Calls: <strong id="caller-stat-total-calls">0</strong>
+      </div>
+      <div class="caller-chart-meta-stat">
+        Connected: <strong id="caller-stat-connected-calls">0</strong>
+      </div>
+      <div class="caller-chart-meta-stat">
+        Rate: <strong id="caller-stat-conn-rate">0%</strong>
+      </div>
+      <div class="caller-chart-meta-stat">
+        Cumulative Talk Time: <strong id="caller-stat-talk-time">0m 0s</strong>
+      </div>
+      <div class="caller-chart-meta-stat">
+        Avg Talk Time: <strong id="caller-stat-avg-talk-time">0s</strong>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- Key Milestone Telemetry (Counselling, Applications, Admissions, Left to Call) -->
-<div class="futuristic-metrics">
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Counselling Sessions</span>
-      <span class="card-icon violet">💬</span>
+<div class="caller-telemetry-grid">
+  <div class="caller-telemetry-card">
+    <div class="caller-telemetry-head">
+      <span>Counselling Sessions</span>
+      <span class="performance-metric-icon violet">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </span>
     </div>
-    <div class="card-value">{{ stats.counselling }}</div>
-    <div class="card-subtext">
-      <span>Counselling &amp; demo bookings in this window</span>
-    </div>
+    <div class="caller-telemetry-val">{{ stats.counselling }}</div>
+    <div class="caller-telemetry-subtext">Counselling &amp; demo bookings in window</div>
   </div>
 
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Student Applications</span>
-      <span class="card-icon cyan">📝</span>
+  <div class="caller-telemetry-card">
+    <div class="caller-telemetry-head">
+      <span>Student Applications</span>
+      <span class="performance-metric-icon cyan">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </span>
     </div>
-    <div class="card-value">{{ stats.applications }}</div>
-    <div class="card-subtext">
-      <span>Verified application forms submitted</span>
-    </div>
+    <div class="caller-telemetry-val">{{ stats.applications }}</div>
+    <div class="caller-telemetry-subtext">Application forms submitted</div>
   </div>
 
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Admissions Completed</span>
-      <span class="card-icon emerald">🎓</span>
+  <div class="caller-telemetry-card">
+    <div class="caller-telemetry-head">
+      <span>Admissions Completed</span>
+      <span class="performance-metric-icon emerald">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+      </span>
     </div>
-    <div class="card-value">{{ stats.conversions }}</div>
-    <div class="card-subtext">
-      <span>{{ admissions_verified|default:stats.conversions }} verified admissions recorded</span>
-    </div>
+    <div class="caller-telemetry-val">{{ stats.conversions }}</div>
+    <div class="caller-telemetry-subtext">{{ admissions_verified|default:stats.conversions }} verified admissions recorded</div>
   </div>
 
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Left to Call</span>
-      <span class="card-icon amber">⏳</span>
+  <div class="caller-telemetry-card">
+    <div class="caller-telemetry-head">
+      <span>Calling Backlog</span>
+      <span class="performance-metric-icon amber">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </span>
     </div>
-    <div class="card-value">{{ left_to_call }} <small>/ {{ caller.lead_count }} total</small></div>
-    <div class="card-subtext">
+    <div class="caller-telemetry-val">{{ left_to_call }} <small>/ {{ caller.lead_count }} total</small></div>
+    <div class="caller-telemetry-subtext">
       <span class="left-to-call-pill {% if left_to_call > 0 %}has-pending{% else %}zero-pending{% endif %}">
-        <span class="dot"></span>{% if left_to_call > 0 %}{{ left_to_call }} pending backlog{% else %}Backlog cleared{% endif %}
+        <span class="dot"></span>{% if left_to_call > 0 %}{{ left_to_call }} pending leads{% else %}Backlog cleared{% endif %}
       </span>
     </div>
   </div>
 </div>
 
-<!-- Operational Telemetry (Calls, Talk Time, Follow-ups, Activity) -->
-<div class="futuristic-metrics">
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Calls &amp; Connected</span>
-      <span class="card-icon cyan">📞</span>
+<!-- Operational Telemetry (Calls, Talk Time, Follow-ups, App Duration) -->
+<div class="caller-telemetry-grid">
+  <div class="caller-telemetry-card">
+    <div class="caller-telemetry-head">
+      <span>Dialer Connection Rate</span>
+      <span class="performance-metric-icon cyan">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      </span>
     </div>
-    <div class="card-value">{{ stats.calls }} <small>/ {{ stats.connected_calls }}</small></div>
-    <div class="card-subtext">
-      <span>Talk time {{ stats.talk_time|duration }} (avg {{ stats.avg_duration|duration }})</span>
-    </div>
+    <div class="caller-telemetry-val">{% if stats.calls %}{% widthratio stats.connected_calls stats.calls 100 %}%{% else %}0%{% endif %} <small>success</small></div>
+    <div class="caller-telemetry-subtext">{{ stats.connected_calls }} connected of {{ stats.calls }} total dials</div>
   </div>
 
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Interested Leads</span>
-      <span class="card-icon mint">✨</span>
+  <div class="caller-telemetry-card">
+    <div class="caller-telemetry-head">
+      <span>Interested Leads</span>
+      <span class="performance-metric-icon emerald">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      </span>
     </div>
-    <div class="card-value">{{ stats.interested }}</div>
-    <div class="card-subtext">
-      <span>{{ caller.interested_count }} currently in interested pipeline</span>
-    </div>
+    <div class="caller-telemetry-val">{{ stats.interested }}</div>
+    <div class="caller-telemetry-subtext">{{ caller.interested_count }} currently in interested stage</div>
   </div>
 
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">Follow-ups Executed</span>
-      <span class="card-icon rose">🗓</span>
+  <div class="caller-telemetry-card">
+    <div class="caller-telemetry-head">
+      <span>Follow-ups Executed</span>
+      <span class="performance-metric-icon rose">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </span>
     </div>
-    <div class="card-value">{{ stats.completed_followups }}</div>
-    <div class="card-subtext">
-      <span>{{ stats.missed_followups }} missed · {{ pending_followups }} pending</span>
-    </div>
+    <div class="caller-telemetry-val">{{ stats.completed_followups }}</div>
+    <div class="caller-telemetry-subtext">{{ stats.missed_followups }} missed · {{ pending_followups }} pending</div>
   </div>
 
-  <div class="futuristic-card">
-    <div class="card-head">
-      <span class="card-title">App Active Duration</span>
-      <span class="card-icon violet">⏱</span>
+  <div class="caller-telemetry-card">
+    <div class="caller-telemetry-head">
+      <span>App Foreground Time</span>
+      <span class="performance-metric-icon violet">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </span>
     </div>
-    <div class="card-value">{{ app_active_seconds|duration }}</div>
-    <div class="card-subtext">
-      <span>Login: {{ login_seconds|duration }} across {{ session_count }} sessions</span>
-    </div>
+    <div class="caller-telemetry-val">{{ app_active_seconds|duration }}</div>
+    <div class="caller-telemetry-subtext">Active across {{ session_count }} session{{ session_count|pluralize }}</div>
   </div>
 </div>
 
-<!-- Telemetry Charts: Dual Graphs & Dual Donut Charts -->
-<div class="dashboard-grid spaced">
-  <!-- Activity Area Graph & Points Line Graph -->
-  <section class="panel">
-    <div class="panel-heading">
-      <div>
-        <h2>{% if window.interval == 'hour' %}Hourly{% else %}Daily{% endif %} Activity Timeline</h2>
-        <p>Call volume and point fluctuation trends across the selected period</p>
-      </div>
-    </div>
-    <h3 class="chart-caption">Call Volume Trend</h3>
-    <div id="activity-chart" class="activity-chart"></div>
-    <h3 class="chart-caption" style="margin-top:16px">Points Fluctuation (+ / −)</h3>
-    <div id="points-trend" class="activity-chart"></div>
-    <details class="chart-details">
-      <summary>View exact interval data table</summary>
-      <div class="table-scroll">
-        <table>
-          <thead>
-            <tr><th>Period</th><th>Calls</th><th>Connected</th><th>Talk time</th><th>Points</th></tr>
-          </thead>
-          <tbody>
-            {% for item in profile_chart.trend %}
-            <tr><td>{{ item.date }}</td><td>{{ item.count }}</td><td>{{ item.connected }}</td><td>{{ item.seconds|duration }}</td><td>{{ item.points }}</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </details>
-  </section>
-
-  <!-- Donut Chart 1: Call Outcomes -->
-  <section class="panel">
-    <div class="panel-heading">
-      <div>
-        <h2>Call Outcomes Donut</h2>
-        <p>Distribution of call outcomes in the selected window</p>
-      </div>
-    </div>
-    <div class="donut-wrap">
-      <div id="pipeline-chart" class="donut" aria-hidden="true"></div>
-      <div class="donut-center">
-        <strong>{{ pie_total }}</strong>
-        <span>Total Calls</span>
-      </div>
-    </div>
-    <div class="outcome-legend">
-      {% for item in pipeline %}
-      <a href="{% if item.key %}{% url 'web:calls' %}?outcome={{ item.key }}&caller={{ caller.pk }}{% else %}{% url 'web:calls' %}?caller={{ caller.pk }}{% endif %}" class="outcome-chip" title="View {{ item.value }} {{ item.name }} calls for {{ caller|user_name }}">
-        <span style="display:flex;align-items:center;gap:7px">
-          <span class="legend-dot" style="background:{{ item.color }};box-shadow:0 0 6px {{ item.color }}"></span>
-          <span>{{ item.name }}</span>
-        </span>
-        <strong>{{ item.value }}</strong>
-      </a>
-      {% endfor %}
-    </div>
-    {% if not pie_total %}
-    <p class="empty">No calls recorded in this filter period.</p>
-    {% endif %}
-  </section>
-</div>
-
-<!-- Donut Chart 2: Current Assigned Lead Pipeline Statuses -->
-<section class="panel spaced">
+<!-- Call Outcomes Donut Section -->
+<section class="panel call-outcomes-panel" style="margin: 24px 0;">
   <div class="panel-heading">
     <div>
-      <h2>Assigned Leads Status Donut &amp; Distribution</h2>
-      <p>Live inventory breakdown across all {{ caller.lead_count }} assigned leads.</p>
+      <div class="eyebrow" style="font-size: 0.72rem; margin-bottom: 2px;">OUTCOME BREAKDOWN</div>
+      <h2>Call Outcomes Donut</h2>
+      <p>Distribution of call outcomes in the selected window</p>
     </div>
-    <span class="pill blue">{{ caller.lead_count }} Leads Assigned</span>
+    <span class="pill violet">{{ pie_total }} total calls</span>
   </div>
-  <div class="futuristic-donut-container">
-    <div class="futuristic-donut-hud">
-      <div id="assigned-leads-chart" class="futuristic-donut-disc" aria-hidden="true"></div>
-      <div class="futuristic-donut-center">
-        <strong>{{ caller.lead_count }}</strong>
-        <span>Total Leads</span>
+  <div class="donut-wrap">
+    <div id="pipeline-chart" class="donut" aria-hidden="true"></div>
+    <div class="donut-center">
+      <strong>{{ pie_total }}</strong>
+      <span>Total Calls</span>
+    </div>
+  </div>
+  <div class="outcome-legend">
+    {% for item in pipeline %}
+    <a href="{% if item.key %}{% url 'web:calls' %}?outcome={{ item.key }}&caller={{ caller.pk }}{% else %}{% url 'web:calls' %}?caller={{ caller.pk }}{% endif %}" class="outcome-chip" title="View {{ item.value }} {{ item.name }} calls for {{ caller|user_name }}">
+      <span style="display:flex;align-items:center;gap:7px">
+        <span class="legend-dot" style="background:{{ item.color }};box-shadow:0 0 6px {{ item.color }}"></span>
+        <span>{{ item.name }}</span>
+      </span>
+      <strong>{{ item.value }}</strong>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- Assigned Leads Pipeline (Full-Width Card with Refined Margin, Borders & Visual Hierarchy) -->
+<section class="panel assigned-leads-pipeline-card" style="margin: 24px 0;">
+  <div class="panel-heading pipeline-card-header">
+    <div>
+      <div class="eyebrow" style="font-size: 0.72rem; margin-bottom: 2px;">LEAD STAGE DISTRIBUTION</div>
+      <h2>Assigned Leads Pipeline</h2>
+      <p>Current distribution of leads assigned to {{ caller|user_name }} across all operational stages</p>
+    </div>
+    <span class="pill cyan">{{ caller.lead_count }} total leads assigned</span>
+  </div>
+  <div class="status-summary-grid">
+    {% for item in lead_pipeline %}
+    <a href="{% url 'web:leads' %}?status={{ item.key }}&owner={{ caller.pk }}" class="status-summary-item" title="View {{ item.value }} {{ item.name }} leads">
+      <div class="status-summary-top">
+        <span class="status-summary-label">{{ item.name }}</span>
+        <span class="status-summary-dot" style="background:{{ item.color }};box-shadow:0 0 6px {{ item.color }}"></span>
       </div>
-    </div>
-    <div class="cyber-breakdown-grid">
-      {% for item in lead_pipeline %}
-      <a href="{% url 'web:leads' %}?status={{ item.key }}&owner={{ caller.pk }}" class="cyber-breakdown-chip" title="View {{ item.value }} {{ item.name }} leads for {{ caller|user_name }}">
-        <div class="chip-identity">
-          <span class="chip-dot" style="background:{{ item.color }};color:{{ item.color }}"></span>
-          <span class="chip-label">{{ item.name }}</span>
-        </div>
-        <span class="chip-count">{{ item.value }}</span>
-      </a>
-      {% endfor %}
-    </div>
-  </div>
-</section>
-{{ lead_pipeline|json_script:'assigned-leads-data' }}
-
-<!-- Points Ledger -->
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>Points ledger</h2>
-      <p>Historical audit trail of awards, milestone validations and penalty deductions.</p>
-    </div>
-    <span class="pill violet">{{ ledger.paginator.count }} transactions</span>
-  </div>
-  <div class="futuristic-table-wrap">
-    <table class="futuristic-table">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Event</th>
-          <th>Points</th>
-          <th>Lead</th>
-          <th>Reason</th>
-          <th>Recorded by</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for entry in ledger %}
-        <tr>
-          <td>{{ entry.occurred_at|date:'d M Y, H:i' }}</td>
-          <td><span class="badge">{{ entry.get_event_display }}</span></td>
-          <td class="{% if entry.points > 0 %}positive{% elif entry.points < 0 %}negative{% endif %}">
-            <strong style="font-size:14px">{% if entry.points > 0 %}+{% endif %}{{ entry.points }}</strong>
-          </td>
-          <td>{{ entry.lead.name|default:'—' }}</td>
-          <td class="notes-cell">{{ entry.reason }}</td>
-          <td>{% if entry.recorded_by %}{% employee_link entry.recorded_by %}{% else %}System{% endif %}</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="6" class="empty">No points transactions recorded in this period.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <div class="pagination">
-    <span>Page {{ ledger.number }} of {{ ledger.paginator.num_pages }}</span>
-    <div>
-      {% if ledger.has_previous %}<a class="button" href="{% querystring ledger_page=ledger.previous_page_number %}">Previous</a>{% endif %}
-      {% if ledger.has_next %}<a class="button" href="{% querystring ledger_page=ledger.next_page_number %}">Next</a>{% endif %}
-    </div>
-  </div>
-</section>
-
-{% if can_adjust %}
-<section class="panel spaced">
-  <details class="chart-details" {% if adjustment_form.errors or milestone_form.errors %}open{% endif %}>
-    <summary style="font-size:13px;font-weight:600;padding:8px 0;color:var(--accent)">⚙ Manage Points &amp; Record Verified Milestones</summary>
-    <div class="points-management">
-      <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="milestone">
-        <h3>Record a Lead Milestone</h3>
-        <p>Admissions require verification. Include an evidence reference. Each milestone earns points once per lead.</p>
-        {{ milestone_form.as_p }}
-        <button class="button primary">Record milestone</button>
-      </form>
-      <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="adjust">
-        <h3>Admin Point Adjustment</h3>
-        <p>Predefined reasons or custom adjustment. Your admin identity is recorded in the ledger.</p>
-        {{ adjustment_form.as_p }}
-        <button class="button">Record adjustment</button>
-      </form>
-    </div>
-
-    {% if adjustments %}
-    <div style="margin-top:20px; border-top: 1px solid var(--border); padding-top: 15px;">
-      <h3 style="margin-bottom:8px; font-size:14px; font-weight:600">Adjustment History</h3>
-      <div class="futuristic-table-wrap">
-        <table class="futuristic-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Reason</th>
-              <th>Points</th>
-              <th>Added By</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for adj in adjustments %}
-            <tr>
-              <td>{{ adj.created_at|date:"d M Y, H:i" }}</td>
-              <td>{{ adj.reason }}</td>
-              <td style="font-weight:600; color:{% if adj.points >= 0 %}var(--success){% else %}var(--danger){% endif %};">
-                {{ adj.points|stringformat:"+d" }}
-              </td>
-              <td>{% employee_link adj.recorded_by %}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="status-summary-val">{{ item.value }}</div>
+      <div class="status-progress-track">
+        <span class="status-progress-fill" style="background:{{ item.color }};width:{{ item.percent }}%"></span>
       </div>
+      <div class="status-summary-footer">
+        <span class="status-percent-pill">{{ item.percent }}% of pipeline</span>
+        <span class="status-view-link">View leads &rarr;</span>
+      </div>
+    </a>
+    {% empty %}
+    <div class="empty" style="grid-column: 1 / -1; padding: 28px; text-align: center; color: var(--text-muted);">
+      No leads currently assigned to this caller.
     </div>
-    {% endif %}
-  </details>
-</section>
-{% endif %}
-
-<!-- Assigned Leads by Batch -->
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>Assigned Leads by Import Batch</h2>
-      <p>Expand a batch to inspect assigned student leads and status progression.</p>
-    </div>
-    <a class="text-link" href="{% url 'web:leads' %}?owner={{ caller.pk }}">Search assigned leads ↗</a>
+    {% endfor %}
   </div>
-  {% regroup profile_leads by import_batch as batches %}
-  {% for batch in batches %}
-  <details class="chart-details">
-    <summary style="font-size:13px;font-weight:550;padding:6px 0">
-      {{ batch.grouper.filename|default:'Manual / Unbatched leads' }} {% if batch.grouper %}(#{{ batch.grouper.pk }}){% endif %} · {{ batch.list|length }} leads
-    </summary>
-    <div class="futuristic-table-wrap" style="margin-top:10px">
-      <table class="futuristic-table">
-        <thead>
-          <tr><th>Lead Name</th><th>Phone</th><th>Status</th><th>Source</th></tr>
-        </thead>
-        <tbody>
-          {% for lead in batch.list %}
-          <tr>
-            <td><a class="text-link" href="{% url 'web:lead-detail' lead.pk %}">{{ lead.name }}</a></td>
-            <td>{{ lead.phone }}</td>
-            <td><span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span></td>
-            <td>{{ lead.source|default:'—' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </details>
-  {% empty %}
-  <div class="empty">No leads assigned.</div>
-  {% endfor %}
 </section>
-
-{{ profile_chart|json_script:'dashboard-data' }}

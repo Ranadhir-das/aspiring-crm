@@ -76,6 +76,12 @@ class User(AbstractUser):
         help_text="Approved by administrator to perform Counselor workflows in addition to primary role.",
     )
 
+    can_contact_via_message = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Approved by administrator to mark leads as contacted via text/WhatsApp message without calling.",
+    )
+
     manager = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,

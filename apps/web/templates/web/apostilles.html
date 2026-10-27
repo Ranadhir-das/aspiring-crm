@@ -1,27 +1,192 @@
 {% extends 'web/base.html' %}
+{% load static %}
 {% load web_tags %}
+
 {% block title %}Apostille{% endblock %}
 {% block breadcrumb %}Apostille{% endblock %}
+
 {% block content %}
-<div class="page-heading">
-  <div><div class="eyebrow">DOCUMENT SERVICES</div><h1>Apostille<span class="accent">.</span></h1><p>Manage candidate documents, payments received and caller points.</p></div>
-  <a class="button primary" href="{% url 'web:apostille-new' %}">+ Add Apostille</a>
+<link rel="stylesheet" href="{% static 'web/apostilles-page.css' %}?v=1">
+
+<!-- Page Heading -->
+<div class="page-heading apostilles-header">
+  <div>
+    <div class="eyebrow">DOCUMENT SERVICES</div>
+    <h1>Apostille<span class="accent">.</span></h1>
+    <p class="heading-subtitle">Manage candidate document legalization, payments received, and caller performance points.</p>
+  </div>
+  <div class="actions header-actions">
+    <a class="action-btn-primary" href="{% url 'web:apostille-new' %}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>+ Add Apostille</span>
+    </a>
+  </div>
 </div>
-<section class="panel">
-  <form class="filters" method="get">
-    <input name="q" value="{{ search }}" aria-label="Search Apostilles" placeholder="Search name, phone or country">
-    <select name="caller" aria-label="Assigned caller"><option value="">All callers</option>{% for caller in callers %}<option value="{{ caller.pk }}" {% if selected_caller == caller.pk|stringformat:'s' %}selected{% endif %}>{{ caller|user_name }}</option>{% endfor %}</select>
-    <select name="candidate_type" aria-label="Candidate type"><option value="">All candidate types</option>{% for value, label in candidate_types %}<option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
-    <button class="button" type="submit">Filter</button><a class="text-link" href="{% url 'web:apostilles' %}">Reset</a>
+
+<!-- 1. Top Filter Section (Placed above cards) -->
+<section class="apostilles-filter-card">
+  <div class="apostilles-filter-head">
+    <div class="apostilles-filter-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span>Filter &amp; Search Apostilles</span>
+    </div>
+    {% if active_filters_count > 0 %}
+    <span class="apostilles-active-pill">
+      <span class="dot"></span>
+      {{ active_filters_count }} filter{% if active_filters_count > 1 %}s{% endif %} active
+    </span>
+    {% endif %}
+  </div>
+
+  <form method="get" class="apostilles-filter-form" action="{% url 'web:apostilles' %}">
+    <!-- Keyword Search -->
+    <div class="apostilles-search-box">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" name="q" value="{{ search }}" placeholder="Search name, phone or country…" aria-label="Search Apostilles">
+    </div>
+
+    <!-- Caller Filter -->
+    <div class="apostilles-select-field">
+      <select name="caller" aria-label="Assigned caller">
+        <option value="">All Callers</option>
+        {% for c in callers %}
+        <option value="{{ c.pk }}" {% if selected_caller == c.pk|stringformat:'s' %}selected{% endif %}>
+          {{ c|user_name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Candidate Type Filter -->
+    <div class="apostilles-select-field">
+      <select name="candidate_type" aria-label="Candidate type">
+        <option value="">All Candidate Types</option>
+        {% for value, label in candidate_types %}
+        <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>
+          {{ label }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="apostilles-filter-actions">
+      <button type="submit" class="btn-filter-submit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        <span>Apply Filter</span>
+      </button>
+      <a href="{% url 'web:apostilles' %}" class="btn-filter-clear">Reset</a>
+    </div>
   </form>
-  <div class="table-scroll"><table>
-    <thead><tr><th>Name / Phone</th><th>Country</th><th>Documents</th><th>Amount received</th><th>Assigned caller</th><th>Points</th><th>Candidate type</th><th>Created</th><th>Actions</th></tr></thead>
-    <tbody>{% for record in records %}<tr>
-      <td><strong>{{ record.candidate_name }}</strong><br><small>{{ record.candidate_phone }}</small></td>
-      <td>{{ record.country }}</td><td>{{ record.number_of_documents }}</td><td>INR {{ record.amount_received|floatformat:2 }}</td><td>{% employee_link record.caller %}</td><td>{{ record.points }}</td><td><span class="badge">{{ record.get_candidate_type_display }}</span></td><td>{{ record.created_at|date:'d M Y, H:i' }}</td>
-      <td><div class="actions"><a class="text-link" href="{% url 'web:apostille-detail' record.pk %}">View</a><a class="text-link" href="{% url 'web:apostille-edit' record.pk %}">Edit</a><a class="text-link" href="{% url 'web:apostille-delete' record.pk %}">Delete</a></div></td>
-    </tr>{% empty %}<tr><td colspan="9" class="empty">No Apostille records found.</td></tr>{% endfor %}</tbody>
-  </table></div>
-  {% include 'web/pagination.html' %}
+</section>
+
+<!-- 2. Four KPI Metric Cards (Placed directly below filter section) -->
+{% if metrics %}
+<section class="apostilles-metrics-grid">
+  {% for metric in metrics %}
+  <div class="apostille-metric-card">
+    <div class="metric-top-bar">
+      <span class="metric-label">{{ metric.label }}</span>
+      <span class="count-pill">{{ metric.pill }}</span>
+    </div>
+    <div class="metric-number">{{ metric.value }}</div>
+    <div class="metric-bottom-bar">
+      <span>{{ metric.desc }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- 3. Contained Scrollable Table with Sticky Header -->
+<section class="apostilles-panel">
+  <div class="apostilles-panel-head">
+    <div>
+      <h2>Legalized Document Dossiers</h2>
+      <p>Candidate records, attestation counts, payment status, and caller awards.</p>
+    </div>
+    <span class="count-pill">
+      {{ records.paginator.count|default:records|length }} record{% if records.paginator.count != 1 %}s{% endif %}
+    </span>
+  </div>
+
+  <div class="apostilles-table-scroll">
+    <table class="apostilles-table">
+      <thead>
+        <tr>
+          <th>Name / Phone</th>
+          <th>Country</th>
+          <th>Documents</th>
+          <th>Amount Received</th>
+          <th>Assigned Caller</th>
+          <th>Points</th>
+          <th>Candidate Type</th>
+          <th>Created</th>
+          <th style="text-align: right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+        <tr>
+          <td>
+            <strong>{{ record.candidate_name }}</strong>
+            <br>
+            <small class="muted">{{ record.candidate_phone }}</small>
+          </td>
+          <td>
+            <span style="font-weight: 600;">{{ record.country }}</span>
+          </td>
+          <td>
+            <span class="count-pill" style="font-size: 11px;">{{ record.number_of_documents }} doc{% if record.number_of_documents != 1 %}s{% endif %}</span>
+          </td>
+          <td>
+            <strong style="color: #10b981;">INR {{ record.amount_received|floatformat:2 }}</strong>
+          </td>
+          <td>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="avatar small">{{ record.caller.first_name|default:record.caller.username|first|upper }}</span>
+              <span>{% employee_link record.caller %}</span>
+            </div>
+          </td>
+          <td>
+            <span class="badge" style="background: rgba(103, 81, 185, 0.12); color: var(--accent); font-weight: 700;">
+              +{{ record.points }} pts
+            </span>
+          </td>
+          <td>
+            <span class="badge">{{ record.get_candidate_type_display }}</span>
+          </td>
+          <td>
+            <span style="white-space: nowrap; font-size: 12px;">{{ record.created_at|date:'d M Y, H:i' }}</span>
+          </td>
+          <td style="text-align: right;">
+            <div class="table-action-links">
+              <a href="{% url 'web:apostille-detail' record.pk %}">View</a>
+              <a href="{% url 'web:apostille-edit' record.pk %}">Edit</a>
+              <a href="{% url 'web:apostille-delete' record.pk %}" class="action-danger">Delete</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="empty" style="padding: 48px 20px; text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 8px;">📑</div>
+            <strong style="font-size: 15px; display: block; margin-bottom: 4px;">No Apostille records found</strong>
+            <p style="color: var(--muted); font-size: 13px; max-width: 420px; margin: 0 auto;">No records matching the filter criteria. Add a new record to get started.</p>
+            <div style="margin-top: 16px;">
+              <a class="action-btn-primary" href="{% url 'web:apostille-new' %}">+ Add Apostille</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if records %}
+  <div style="padding: 12px 18px; border-top: 1px solid var(--border);">
+    {% include 'web/pagination.html' %}
+  </div>
+  {% endif %}
 </section>
 {% endblock %}

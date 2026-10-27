@@ -1,20 +1,40 @@
-{% extends 'web/base.html' %}{% load web_tags %}
+{% extends 'web/base.html' %}
+{% load static %}
+{% load web_tags %}
 {% block title %}Call activity{% endblock %}
 {% block breadcrumb %}Call activity{% endblock %}
+
 {% block content %}
-<div class="page-heading">
+<link rel="stylesheet" href="{% static 'web/calls-activity.css' %}?v=1">
+
+<!-- Page Heading -->
+<div class="page-heading calls-header">
   <div>
     <div class="eyebrow">EVERY CONVERSATION COUNTS</div>
     <h1>Call activity<span class="accent">.</span></h1>
-    <p>Recorded conversations from your CRM and caller app.</p>
+    <p class="heading-subtitle">Recorded conversations from your CRM and caller app.</p>
+  </div>
+  <div class="actions header-actions">
+    <a href="{% querystring export='csv' page=None %}" class="action-btn" title="Download matching calls as CSV">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      <span>Export CSV</span>
+    </a>
+    <a href="{% querystring export='xlsx' page=None %}" class="action-btn" title="Download matching calls as Excel">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
+      <span>Export Excel</span>
+    </a>
+    <a href="{% url 'web:external-calls' %}" class="action-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      <span>External calls ↗</span>
+    </a>
   </div>
 </div>
 
-<!-- Interactive Quick Outcome Filter Pills with Exact Counts -->
+<!-- 1. Top Filter Section (Placed above cards as per standard) -->
 <div class="status-pills-scroll">
   <div class="status-pills-bar">
     <a href="{% querystring outcome='' page=None %}" class="status-filter-pill {% if not selected_outcome %}active{% endif %}" title="View all matching calls">
-      <span class="pill-label">All</span>
+      <span class="pill-label">All Calls</span>
       <span class="pill-count">{{ total_matching_calls }}</span>
     </a>
     {% for key, label, count in outcome_choices_with_counts %}
@@ -26,69 +46,82 @@
   </div>
 </div>
 
-<div class="filter-toolbar-card">
+<div class="calls-filter-card">
+  <div class="calls-filter-head">
+    <div class="calls-filter-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span>Filter &amp; Search Calls</span>
+    </div>
+    {% if active_filters_count > 0 %}
+    <span class="calls-active-filters-pill">
+      <span class="dot"></span>
+      {{ active_filters_count }} filter{% if active_filters_count > 1 %}s{% endif %} active
+    </span>
+    {% endif %}
+  </div>
+
   <form method="get" action="{% url 'web:calls' %}">
-    <div class="filter-toolbar-main">
-      <label class="filter-search-box">
-        <svg class="filter-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
+    <div class="calls-filter-form-main">
+      <div class="calls-search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="text" name="q" aria-label="Search calls" value="{{ search }}" placeholder="Search lead name or phone…" autocomplete="off">
         {% if search %}
-        <a href="{% querystring q=None page=None %}" class="filter-search-clear" title="Clear search" aria-label="Clear search">✕</a>
+        <a href="{% querystring q=None page=None %}" class="calls-search-clear" title="Clear search" aria-label="Clear search">✕</a>
         {% endif %}
-      </label>
+      </div>
 
-      <select name="outcome" class="filter-select" aria-label="Call outcome">
-        <option value="">All outcomes ({{ total_matching_calls }})</option>
-        {% for key, label, count in outcome_choices_with_counts %}
-        <option value="{{ key }}" {% if key == selected_outcome %}selected{% endif %}>{{ label }} ({{ count }})</option>
-        {% endfor %}
-      </select>
+      <div class="calls-select-field">
+        <select name="outcome" aria-label="Call outcome" onchange="this.form.submit()">
+          <option value="">All outcomes ({{ total_matching_calls }})</option>
+          {% for key, label, count in outcome_choices_with_counts %}
+          <option value="{{ key }}" {% if key == selected_outcome %}selected{% endif %}>{{ label }} ({{ count }})</option>
+          {% endfor %}
+        </select>
+      </div>
 
       {% if can_manage %}
-      <select name="caller" class="filter-select" aria-label="Caller">
-        <option value="">All callers</option>
-        {% for c in callers %}
-        <option value="{{ c.pk }}" {% if selected_caller == c.pk|stringformat:'s' %}selected{% endif %}>{{ c|user_name }}</option>
-        {% endfor %}
-      </select>
+      <div class="calls-select-field">
+        <select name="caller" aria-label="Caller" onchange="this.form.submit()">
+          <option value="">All callers</option>
+          {% for c in callers %}
+          <option value="{{ c.pk }}" {% if selected_caller == c.pk|stringformat:'s' %}selected{% endif %}>{{ c|user_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
       {% endif %}
 
-      <select name="batch" class="filter-select" aria-label="Lead batch">
-        <option value="">All batches</option>
-        <option value="none" {% if selected_batch == 'none' %}selected{% endif %}>Manual / unbatched leads</option>
-        {% for batch in batches %}
-        <option value="{{ batch.pk }}" {% if selected_batch == batch.pk|stringformat:'s' %}selected{% endif %}>{{ batch.filename }} (#{{ batch.pk }})</option>
-        {% endfor %}
-      </select>
+      <div class="calls-select-field">
+        <select name="batch" aria-label="Lead batch" onchange="this.form.submit()">
+          <option value="">All batches</option>
+          <option value="none" {% if selected_batch == 'none' %}selected{% endif %}>Manual / unbatched leads</option>
+          {% for batch in batches %}
+          <option value="{{ batch.pk }}" {% if selected_batch == batch.pk|stringformat:'s' %}selected{% endif %}>{{ batch.filename }} (#{{ batch.pk }})</option>
+          {% endfor %}
+        </select>
+      </div>
 
-      <select name="duration_preset" class="filter-select" aria-label="Duration preset">
-        <option value="">All durations</option>
-        <option value="under_30" {% if duration_preset == 'under_30' %}selected{% endif %}>Under 30s</option>
-        <option value="30_to_120" {% if duration_preset == '30_to_120' %}selected{% endif %}>30s to 2m</option>
-        <option value="over_120" {% if duration_preset == 'over_120' %}selected{% endif %}>Over 2m</option>
-      </select>
+      <div class="calls-select-field">
+        <select name="duration_preset" aria-label="Duration preset" onchange="this.form.submit()">
+          <option value="">All durations</option>
+          <option value="under_30" {% if duration_preset == 'under_30' %}selected{% endif %}>Under 30s</option>
+          <option value="30_to_120" {% if duration_preset == '30_to_120' %}selected{% endif %}>30s to 2m</option>
+          <option value="over_120" {% if duration_preset == 'over_120' %}selected{% endif %}>Over 2m</option>
+        </select>
+      </div>
 
-      <div class="filter-actions">
-        <button class="btn-filter-apply" type="submit">Filter calls</button>
+      <div class="calls-filter-actions">
+        <button class="btn-filter-submit" type="submit">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Filter calls</span>
+        </button>
         {% if active_filters_count %}
-        <a class="btn-filter-reset" href="{% url 'web:calls' %}">Reset</a>
+        <a class="btn-filter-clear" href="{% url 'web:calls' %}">Reset</a>
         {% endif %}
-        <div class="export-group">
-          <a href="{% querystring export='csv' page=None %}" class="btn-export btn-export-csv" title="Download matching calls as CSV">
-            <span class="btn-export-icon">📄</span> CSV
-          </a>
-          <a href="{% querystring export='xlsx' page=None %}" class="btn-export btn-export-excel" title="Download matching calls as Excel (.xlsx)">
-            <span class="btn-export-icon">📊</span> Excel
-          </a>
-        </div>
       </div>
     </div>
 
     <!-- Collapsible Advanced Filters -->
-    <details class="advanced-filters-section" {% if start_date or end_date or selected_source or duration_min or duration_max or has_recording or has_followup %}open{% endif %}>
+    <details class="advanced-filters-section" style="margin-top: 14px;" {% if start_date or end_date or selected_source or duration_min or duration_max or has_recording or has_followup %}open{% endif %}>
       <summary class="advanced-filters-toggle">
         <span>
           ⚡ Advanced Filters
@@ -150,7 +183,7 @@
     </details>
 
     {% if date_error %}
-    <div class="filter-alert-error">
+    <div class="filter-alert-error" style="margin-top: 12px;">
       <span>⚠️</span>
       <span>{{ date_error }}</span>
     </div>
@@ -158,7 +191,53 @@
   </form>
 </div>
 
-<section class="panel">
+<!-- 2. Four Metric KPI Cards (Placed below filters as per standard) -->
+<div class="calls-metrics-grid">
+  <a href="{% querystring outcome='' page=None %}" class="call-metric-card card-total {% if not selected_outcome %}is-active-tab{% endif %}" title="View all calls in current scope">
+    <div class="metric-top-bar">
+      <span class="metric-label">Total Calls</span>
+      <span class="metric-icon-circle">📞</span>
+    </div>
+    <div class="metric-number">{{ total_matching_calls }}</div>
+    <div class="metric-bottom-bar">Logged in current scope</div>
+  </a>
+
+  <a href="{% querystring outcome='INTERESTED' page=None %}" class="call-metric-card card-interested {% if selected_outcome == 'INTERESTED' %}is-active-tab{% endif %}" title="Filter by Interested leads">
+    <div class="metric-top-bar">
+      <span class="metric-label">Interested Leads</span>
+      <span class="metric-icon-circle mint">★</span>
+    </div>
+    <div class="metric-number">{{ interested_calls_count }}</div>
+    <div class="metric-bottom-bar">
+      <span class="pill mint">Positive disposition</span>
+    </div>
+  </a>
+
+  <a href="{% querystring outcome='CALL_BACK' page=None %}" class="call-metric-card card-callback {% if selected_outcome == 'CALL_BACK' %}is-active-tab{% endif %}" title="Filter by Call back requested">
+    <div class="metric-top-bar">
+      <span class="metric-label">Call Backs</span>
+      <span class="metric-icon-circle blue">↺</span>
+    </div>
+    <div class="metric-number">{{ callback_calls_count }}</div>
+    <div class="metric-bottom-bar">
+      <span class="pill blue">Follow-up requested</span>
+    </div>
+  </a>
+
+  <div class="call-metric-card card-duration" title="Total talk duration across current scope">
+    <div class="metric-top-bar">
+      <span class="metric-label">Total Talk Time</span>
+      <span class="metric-icon-circle purple">⏱</span>
+    </div>
+    <div class="metric-number" style="font-size: 22px;">{{ total_talk_time_display }}</div>
+    <div class="metric-bottom-bar">
+      <span>{{ connected_calls_count }} connected call{% if connected_calls_count != 1 %}s{% endif %}</span>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Calls Table Panel with Contained Scroll and Sticky Header -->
+<section class="calls-panel">
   <!-- Prominent Results Summary Bar showing the exact number of calls -->
   <div class="lead-results-summary">
     <div class="summary-left" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -197,24 +276,30 @@
     {% endif %}
   </div>
 
-  <div class="table-scroll">
-    <table>
+  <div class="calls-table-scroll">
+    <table class="calls-table">
       <thead>
         <tr>
-          <th>Lead</th>
-          <th>Caller</th>
-          <th>Outcome</th>
-          <th>Course / Admission</th><th>Started</th>
-          <th>Duration</th>
-          <th>Notes</th>
-          <th>Recording</th>
+          <th style="min-width: 220px;">Lead</th>
+          <th style="min-width: 140px;">Caller</th>
+          <th style="min-width: 130px;">Outcome</th>
+          <th style="min-width: 150px;">Course / Admission</th>
+          <th style="min-width: 130px;">Started</th>
+          <th style="min-width: 100px; text-align: center;">Duration</th>
+          <th style="min-width: 180px;">Notes</th>
+          <th style="min-width: 180px;">Recording</th>
         </tr>
       </thead>
       <tbody>
         {% for call in records %}
         {% ifchanged call.lead.import_batch_id %}
         <tr class="batch-heading">
-          <th colspan="8">{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }} <small>• Batch {% if call.lead.import_batch_id %}#{{ call.lead.import_batch_id }}{% else %}—{% endif %}</small></th>
+          <th colspan="8">
+            <span style="display: inline-flex; align-items: center; gap: 8px;">
+              📁 {{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }}
+              <small style="color: var(--muted); font-size: 11px;">• Batch {% if call.lead.import_batch_id %}#{{ call.lead.import_batch_id }}{% else %}—{% endif %}</small>
+            </span>
+          </th>
         </tr>
         {% endifchanged %}
         <tr>
@@ -222,10 +307,17 @@
             {% if call.lead_id %}
             <a class="person" href="{% url 'web:lead-detail' call.lead_id %}">
               <span class="avatar subtle">{{ call.lead.name|first|upper }}</span>
-              <span><small>{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }}</small><strong>{{ call.lead.name }}</strong><small>{{ call.lead.phone }}</small></span>
+              <span>
+                <small style="color: var(--muted); display: block; font-size: 10.5px;">{{ call.lead.import_batch.filename|default:"Manual / unbatched leads" }}</small>
+                <strong style="color: var(--text); font-size: 13px;">{{ call.lead.name }}</strong>
+                <small style="color: var(--muted); display: block; font-size: 11px;">{{ call.lead.phone }}</small>
+              </span>
             </a>
             {% else %}
-            <strong>{{ call.phone_number }}</strong><small>External call</small>
+            <div>
+              <strong style="color: var(--text); font-size: 13px;">{{ call.phone_number }}</strong>
+              <small style="color: var(--muted); display: block; font-size: 11px;">External call</small>
+            </div>
             {% endif %}
           </td>
           <td>
@@ -245,17 +337,22 @@
             {% endif %}
           </td>
           <td>{% include "web/call_course.html" %}</td>
-          <td>{{ call.started_at|date:'d M, H:i' }}</td>
-          <td>{{ call.duration_seconds }}s</td>
-          <td class="notes-cell">{{ call.notes|default:'—' }}</td>
+          <td>
+            <span style="font-size: 12px; font-weight: 550;">{{ call.started_at|date:'d M Y' }}</span>
+            <small style="display: block; color: var(--muted); font-size: 11px;">{{ call.started_at|date:'H:i' }}</small>
+          </td>
+          <td style="text-align: center;">
+            <span class="duration-pill">{{ call.duration_seconds }}s</span>
+          </td>
+          <td class="notes-cell" style="max-width: 280px; font-size: 12.5px;">{{ call.notes|default:'—' }}</td>
           <td>{% include 'web/call_recording.html' %}</td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="empty">
-            <span class="empty-icon">📞</span>
-            <strong>No matching calls found</strong>
-            <p>Try adjusting your search criteria, dates, or <a href="{% url 'web:calls' %}">clear all active filters</a>.</p>
+          <td colspan="8" class="empty" style="padding: 40px 20px; text-align: center;">
+            <span class="empty-icon" style="font-size: 28px; display: block; margin-bottom: 8px;">📞</span>
+            <strong style="font-size: 14px; display: block; margin-bottom: 4px;">No matching calls found</strong>
+            <p style="font-size: 12px; color: var(--muted); margin: 0;">Try adjusting your search criteria, dates, or <a href="{% url 'web:calls' %}" style="color: var(--accent);">clear all active filters</a>.</p>
           </td>
         </tr>
         {% endfor %}

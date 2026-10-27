@@ -105,7 +105,7 @@
             <label for="{{ form.pasted_numbers.id_for_label }}">Paste phone numbers</label>
             <span class="input-tag">1 number per line</span>
           </div>
-          <p class="field-description">Indian mobile numbers (+91, spaces, hyphens, optional braces) are normalized to 10 digits. Duplicates within the pasted list and existing CRM leads are automatically skipped.</p>
+          <p class="field-description">Indian mobile numbers (+91) and Bangladesh mobile numbers (+880, 88, 01...) are automatically recognized and normalized. Duplicates within the pasted list and existing CRM leads are automatically skipped.</p>
           {{ form.pasted_numbers }}
           {{ form.pasted_numbers.errors }}
         </div>

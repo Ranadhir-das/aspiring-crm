@@ -1,0 +1,46 @@
+{% extends 'web/error_base.html' %}
+
+{% block error_title %}404 · Page Not Found{% endblock %}
+{% block glow_class %}glow-404{% endblock %}
+
+{% block error_content %}
+  <!-- Status Icon Orb -->
+  <div class="error-icon-orb orb-404">
+    <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      <line x1="8" y1="11" x2="14" y2="11"/>
+    </svg>
+  </div>
+
+  <!-- Error Code Pill -->
+  <div>
+    <span class="error-code-tag code-404">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      HTTP 404 • PAGE NOT FOUND
+    </span>
+  </div>
+
+  <!-- Heading & Description -->
+  <h1 class="error-title">Lost in the Pipeline</h1>
+  <p class="error-desc">
+    {{ error_message|default:"The lead record, view, or destination you are searching for might have been reassigned, archived, or does not exist at this URL." }}
+  </p>
+
+  <!-- Action Buttons -->
+  <div class="error-actions">
+    <a href="{% url 'web:dashboard' %}" class="btn-error-primary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Return to Dashboard</span>
+    </a>
+    <a href="{% url 'web:leads' %}" class="btn-error-secondary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search Leads</span>
+    </a>
+    <button type="button" onclick="window.history.back()" class="btn-error-secondary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      <span>Back</span>
+    </button>
+  </div>
+{% endblock %}
+

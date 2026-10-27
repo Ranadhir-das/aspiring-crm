@@ -1,0 +1,270 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}People overview{% endblock %}
+{% block breadcrumb %}People overview{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/people-overview.css' %}?v=1">
+
+<div class="people-page">
+  <!-- Header -->
+  <div class="people-header">
+    <div>
+      <div class="eyebrow">WORKFORCE PRESENCE &amp; OPERATIONS</div>
+      <h1>People overview<span class="accent">.</span></h1>
+      <p>Real-time daily presence, attendance status, and team workload for today ({{ today|date:'l, d F Y' }}).</p>
+    </div>
+    <div class="people-header-actions">
+      {% if pending_approvals %}
+      <a class="people-notice-pill amber" href="{% url 'web:employees' %}" title="View pending account activations">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span>{{ pending_approvals }} pending account{{ pending_approvals|pluralize }} ↗</span>
+      </a>
+      {% endif %}
+      {% if pending_leaves %}
+      <a class="people-notice-pill blue" href="{% url 'web:leaves' %}?status=PENDING" title="Review pending leave requests">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>{{ pending_leaves }} leave request{{ pending_leaves|pluralize }} ↗</span>
+      </a>
+      {% endif %}
+      <a class="button" href="{% url 'web:employees' %}">Manage workforce ↗</a>
+    </div>
+  </div>
+
+  <!-- Filter Card Toolbar -->
+  <section class="people-filter-card">
+    <form method="get" class="people-filter-form">
+      <div class="people-search-field">
+        <span class="search-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input type="text" name="q" placeholder="Search employee, name, designation..." value="{{ search_query }}">
+      </div>
+
+      <div class="people-filter-field">
+        <select name="status" onchange="this.form.submit()">
+          <option value="">All statuses</option>
+          <option value="PRESENT" {% if selected_status == 'PRESENT' %}selected{% endif %}>Present (Office)</option>
+          <option value="WFH" {% if selected_status == 'WFH' %}selected{% endif %}>Work from home</option>
+          <option value="LEAVE" {% if selected_status == 'LEAVE' %}selected{% endif %}>On leave</option>
+          <option value="WEEK_OFF" {% if selected_status == 'WEEK_OFF' %}selected{% endif %}>Week off</option>
+          <option value="HOLIDAY" {% if selected_status == 'HOLIDAY' %}selected{% endif %}>Holiday</option>
+          <option value="NOT_MARKED" {% if selected_status == 'NOT_MARKED' %}selected{% endif %}>Not marked</option>
+        </select>
+      </div>
+
+      <div class="people-filter-field">
+        <select name="role" onchange="this.form.submit()">
+          <option value="">All roles</option>
+          {% for r in roles_list %}
+          <option value="{{ r }}" {% if selected_role == r %}selected{% endif %}>{{ r|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="people-filter-actions">
+        {% if active_filters_count %}
+        <span class="people-active-badge">{{ active_filters_count }} filter{{ active_filters_count|pluralize }} active</span>
+        {% endif %}
+        <button class="people-apply-btn" type="submit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Apply filter
+        </button>
+        {% if search_query or selected_status or selected_role %}
+        <a class="people-reset-btn" href="{% url 'web:people-overview' %}">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
+  <!-- 4 KPI Metrics Grid -->
+  <div class="people-metrics-grid">
+    <div class="people-metric-card">
+      <div class="people-metric-header">
+        <span>Total Team</span>
+        <span class="people-metric-icon blue">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </span>
+      </div>
+      <div class="people-metric-value">{{ total_team }}</div>
+      <div class="people-metric-label">Active staff accounts</div>
+    </div>
+
+    <div class="people-metric-card">
+      <div class="people-metric-header">
+        <span>On Duty Today</span>
+        <span class="people-metric-icon green">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+      </div>
+      <div class="people-metric-value">{{ on_duty }}</div>
+      <div class="people-metric-label">{{ summary.PRESENT }} office · {{ summary.WFH }} remote</div>
+    </div>
+
+    <div class="people-metric-card">
+      <div class="people-metric-header">
+        <span>On Approved Leave</span>
+        <span class="people-metric-icon amber">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </span>
+      </div>
+      <div class="people-metric-value">{{ on_leave_count }}</div>
+      <div class="people-metric-label">Approved absence today</div>
+    </div>
+
+    <div class="people-metric-card">
+      <div class="people-metric-header">
+        <span>Not Marked Yet</span>
+        <span class="people-metric-icon purple">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </span>
+      </div>
+      <div class="people-metric-value">{{ not_marked_count }}</div>
+      <div class="people-metric-label">Pending attendance check-in</div>
+    </div>
+  </div>
+
+  <!-- Quick Status Breakdown Strip -->
+  <div class="people-breakdown-strip">
+    <span class="people-breakdown-title">Quick filter:</span>
+    <a href="{% url 'web:people-overview' %}" class="people-status-pill {% if not selected_status %}active{% endif %}">
+      <span>All ({{ total_team }})</span>
+    </a>
+    <a href="{% url 'web:people-overview' %}?status=PRESENT" class="people-status-pill {% if selected_status == 'PRESENT' %}active{% endif %}">
+      <span class="dot green"></span>
+      <span>Office ({{ summary.PRESENT }})</span>
+    </a>
+    <a href="{% url 'web:people-overview' %}?status=WFH" class="people-status-pill {% if selected_status == 'WFH' %}active{% endif %}">
+      <span class="dot blue"></span>
+      <span>WFH ({{ summary.WFH }})</span>
+    </a>
+    <a href="{% url 'web:people-overview' %}?status=LEAVE" class="people-status-pill {% if selected_status == 'LEAVE' %}active{% endif %}">
+      <span class="dot amber"></span>
+      <span>Leave ({{ summary.LEAVE }})</span>
+    </a>
+    {% if summary.WEEK_OFF %}
+    <a href="{% url 'web:people-overview' %}?status=WEEK_OFF" class="people-status-pill {% if selected_status == 'WEEK_OFF' %}active{% endif %}">
+      <span class="dot gray"></span>
+      <span>Week off ({{ summary.WEEK_OFF }})</span>
+    </a>
+    {% endif %}
+    {% if summary.HOLIDAY %}
+    <a href="{% url 'web:people-overview' %}?status=HOLIDAY" class="people-status-pill {% if selected_status == 'HOLIDAY' %}active{% endif %}">
+      <span class="dot purple"></span>
+      <span>Holiday ({{ summary.HOLIDAY }})</span>
+    </a>
+    {% endif %}
+    <a href="{% url 'web:people-overview' %}?status=NOT_MARKED" class="people-status-pill {% if selected_status == 'NOT_MARKED' %}active{% endif %}">
+      <span class="dot red"></span>
+      <span>Not marked ({{ summary.NOT_MARKED }})</span>
+    </a>
+  </div>
+
+  <!-- Contained Scrollable Table -->
+  <section class="people-table-card">
+    <div class="people-card-header">
+      <h2>Today's workforce presence</h2>
+      <span class="badge">{{ records.paginator.count|default:records|length }} member{{ records.paginator.count|default:records|length|pluralize }}</span>
+    </div>
+
+    <div class="people-table-scroll">
+      <table class="people-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Role &amp; Designation</th>
+            <th>Today's presence</th>
+            <th>Check-in &amp; Hours</th>
+            <th>Login remark</th>
+            <th style="text-align: right;">Activity</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td>
+              <div class="people-person">
+                <span class="people-avatar">{{ r.employee|user_name|first|upper }}</span>
+                <div class="people-person-info">
+                  <span class="people-person-name">{% employee_link r.employee %}</span>
+                  <span class="people-person-sub">{{ r.employee.email|default:r.employee.username }}</span>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-weight: 600; font-size: 0.88rem;">{{ r.designation }}</span>
+                <span class="badge" style="width: fit-content; font-size: 0.72rem; padding: 2px 6px;">{{ r.role_display }}</span>
+              </div>
+            </td>
+            <td>
+              {% if r.status_code == 'PRESENT' %}
+              <span class="presence-badge present">
+                <span class="dot green"></span> Present (Office)
+              </span>
+              {% elif r.status_code == 'WFH' %}
+              <span class="presence-badge wfh">
+                <span class="dot blue"></span> Work from home
+              </span>
+              {% elif r.status_code == 'LEAVE' %}
+              <span class="presence-badge leave">
+                <span class="dot amber"></span> On Leave
+              </span>
+              {% elif r.status_code == 'WEEK_OFF' %}
+              <span class="presence-badge week_off">
+                <span class="dot gray"></span> Week off
+              </span>
+              {% elif r.status_code == 'HOLIDAY' %}
+              <span class="presence-badge holiday">
+                <span class="dot purple"></span> {{ r.status_label }}
+              </span>
+              {% else %}
+              <span class="presence-badge not_marked">
+                <span class="dot red"></span> Not marked yet
+              </span>
+              {% endif %}
+            </td>
+            <td>
+              {% if r.record and r.checked_in %}
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span><strong>{{ r.hours }} hrs</strong> <small style="color: var(--text-muted);">(in at {{ r.checked_in|date:'H:i' }})</small></span>
+                {% if r.is_late %}
+                <span class="badge busy" style="font-size: 0.7rem; width: fit-content;">Late arrival</span>
+                {% endif %}
+              </div>
+              {% else %}
+              <span class="muted" style="font-size: 0.85rem;">—</span>
+              {% endif %}
+            </td>
+            <td class="notes-cell" style="max-width: 220px; font-size: 0.82rem; color: var(--text-muted);">
+              {% if r.remark %}
+              <span title="{{ r.remark }}">{{ r.remark|truncatechars:40 }}</span>
+              {% else %}
+              <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">
+              <div class="people-actions-group" style="justify-content: flex-end;">
+                {% if r.is_caller %}
+                <a class="people-action-link" href="{% url 'web:leads' %}?owner={{ r.employee.pk }}">Leads ↗</a>
+                {% endif %}
+                <a class="people-action-link" href="{% url 'web:caller-detail' r.employee.pk %}">Activity ↗</a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="empty" style="text-align: center; padding: 40px; color: var(--text-muted);">
+              No team members match the selected filter criteria.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% include 'web/pagination.html' %}
+  </section>
+</div>
+{% endblock %}
+

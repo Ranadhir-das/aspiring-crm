@@ -1,4 +1,191 @@
-{% extends 'web/base.html' %}{% block title %}Apostille Leads{% endblock %}{% block content %}
-<div class="page-heading"><div><h1>Apostille Leads</h1><p>Enquiries, conversion details and caller assignments.</p></div><a class="button primary" href="{% url 'web:apostille-lead-new' %}">Add Apostille Lead</a></div>
-<section class="panel"><form method="get" class="filters"><input name="q" value="{{ search }}" placeholder="Search name, phone or country" aria-label="Search"><select name="conversion" aria-label="Conversion"><option value="">All conversions</option><option value="true" {% if conversion == 'true' %}selected{% endif %}>Yes</option><option value="false" {% if conversion == 'false' %}selected{% endif %}>No</option></select><button class="button">Filter</button></form>
-<div class="table-scroll"><table><thead><tr><th>Name / Phone</th><th>Country</th><th>Document / Count</th><th>Conversion</th><th>Caller</th><th>Status</th></tr></thead><tbody>{% for lead in records %}<tr><td><a href="{% url 'web:apostille-lead-manage' lead.pk %}">{{ lead.name }}</a><br>{{ lead.phone }}</td><td>{{ lead.apostille_details.country|default:'Not recorded' }}</td><td>{{ lead.apostille_details.document_name }} / {{ lead.apostille_details.number_of_documents|default:'—' }}</td><td>{{ lead.apostille_details.conversion|yesno:'Yes,No,Not recorded' }}</td><td>{{ lead.assigned_caller|default:'Pending assignment' }}</td><td>{{ lead.get_status_display }}</td></tr>{% empty %}<tr><td colspan="6" class="empty">No Apostille leads found.</td></tr>{% endfor %}</tbody></table></div>{% include 'web/pagination.html' %}</section>{% endblock %}
+{% extends 'web/base.html' %}
+{% load static %}
+{% load web_tags %}
+
+{% block title %}Apostille Leads{% endblock %}
+{% block breadcrumb %}Apostille Leads{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/apostille-leads.css' %}?v=1">
+
+<!-- Page Heading -->
+<div class="page-heading apostille-leads-header">
+  <div>
+    <div class="eyebrow">DOCUMENT ENQUIRIES</div>
+    <h1>Apostille Leads<span class="accent">.</span></h1>
+    <p class="heading-subtitle">Prospective document legalization enquiries, conversion tracking, and caller lead allocations.</p>
+  </div>
+  <div class="actions header-actions">
+    <a class="action-btn-primary" href="{% url 'web:apostille-lead-new' %}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>+ Add Apostille Lead</span>
+    </a>
+  </div>
+</div>
+
+<!-- 1. Top Filter Section (Placed above cards) -->
+<section class="apostille-leads-filter-card">
+  <div class="apostille-leads-filter-head">
+    <div class="apostille-leads-filter-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span>Filter &amp; Search Apostille Leads</span>
+    </div>
+    {% if active_filters_count > 0 %}
+    <span class="apostille-leads-active-pill">
+      <span class="dot"></span>
+      {{ active_filters_count }} filter{% if active_filters_count > 1 %}s{% endif %} active
+    </span>
+    {% endif %}
+  </div>
+
+  <form method="get" class="apostille-leads-filter-form" action="{% url 'web:apostille-leads' %}">
+    <!-- Keyword Search -->
+    <div class="apostille-leads-search-box">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" name="q" value="{{ search }}" placeholder="Search name, phone or country…" aria-label="Search">
+    </div>
+
+    <!-- Caller Filter -->
+    {% if callers %}
+    <div class="apostille-leads-select-field">
+      <select name="caller" aria-label="Assigned caller">
+        <option value="">All Callers</option>
+        {% for c in callers %}
+        <option value="{{ c.pk }}" {% if selected_caller == c.pk|stringformat:'s' %}selected{% endif %}>
+          {{ c|user_name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <!-- Conversion Filter -->
+    <div class="apostille-leads-select-field">
+      <select name="conversion" aria-label="Conversion status">
+        <option value="">All Conversions</option>
+        <option value="true" {% if conversion == 'true' %}selected{% endif %}>Converted (Yes)</option>
+        <option value="false" {% if conversion == 'false' %}selected{% endif %}>Not Converted (No)</option>
+      </select>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="apostille-leads-filter-actions">
+      <button type="submit" class="btn-filter-submit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        <span>Apply Filter</span>
+      </button>
+      <a href="{% url 'web:apostille-leads' %}" class="btn-filter-clear">Reset</a>
+    </div>
+  </form>
+</section>
+
+<!-- 2. Four KPI Metric Cards (Placed directly below filter section) -->
+{% if metrics %}
+<section class="apostille-leads-metrics-grid">
+  {% for metric in metrics %}
+  <div class="apostille-lead-metric-card">
+    <div class="metric-top-bar">
+      <span class="metric-label">{{ metric.label }}</span>
+      <span class="count-pill">{{ metric.pill }}</span>
+    </div>
+    <div class="metric-number">{{ metric.value }}</div>
+    <div class="metric-bottom-bar">
+      <span>{{ metric.desc }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- 3. Contained Scrollable Table with Sticky Header -->
+<section class="apostille-leads-panel">
+  <div class="apostille-leads-panel-head">
+    <div>
+      <h2>Document Enquiries Pipeline</h2>
+      <p>Tracking initial candidate reachouts, assigned staff, and conversion readiness.</p>
+    </div>
+    <span class="count-pill">
+      {{ records.paginator.count|default:records|length }} enquiry{% if records.paginator.count != 1 %}s{% endif %}
+    </span>
+  </div>
+
+  <div class="apostille-leads-table-scroll">
+    <table class="apostille-leads-table">
+      <thead>
+        <tr>
+          <th>Name / Contact</th>
+          <th>Target Country</th>
+          <th>Document Details</th>
+          <th>Conversion</th>
+          <th>Assigned Caller</th>
+          <th>Pipeline Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lead in records %}
+        <tr>
+          <td>
+            <a class="person" href="{% url 'web:apostille-lead-manage' lead.pk %}">
+              <span class="avatar subtle">{{ lead.name|first|upper }}</span>
+              <span>
+                <strong>{{ lead.name }}</strong>
+                <small>{{ lead.phone }}</small>
+              </span>
+            </a>
+          </td>
+          <td>
+            <strong>{{ lead.apostille_details.country|default:'Not recorded' }}</strong>
+          </td>
+          <td>
+            <strong>{{ lead.apostille_details.document_name|default:'General Documents' }}</strong>
+            <br>
+            <small class="muted">
+              {{ lead.apostille_details.number_of_documents|default:'1' }} document{% if lead.apostille_details.number_of_documents != 1 %}s{% endif %}
+            </small>
+          </td>
+          <td>
+            {% if lead.apostille_details.conversion %}
+            <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #10b981; font-weight: 700;">Converted (Yes)</span>
+            {% elif lead.apostille_details.conversion is not None and not lead.apostille_details.conversion %}
+            <span class="badge" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">Follow-up (No)</span>
+            {% else %}
+            <span class="muted">Not recorded</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if lead.assigned_caller %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="avatar small">{{ lead.assigned_caller.first_name|default:lead.assigned_caller.username|first|upper }}</span>
+              <span>{% employee_link lead.assigned_caller %}</span>
+            </div>
+            {% else %}
+            <span class="muted" style="font-size: 12px;">Pending assignment</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="empty" style="padding: 48px 20px; text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 8px;">📂</div>
+            <strong style="font-size: 15px; display: block; margin-bottom: 4px;">No Apostille leads found</strong>
+            <p style="color: var(--muted); font-size: 13px; max-width: 420px; margin: 0 auto;">No enquiries matching the filter criteria. Add a new lead to begin tracking.</p>
+            <div style="margin-top: 16px;">
+              <a class="action-btn-primary" href="{% url 'web:apostille-lead-new' %}">+ Add Apostille Lead</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if records %}
+  <div style="padding: 12px 18px; border-top: 1px solid var(--border);">
+    {% include 'web/pagination.html' %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

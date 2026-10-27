@@ -1,5 +1,5 @@
 from django import forms
-from django.db.models import Q
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404
 from apps.accounts.models import User
 from apps.calls.models import Call
@@ -52,7 +52,34 @@ def external_call_list(request):
         elif data['followup_status']: query = query.filter(followup__status=data['followup_status'])
     else:
         query = query.none()
-    return page(request, 'external_calls', 'external-calls', form=form, records=paginate(request, query))
+
+    # Dynamic metrics on the scoped query
+    total_external_calls = query.count()
+    connected_calls_count = query.filter(duration_seconds__gt=0).count()
+    followups_count = query.filter(followup__isnull=False).count()
+
+    total_duration_seconds = query.aggregate(s=Sum('duration_seconds'))['s'] or 0
+    hours = total_duration_seconds // 3600
+    minutes = (total_duration_seconds % 3600) // 60
+    if hours > 0:
+        total_talk_time_display = f"{hours}h {minutes}m"
+    else:
+        total_talk_time_display = f"{minutes}m {total_duration_seconds % 60}s"
+
+    active_filters_count = sum(1 for k, v in request.GET.items() if v and k != 'page')
+
+    return page(
+        request,
+        'external_calls',
+        'external-calls',
+        form=form,
+        records=paginate(request, query),
+        total_external_calls=total_external_calls,
+        connected_calls_count=connected_calls_count,
+        followups_count=followups_count,
+        total_talk_time_display=total_talk_time_display,
+        active_filters_count=active_filters_count,
+    )
 
 
 @workspace(management=True)

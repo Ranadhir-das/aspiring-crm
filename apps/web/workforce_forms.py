@@ -26,14 +26,16 @@ class EmployeeForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone', 'designation', 'role', 'manager', 'is_active', 'services', 'can_act_as_caller', 'can_act_as_counselor']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'designation', 'role', 'manager', 'is_active', 'services', 'can_act_as_caller', 'can_act_as_counselor', 'can_contact_via_message']
         labels = {
             'can_act_as_caller': 'Additional Capability: Caller',
             'can_act_as_counselor': 'Additional Capability: Counselor',
+            'can_contact_via_message': 'Counselor: Allow Contact via Message',
         }
         help_texts = {
             'can_act_as_caller': 'Grants access to the caller workspace, calling, leads, and follow-ups. Daily face verification is required.',
             'can_act_as_counselor': 'Grants access to the counselor workspace, counselling workflows, and admission requests.',
+            'can_contact_via_message': 'Approved by administrator to mark next-year/deferred leads as contacted via text/WhatsApp message without calling.',
         }
 
     def __init__(self, *args, actor, **kwargs):
@@ -47,6 +49,7 @@ class EmployeeForm(forms.ModelForm):
         if actor.role not in {'SUPER_ADMIN', 'ADMIN'}:
             self.fields.pop('can_act_as_caller', None)
             self.fields.pop('can_act_as_counselor', None)
+            self.fields.pop('can_contact_via_message', None)
         self.fields['manager'].queryset = User.objects.filter(role__in=['ADMIN', 'MANAGER', 'SUPER_ADMIN'], is_active=True).exclude(pk=self.instance.pk)
 
     def clean(self):

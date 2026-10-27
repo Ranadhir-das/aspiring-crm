@@ -1,0 +1,511 @@
+/* People Overview & Workforce Real-Time Presence Styles */
+
+.people-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Header */
+.people-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.people-header .eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.people-header h1 {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+
+.people-header p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin: 0;
+  max-width: 720px;
+}
+
+.people-header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.people-notice-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.people-notice-pill:hover {
+  transform: translateY(-1px);
+}
+
+.people-notice-pill.amber {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.people-notice-pill.blue {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.25);
+}
+
+/* Filter Card */
+.people-filter-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.people-filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.people-search-field {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.people-search-field input {
+  width: 100%;
+  padding: 9px 12px 9px 36px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.people-search-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.people-search-field .search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.people-filter-field {
+  flex: 0 1 180px;
+  min-width: 140px;
+}
+
+.people-filter-field select {
+  width: 100%;
+  padding: 9px 32px 9px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.88rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.people-filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.people-apply-btn {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 600 !important;
+  padding: 9px 18px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25) !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  transition: all 0.15s ease;
+}
+
+.people-apply-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af) !important;
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+.people-reset-btn {
+  background: var(--bg) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border) !important;
+  padding: 8px 14px !important;
+  border-radius: 8px !important;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.people-reset-btn:hover {
+  color: var(--text) !important;
+  background: var(--surface-hover, rgba(0, 0, 0, 0.05)) !important;
+}
+
+.people-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent);
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+/* 4 KPI Metrics */
+.people-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .people-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .people-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.people-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.people-metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.people-metric-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.people-metric-icon.blue { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
+.people-metric-icon.green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+.people-metric-icon.amber { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.people-metric-icon.purple { background: rgba(139, 92, 246, 0.12); color: #8b5cf6; }
+
+.people-metric-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.people-metric-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Status Breakdown Strip */
+.people-breakdown-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  align-items: center;
+}
+
+.people-breakdown-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 6px;
+}
+
+.people-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  transition: all 0.12s ease;
+}
+
+.people-status-pill:hover {
+  border-color: var(--accent);
+}
+
+.people-status-pill.active {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.people-status-pill .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.people-status-pill .dot.green { background: #10b981; }
+.people-status-pill .dot.blue { background: #3b82f6; }
+.people-status-pill .dot.amber { background: #f59e0b; }
+.people-status-pill .dot.purple { background: #8b5cf6; }
+.people-status-pill .dot.gray { background: #9ca3af; }
+.people-status-pill .dot.red { background: #ef4444; }
+
+/* Contained Scrollable Table */
+.people-table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+.people-card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.people-card-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.people-table-scroll {
+  max-height: 580px;
+  overflow-y: auto;
+  overflow-x: auto;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.people-table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.people-table-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 3px;
+}
+
+.people-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+}
+
+.people-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  padding: 12px 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.people-table tbody tr {
+  transition: background-color 0.12s ease;
+  border-bottom: 1px solid var(--border);
+}
+
+.people-table tbody tr:hover {
+  background-color: var(--surface-hover, rgba(0, 0, 0, 0.02));
+}
+
+.people-table tbody td {
+  padding: 14px 16px;
+  font-size: 0.9rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.people-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.people-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(139, 92, 246, 0.2));
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.people-person-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.people-person-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.people-person-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Status Badges */
+.presence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.presence-badge.present {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.presence-badge.wfh {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.presence-badge.leave {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+}
+
+.presence-badge.week_off {
+  background: rgba(156, 163, 175, 0.15);
+  color: #6b7280;
+}
+
+.presence-badge.holiday {
+  background: rgba(139, 92, 246, 0.12);
+  color: #8b5cf6;
+}
+
+.presence-badge.not_marked {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.people-actions-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.people-action-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: opacity 0.15s ease;
+}
+
+.people-action-link:hover {
+  text-decoration: underline;
+}
+

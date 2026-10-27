@@ -26,6 +26,8 @@ MANAGEMENT_ROLES = (User.Role.SUPER_ADMIN, User.Role.ADMIN, User.Role.MANAGER)
 def display_name(user):
     if not user:
         return ''
+    if isinstance(user, str):
+        return user
     return user.get_full_name() or user.username
 
 
@@ -51,6 +53,10 @@ def latest_interested_call(lead):
     return lead.calls.filter(outcome='INTERESTED').order_by('-started_at', '-pk').first()
 
 
+def latest_forwardable_call(lead):
+    return lead.calls.filter(outcome__in=['INTERESTED', 'B2B']).order_by('-started_at', '-pk').first()
+
+
 def interested_call_has_course_and_year(call):
     return bool(call and (call.selected_course or call.selected_course_custom) and call.expected_admission_year)
 
@@ -67,9 +73,9 @@ def forward_eligibility(lead, caller):
         return False, 'Only callers can forward leads to a counselor.'
     if lead.assigned_caller_id != caller.pk:
         return False, 'Only the assigned caller can forward this lead.'
-    if lead.status != Lead.Status.INTERESTED:
-        return False, 'Only Interested leads can be forwarded to a counselor.'
-    if not interested_call_has_course_and_year(latest_interested_call(lead)):
+    if lead.status not in (Lead.Status.INTERESTED, Lead.Status.B2B):
+        return False, 'Only Interested and B2B leads can be forwarded to a counselor.'
+    if lead.status == Lead.Status.INTERESTED and not interested_call_has_course_and_year(latest_interested_call(lead)):
         return False, 'Save an Interested outcome with course and year before forwarding.'
     return True, ''
 
@@ -180,7 +186,7 @@ def forward_lead_to_counselor(*, lead_id, caller, counselor_id):
 
         assignment = LeadCounselorAssignment.objects.create(
             lead=lead, counselor=counselor, forwarded_by=caller, caller=caller,
-            source_call=latest_interested_call(lead), forwarded_at=now,
+            source_call=latest_forwardable_call(lead), forwarded_at=now,
         )
         if current:
             verb = ActivityLog.Verb.COUNSELOR_REASSIGNED
@@ -240,7 +246,7 @@ def visible_counselor_notes(user, lead):
     return notes.none()
 
 
-def add_counselor_note(*, user, lead_id, body, client_event_id=None, call=None):
+def add_counselor_note(*, user, lead_id, body, client_event_id=None, call=None, kind=None):
     assignment = get_counselor_assignment_or_404(user, lead_id)
     body = (body or '').strip()
     if not body:
@@ -253,20 +259,54 @@ def add_counselor_note(*, user, lead_id, body, client_event_id=None, call=None):
             if existing.lead_id != assignment.lead_id:
                 raise ValidationError({'client_event_id': 'This event id was already used.'})
             return existing, False
-    fields = {'lead': assignment.lead, 'assignment': assignment, 'counselor': user, 'body': body,
-              'client_event_id': client_event_id or None, 'kind': CounselorNote.Kind.NOTE}
+
+    note_kind = CounselorNote.Kind.NOTE
     if call:
-        fields.update(kind=CounselorNote.Kind.CALL, phone_number=assignment.lead.phone[:20],
+        note_kind = CounselorNote.Kind.CALL
+    elif kind in (CounselorNote.Kind.MESSAGE, 'MESSAGE'):
+        if not (getattr(user, 'can_contact_via_message', False) or user.role in MANAGEMENT_ROLES):
+            raise PermissionDenied('Permission denied: Administrator approval is required to mark leads contacted via message.')
+        note_kind = CounselorNote.Kind.MESSAGE
+
+    fields = {'lead': assignment.lead, 'assignment': assignment, 'counselor': user, 'body': body,
+              'client_event_id': client_event_id or None, 'kind': note_kind}
+    if call:
+        fields.update(phone_number=assignment.lead.phone[:20],
                       call_started_at=call.get('started_at'), call_ended_at=call.get('ended_at'),
                       duration_seconds=max(0, int(call.get('duration_seconds') or 0)))
+    elif note_kind == CounselorNote.Kind.MESSAGE:
+        fields.update(phone_number=assignment.lead.phone[:20])
+
     try:
         with transaction.atomic():
-            return CounselorNote.objects.create(**fields), True
+            note = CounselorNote.objects.create(**fields)
+            if note_kind == CounselorNote.Kind.MESSAGE:
+                ActivityLog.objects.create(
+                    lead=assignment.lead,
+                    actor=user,
+                    verb=ActivityLog.Verb.WHATSAPP_INITIATED,
+                    description=f'Counselor {display_name(user)} contacted student via message: {body[:120]}'[:300],
+                )
+            return note, True
     except IntegrityError:
         existing = CounselorNote.objects.filter(counselor=user, client_event_id=client_event_id).first()
         if existing:
             return existing, False
         raise
+
+
+def mark_counselor_lead_contacted_by_message(*, user, lead_id, notes=None, client_event_id=None):
+    """Mark a counselor lead as contacted via message (WhatsApp/text) for students interested in future intake."""
+    if not (getattr(user, 'can_contact_via_message', False) or user.role in MANAGEMENT_ROLES):
+        raise PermissionDenied('Permission denied: Administrator approval is required to mark leads contacted via message.')
+    body = (notes or '').strip() or 'Contacted student via text/WhatsApp message (interested for future intake).'
+    return add_counselor_note(
+        user=user,
+        lead_id=lead_id,
+        body=body,
+        client_event_id=client_event_id,
+        kind=CounselorNote.Kind.MESSAGE,
+    )
 
 
 def request_admission(*, user, lead_id, message=''):
@@ -330,8 +370,8 @@ def review_admission_request(*, reviewer, request_id, decision, note=''):
 def counselor_contact_summary_for_leads(counselor, lead_ids):
     """Return dict mapping lead_id -> contact_summary dict for active counselor.
 
-    Only notes with kind=CounselorNote.Kind.CALL by the given counselor are counted.
-    Any call notes from previous counselors on reassigned leads are ignored.
+    Notes with kind=CALL or kind=MESSAGE by the given counselor are counted.
+    Any notes from previous counselors on reassigned leads are ignored.
     Executes a single fast query across all requested lead_ids to prevent N+1 queries.
     """
     lead_ids = [lid for lid in lead_ids if lid]
@@ -344,28 +384,35 @@ def counselor_contact_summary_for_leads(counselor, lead_ids):
             'last_contacted_at': None,
             'last_call_duration': None,
             'counselor_call_count': 0,
+            'counselor_message_count': 0,
         }
         for lid in lead_ids
     }
 
-    call_notes = (
+    contact_notes = (
         CounselorNote.objects.filter(
             counselor=counselor,
             lead_id__in=lead_ids,
-            kind=CounselorNote.Kind.CALL,
+            kind__in=[CounselorNote.Kind.CALL, CounselorNote.Kind.MESSAGE],
         ).order_by('lead_id', '-created_at', '-id')
     )
 
-    for note in call_notes:
+    for note in contact_notes:
         info = summaries.get(note.lead_id)
         if not info:
             continue
         if info['counselor_contact_status'] == 'PENDING':
-            info['counselor_contact_status'] = 'CONTACTED'
+            if note.kind == CounselorNote.Kind.CALL:
+                info['counselor_contact_status'] = 'CONTACTED'
+            elif note.kind == CounselorNote.Kind.MESSAGE:
+                info['counselor_contact_status'] = 'CONTACTED_BY_MESSAGE'
             contact_dt = note.call_ended_at or note.call_started_at or note.created_at
             info['last_contacted_at'] = contact_dt.isoformat() if contact_dt else None
             info['last_call_duration'] = note.duration_seconds
-        info['counselor_call_count'] += 1
+        if note.kind == CounselorNote.Kind.CALL:
+            info['counselor_call_count'] += 1
+        elif note.kind == CounselorNote.Kind.MESSAGE:
+            info['counselor_message_count'] += 1
 
     return summaries
 
@@ -375,17 +422,25 @@ def counselor_dashboard(user):
     today = timezone.localdate()
     lead_ids = list(assignments.values_list('lead_id', flat=True))
     notes = CounselorNote.objects.filter(counselor=user)
-    contacted_today = notes.filter(created_at__date=today, lead_id__in=lead_ids).values('lead_id').distinct().count()
-    touched = set(notes.filter(lead_id__in=lead_ids).values_list('lead_id', flat=True))
+    contacted_today = notes.filter(
+        created_at__date=today,
+        lead_id__in=lead_ids,
+        kind__in=[CounselorNote.Kind.CALL, CounselorNote.Kind.MESSAGE],
+    ).values('lead_id').distinct().count()
+    touched = set(notes.filter(
+        lead_id__in=lead_ids,
+        kind__in=[CounselorNote.Kind.CALL, CounselorNote.Kind.MESSAGE],
+    ).values_list('lead_id', flat=True))
     pending_counselling = len([pk for pk in lead_ids if pk not in touched])
     admission_requests = AdmissionRequest.objects.filter(counselor=user, status=AdmissionRequest.Status.PENDING).count()
     recent_notes = notes.select_related('lead').order_by('-created_at')[:6]
     recent_requests = AdmissionRequest.objects.filter(counselor=user).select_related('lead').order_by('-created_at')[:4]
     recent_forwards = assignments.order_by('-forwarded_at')[:6]
 
-    call_lead_ids = set(notes.filter(lead_id__in=lead_ids, kind=CounselorNote.Kind.CALL).values_list('lead_id', flat=True))
-    contacted_leads = len(call_lead_ids)
-    pending_leads = len(lead_ids) - contacted_leads
+    contact_summaries = counselor_contact_summary_for_leads(user, lead_ids)
+    contacted_leads = sum(1 for s in contact_summaries.values() if s['counselor_contact_status'] == 'CONTACTED')
+    contacted_by_message = sum(1 for s in contact_summaries.values() if s['counselor_contact_status'] == 'CONTACTED_BY_MESSAGE')
+    pending_leads = sum(1 for s in contact_summaries.values() if s['counselor_contact_status'] == 'PENDING')
 
     activity = []
     for item in recent_forwards:
@@ -393,8 +448,9 @@ def counselor_dashboard(user):
                          'text': f'Forwarded by {display_name(item.forwarded_by or item.caller)}',
                          'at': item.forwarded_at})
     for note in recent_notes:
+        note_text = 'Counselling call' if note.kind == CounselorNote.Kind.CALL else ('Contacted by message' if note.kind == CounselorNote.Kind.MESSAGE else 'Note added')
         activity.append({'type': note.kind, 'lead_id': note.lead_id, 'lead_name': note.lead.name,
-                         'text': 'Counselling call' if note.kind == CounselorNote.Kind.CALL else 'Note added',
+                         'text': note_text,
                          'at': note.created_at})
     for item in recent_requests:
         activity.append({'type': 'ADMISSION_REQUEST', 'lead_id': item.lead_id, 'lead_name': item.lead.name,
@@ -406,6 +462,7 @@ def counselor_dashboard(user):
             'assigned_leads': len(lead_ids),
             'pending_leads': pending_leads,
             'contacted_leads': contacted_leads,
+            'contacted_by_message': contacted_by_message,
             'today_contacted': contacted_today,
             'pending_counselling': pending_counselling,
             'admission_requests': admission_requests,

@@ -1,0 +1,352 @@
+/* Photo Attendance Review Queue Styles */
+
+.photo-review-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.photo-review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.photo-review-header .eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.photo-review-header h1 {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+
+.photo-review-header p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  margin: 0;
+  max-width: 780px;
+  line-height: 1.5;
+}
+
+/* Filter Card */
+.photo-filter-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.photo-filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.photo-search-field {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.photo-search-field input {
+  width: 100%;
+  padding: 9px 12px 9px 36px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.9rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.photo-search-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.photo-search-field .search-icon {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.photo-filter-field {
+  flex: 0 1 180px;
+  min-width: 140px;
+}
+
+.photo-filter-field select {
+  width: 100%;
+  padding: 9px 32px 9px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.88rem;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.photo-filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.photo-apply-btn {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  color: #ffffff !important;
+  border: none !important;
+  font-weight: 600 !important;
+  padding: 9px 18px !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.25) !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  transition: all 0.15s ease;
+}
+
+.photo-apply-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af) !important;
+  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.35) !important;
+  transform: translateY(-1px);
+}
+
+.photo-reset-btn {
+  background: var(--bg) !important;
+  color: var(--text-muted) !important;
+  border: 1px solid var(--border) !important;
+  padding: 8px 14px !important;
+  border-radius: 8px !important;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.photo-reset-btn:hover {
+  color: var(--text) !important;
+  background: var(--surface-hover, rgba(0, 0, 0, 0.05)) !important;
+}
+
+.photo-active-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--accent);
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+/* 4 KPI Metrics */
+.photo-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .photo-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .photo-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.photo-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.photo-metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.photo-metric-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-metric-icon.blue { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
+.photo-metric-icon.amber { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+.photo-metric-icon.green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+.photo-metric-icon.rose { background: rgba(244, 63, 94, 0.12); color: #f43f5e; }
+
+.photo-metric-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.photo-metric-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Photo Review Cards List */
+.photo-cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.photo-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.photo-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.photo-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.photo-card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.photo-card-meta {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.photo-figures-grid {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.photo-figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.photo-img {
+  width: 220px;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.photo-figcaption {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+.photo-review-form {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 600px;
+}
+
+.photo-review-form label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.photo-review-form input {
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.photo-review-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+

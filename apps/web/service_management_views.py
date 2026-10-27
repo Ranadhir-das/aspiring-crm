@@ -12,7 +12,7 @@ from .views import page, workspace
 
 @workspace(management=True)
 def services_list(request):
-    services = Service.objects.annotate(
+    query = Service.objects.annotate(
         caller_count=Count(
             'employees',
             filter=Q(employees__is_active=True, employees__role=User.Role.CALLER),
@@ -31,9 +31,26 @@ def services_list(request):
         ),
     ).order_by('name', 'pk')
 
-    total_services = services.count()
+    q = request.GET.get('q', '').strip()
+    if q:
+        query = query.filter(
+            Q(name__icontains=q)
+            | Q(code__icontains=q)
+            | Q(description__icontains=q)
+        )
+
+    status = request.GET.get('status', '').strip()
+    if status == 'active':
+        query = query.filter(is_active=True)
+    elif status == 'inactive':
+        query = query.filter(is_active=False)
+
+    services = list(query)
+    total_services = len(services)
     active_services = sum(1 for s in services if s.is_active)
     inactive_services = total_services - active_services
+    total_available_leads = sum(s.available_lead_count for s in services)
+    active_filters_count = sum(1 for v in [q, status] if v)
 
     return page(
         request,
@@ -43,6 +60,10 @@ def services_list(request):
         total_services=total_services,
         active_services=active_services,
         inactive_services=inactive_services,
+        total_available_leads=total_available_leads,
+        search_query=q,
+        selected_status=status,
+        active_filters_count=active_filters_count,
     )
 
 
@@ -150,6 +171,12 @@ def caller_services_list(request):
 
     all_services = Service.objects.all().order_by('name')
 
+    total_callers = len(callers)
+    active_callers = sum(1 for c in callers if c.is_active)
+    total_service_mappings = sum(len(getattr(c, 'active_services_list', [])) for c in callers)
+    total_available_leads = sum(getattr(c, 'available_lead_count', 0) for c in callers)
+    active_filters_count = sum(1 for v in [q, service_filter, status_filter] if v)
+
     return page(
         request,
         'caller_services',
@@ -159,8 +186,11 @@ def caller_services_list(request):
         selected_service=service_filter,
         selected_status=status_filter,
         search_query=q,
-        total_callers=len(callers),
-        active_callers=sum(1 for c in callers if c.is_active),
+        total_callers=total_callers,
+        active_callers=active_callers,
+        total_service_mappings=total_service_mappings,
+        total_available_leads=total_available_leads,
+        active_filters_count=active_filters_count,
     )
 
 

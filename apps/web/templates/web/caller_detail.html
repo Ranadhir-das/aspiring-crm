@@ -1,56 +1,192 @@
-{% extends 'web/base.html' %}{% load web_tags %}
-{% block title %}{{ caller|user_name }} · Activity & Performance{% endblock %}
-{% block breadcrumb %}Employee Activity{% endblock %}
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}{{ caller|user_name }} · Activity &amp; Performance{% endblock %}
+{% block breadcrumb %}{{ caller|user_name }}{% endblock %}
+
 {% block content %}
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:16px;flex-wrap:wrap">
-  <a class="button" href="{% if can_call %}{% url 'web:performance' %}{% else %}{% url 'web:employee-home' %}{% endif %}" style="gap:6px">&larr; Back to workspace</a>
-  {% if can_call %}<a class="button primary" href="{% url 'web:leads' %}?owner={{ caller.pk }}">View Assigned Leads &nearr;</a>{% endif %}
-</div>
+<link rel="stylesheet" href="{% static 'web/performance-command.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'web/caller-detail.css' %}?v=5">
 
-<div class="page-heading"><div><h1>{{ caller|user_name }}</h1><p>{{ caller.get_role_display }} &middot; Activity &amp; Performance</p></div></div>
-<section class="metrics employee-summary" aria-label="Employee activity summary">
-{% for label, value in employee_summary.items %}<div class="metric"><div class="metric-top">{{ label }}</div><strong>{{ value }}</strong></div>{% endfor %}
-</section>
-{% include "web/profile_summary.html" %}
-<section class="panel form-panel spaced"><h2>Course conversions</h2><p>Own course: <strong>{{ stats.own_course_conversions|default:0 }}</strong> &middot; Other course: <strong>{{ stats.other_course_conversions|default:0 }}</strong></p><p class="muted">New qualified outcomes earn 15 own-course or 30 other-course points once per lead. Historical ledger values are preserved.</p></section>
-<div class="dashboard-grid spaced">
-{% for title, items in recent_employee_activity %}<section class="panel"><div class="panel-heading"><h2>{{ title }}</h2></div>
-{% for item in items %}<div class="activity-row"><div><strong>{% if item.lead %}{{ item.lead.name }}{% elif item.visitor_name %}{{ item.visitor_name }}{% elif item.walk_in_name %}{{ item.walk_in_name }}{% elif item.phone_number %}{{ item.phone_number }}{% else %}External contact{% endif %}</strong>
-<p>{% if item.started_at %}{{ item.started_at }} &middot; {{ item.get_outcome_display }}{% elif item.scheduled_at %}{{ item.scheduled_at }} &middot; {{ item.get_status_display }}{% elif item.conducted_at %}{{ item.conducted_at }} &middot; {{ item.get_counselling_type_display }}{% else %}{{ item.admission_date }} &middot; {{ item.college }}{% endif %}</p><p>{{ item.notes|truncatechars:200 }}</p></div></div>
-{% empty %}<div class="empty">No records yet.</div>{% endfor %}</section>{% endfor %}
-</div>
-
-<section class="panel spaced">
-  <div class="panel-heading">
-    <div>
-      <h2>Activity</h2>
-      <p>Real-time audit stream of calls, status adjustments, follow-up events and authentication timestamps</p>
+<div class="caller-detail-page">
+  <!-- Top Navigation & Action Bar -->
+  <div class="caller-top-nav">
+    <a class="button" href="{% if can_call %}{% url 'web:performance' %}{% else %}{% url 'web:team' %}{% endif %}">
+      &larr; Back to performance
+    </a>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <a class="button primary" href="{% url 'web:leads' %}?owner={{ caller.pk }}">
+        View Assigned Leads ({{ caller.lead_count }}) ↗
+      </a>
     </div>
   </div>
-  {% for item in records %}
-  <div class="activity-row">
-    <span class="activity-mark">
-      {% if item.verb == 'CALL_LOGGED' %}📞
-      {% elif item.verb == 'STATUS_CHANGED' %}↻
-      {% elif item.verb == 'ASSIGNED' or item.verb == 'REASSIGNED' %}👤
-      {% elif item.verb == 'FOLLOWUP_SCHEDULED' %}🗓
-      {% elif item.verb == 'FOLLOWUP_COMPLETED' %}✓
-      {% elif item.verb == 'FOLLOWUP_CANCELLED' %}✕
-      {% elif item.verb == 'LOGGED_IN' %}→
-      {% elif item.verb == 'LOGGED_OUT' %}←
-      {% else %}✦{% endif %}
-    </span>
-    <div>
-      <strong>{{ item.description }}</strong>
-      {% if item.lead %}
-      <p><a class="text-link" href="{% url 'web:lead-detail' item.lead.pk %}">{{ item.lead.name }} · {{ item.lead.phone }}</a></p>
-      {% endif %}
+
+  <!-- Profile Summary Component (Includes Hero, Horizon, Individual Graph & Telemetry) -->
+  {% include "web/profile_summary.html" %}
+
+  <!-- Course Conversions Card -->
+  <section class="panel spaced" style="border-radius:12px;padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+      <div>
+        <h2 style="margin:0 0 4px 0;font-size:1.15rem;font-weight:700;">Course Conversions &amp; Performance Rules</h2>
+        <p style="margin:0;font-size:0.88rem;color:var(--text-muted);">
+          Own course: <strong style="color:var(--text);">{{ stats.own_course_conversions|default:0 }}</strong> ·
+          Other course: <strong style="color:var(--text);">{{ stats.other_course_conversions|default:0 }}</strong>
+        </p>
+      </div>
     </div>
-    <time>{{ item.created_at|date:'d M Y, H:i' }}</time>
+    <p class="muted" style="margin:0;font-size:0.82rem;line-height:1.5;">
+      Qualified outcomes earn 15 own-course or 30 other-course points once per lead. Historical ledger values are preserved.
+    </p>
+  </section>
+
+  <!-- Recent Operational Activity Grid (Calls, Followups, Counselling, Admissions) -->
+  <div class="dashboard-grid spaced">
+    {% for title, items in recent_employee_activity %}
+    <section class="panel" style="border-radius:12px;">
+      <div class="panel-heading">
+        <h2>{{ title }}</h2>
+      </div>
+      {% for item in items %}
+      <div class="activity-row">
+        <div>
+          <strong>
+            {% if item.lead %}
+              <a class="text-link" href="{% url 'web:lead-detail' item.lead.pk %}">{{ item.lead.name }}</a>
+            {% elif item.visitor_name %}
+              {{ item.visitor_name }}
+            {% elif item.walk_in_name %}
+              {{ item.walk_in_name }}
+            {% elif item.phone_number %}
+              {{ item.phone_number }}
+            {% else %}
+              External contact
+            {% endif %}
+          </strong>
+          <p>
+            {% if item.started_at %}
+              {{ item.started_at|date:'d M Y, H:i' }} · {{ item.get_outcome_display }}
+            {% elif item.scheduled_at %}
+              {{ item.scheduled_at|date:'d M Y, H:i' }} · {{ item.get_status_display }}
+            {% elif item.conducted_at %}
+              {{ item.conducted_at|date:'d M Y, H:i' }} · {{ item.get_counselling_type_display }}
+            {% else %}
+              {{ item.admission_date|date:'d M Y' }} · {{ item.college }}
+            {% endif %}
+          </p>
+          {% if item.notes %}
+          <p style="color:var(--text-muted);font-size:0.82rem;">{{ item.notes|truncatechars:180 }}</p>
+          {% endif %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty" style="padding:24px;text-align:center;color:var(--text-muted);">No records in this window.</div>
+      {% endfor %}
+    </section>
+    {% endfor %}
   </div>
-  {% empty %}
-  <div class="empty">No activity recorded for this caller yet.</div>
-  {% endfor %}
-  {% include 'web/pagination.html' %}
-</section>
+
+  <!-- Real-Time Activity Audit Stream -->
+  <section class="panel spaced" style="border-radius:12px;">
+    <div class="panel-heading">
+      <div>
+        <h2>Activity Audit Stream</h2>
+        <p>Real-time audit stream of calls, status adjustments, follow-up events, and authentication timestamps.</p>
+      </div>
+    </div>
+    {% for item in records %}
+    <div class="caller-stream-item">
+      <div class="caller-stream-icon">
+        {% if item.verb == 'CALL_LOGGED' %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        {% elif item.verb == 'STATUS_CHANGED' %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        {% elif item.verb == 'ASSIGNED' or item.verb == 'REASSIGNED' %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        {% elif item.verb == 'FOLLOWUP_SCHEDULED' %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        {% elif item.verb == 'FOLLOWUP_COMPLETED' %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        {% elif item.verb == 'FOLLOWUP_CANCELLED' %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        {% elif item.verb == 'LOGGED_IN' %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        {% elif item.verb == 'LOGGED_OUT' %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        {% else %}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        {% endif %}
+      </div>
+      <div class="caller-stream-content">
+        <div class="caller-stream-desc">{{ item.description }}</div>
+        {% if item.lead %}
+        <div class="caller-stream-meta">
+          <a class="text-link" href="{% url 'web:lead-detail' item.lead.pk %}">{{ item.lead.name }} · {{ item.lead.phone }}</a>
+        </div>
+        {% endif %}
+      </div>
+      <time class="caller-stream-time">{{ item.created_at|date:'d M Y, H:i' }}</time>
+    </div>
+    {% empty %}
+    <div class="empty" style="padding:36px;text-align:center;color:var(--text-muted);">No activity recorded for this caller yet.</div>
+    {% endfor %}
+
+    {% include 'web/pagination.html' %}
+  </section>
+
+  <!-- Performance Ledger Table -->
+  {% if ledger %}
+  <section class="caller-table-card">
+    <div class="performance-card-header">
+      <div>
+        <h2>Points Ledger Entries</h2>
+        <p style="margin:2px 0 0 0;font-size:0.85rem;color:var(--text-muted);">Audit ledger of points transactions for this caller in the selected window.</p>
+      </div>
+    </div>
+    <div class="caller-table-scroll">
+      <table class="caller-table">
+        <thead>
+          <tr>
+            <th>Date &amp; Time</th>
+            <th>Event</th>
+            <th>Points</th>
+            <th>Lead</th>
+            <th>Recorded By</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in ledger %}
+          <tr>
+            <td>{{ entry.occurred_at|date:'d M Y, H:i' }}</td>
+            <td><span class="badge">{{ entry.get_event_display }}</span></td>
+            <td>
+              <strong class="{% if entry.points > 0 %}accent{% else %}busy{% endif %}">
+                {% if entry.points > 0 %}+{% endif %}{{ entry.points }}
+              </strong>
+            </td>
+            <td>
+              {% if entry.lead %}
+              <a class="text-link" href="{% url 'web:lead-detail' entry.lead.pk %}">{{ entry.lead.name }}</a>
+              {% else %}
+              —
+            {% endif %}
+            </td>
+            <td>{% employee_link entry.recorded_by %}</td>
+            <td class="notes-cell">{{ entry.notes|default:'—' }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="6" class="empty" style="text-align:center;padding:36px;color:var(--text-muted);">No points entries in this window.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+<!-- Chart Dataset Script Integration -->
+{{ caller_chart_data|json_script:'individual-caller-chart-data' }}
+<script src="{% static 'web/caller-detail-chart.js' %}?v=5"></script>
 {% endblock %}

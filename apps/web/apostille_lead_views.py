@@ -31,14 +31,53 @@ class ApostilleEnquiryForm(forms.Form):
 @require_GET
 def apostille_leads(request):
     from django.db.models import Q
-    qs = visible_apostille_leads(request.user)
+    qs = visible_apostille_leads(request.user).select_related('assigned_caller', 'apostille_details')
     search = request.GET.get('q', '').strip()[:200]
+    conversion = request.GET.get('conversion', '').strip()
+    caller = request.GET.get('caller', '').strip()
+    active_filters_count = 0
+
     if search:
-        qs = qs.filter(Q(name__icontains=search) | Q(phone__icontains=search) | Q(apostille_details__country__icontains=search))
-    conversion = request.GET.get('conversion', '')
+        active_filters_count += 1
+        qs = qs.filter(
+            Q(name__icontains=search)
+            | Q(phone__icontains=search)
+            | Q(apostille_details__country__icontains=search)
+            | Q(apostille_details__document_name__icontains=search)
+        )
     if conversion in ('true', 'false'):
+        active_filters_count += 1
         qs = qs.filter(apostille_details__conversion=conversion == 'true')
-    return page(request, 'apostille_leads', 'apostilles', records=paginate(request, qs.order_by('-created_at', '-pk')), search=search, conversion=conversion)
+    if caller and caller.isdigit():
+        active_filters_count += 1
+        qs = qs.filter(assigned_caller_id=int(caller))
+
+    total_leads = qs.count()
+    converted_count = qs.filter(apostille_details__conversion=True).count()
+    unconverted_count = qs.filter(apostille_details__conversion=False).count()
+    assigned_count = qs.filter(assigned_caller__isnull=False).count()
+
+    metrics = [
+        {'label': 'Total Enquiries', 'value': total_leads, 'pill': 'Leads', 'desc': 'All apostille pipeline leads'},
+        {'label': 'Converted to Client', 'value': converted_count, 'pill': 'Converted', 'desc': 'Successfully converted'},
+        {'label': 'Under Follow-up', 'value': unconverted_count, 'pill': 'In Pipeline', 'desc': 'Pending conversion'},
+        {'label': 'Assigned to Callers', 'value': assigned_count, 'pill': 'Assigned', 'desc': 'Allocated to calling team'},
+    ]
+
+    callers = User.objects.filter(role='CALLER', is_active=True).order_by('first_name', 'username')
+
+    return page(
+        request,
+        'apostille_leads',
+        'apostilles',
+        records=paginate(request, qs.order_by('-created_at', '-pk')),
+        search=search,
+        conversion=conversion,
+        selected_caller=caller,
+        callers=callers,
+        active_filters_count=active_filters_count,
+        metrics=metrics,
+    )
 
 
 @roles(ADMINS)

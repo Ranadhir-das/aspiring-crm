@@ -33,6 +33,7 @@ from apps.leads.counselor_services import (
     get_counselor_assignment_or_404,
     initials,
     latest_interested_call,
+    mark_counselor_lead_contacted_by_message,
     request_admission,
     visible_counselor_notes,
 )
@@ -115,6 +116,7 @@ def lead_summary(assignment, touched_ids=None, contact_summaries=None):
         'last_contacted_at': contact_info['last_contacted_at'],
         'last_call_duration': contact_info['last_call_duration'],
         'counselor_call_count': contact_info['counselor_call_count'],
+        'counselor_message_count': contact_info.get('counselor_message_count', 0),
     }
 
 
@@ -197,8 +199,12 @@ class CounselorDashboardView(APIView):
         recent_lead_ids = [item.lead_id for item in data['recent_leads']]
         contact_summaries = counselor_contact_summary_for_leads(request.user, recent_lead_ids)
         return Response({
-            'counselor': {'id': request.user.pk, 'name': display_name(request.user),
-                          'initials': initials(request.user)},
+            'counselor': {
+                'id': request.user.pk,
+                'name': display_name(request.user),
+                'initials': initials(request.user),
+                'can_contact_via_message': getattr(request.user, 'can_contact_via_message', False) or request.user.role in ('ADMIN', 'SUPER_ADMIN', 'MANAGER'),
+            },
             'stats': data['stats'],
             'recent_leads': [lead_summary(item, touched_ids=touched, contact_summaries=contact_summaries)
                              for item in data['recent_leads']],
@@ -239,6 +245,7 @@ class CounselorLeadDetailView(APIView):
             'last_contacted_at': None,
             'last_call_duration': None,
             'counselor_call_count': 0,
+            'counselor_message_count': 0,
         }
         return Response({
             'lead': {
@@ -251,11 +258,13 @@ class CounselorLeadDetailView(APIView):
                 'last_contacted_at': contact_info['last_contacted_at'],
                 'last_call_duration': contact_info['last_call_duration'],
                 'counselor_call_count': contact_info['counselor_call_count'],
+                'counselor_message_count': contact_info.get('counselor_message_count', 0),
             },
             'counselor_contact_status': contact_info['counselor_contact_status'],
             'last_contacted_at': contact_info['last_contacted_at'],
             'last_call_duration': contact_info['last_call_duration'],
             'counselor_call_count': contact_info['counselor_call_count'],
+            'counselor_message_count': contact_info.get('counselor_message_count', 0),
             'interested': interested_data(interested),
             'caller': {
                 'id': lead.assigned_caller_id,
@@ -288,7 +297,11 @@ class CounselorLeadDetailView(APIView):
                                    AdmissionRequest.objects.filter(lead=lead, counselor=request.user)[:20]],
             'has_pending_admission_request': AdmissionRequest.objects.filter(
                 lead=lead, status=AdmissionRequest.Status.PENDING).exists(),
-            'permissions': {'can_edit_lead': False, 'can_forward': False},
+            'permissions': {
+                'can_edit_lead': False,
+                'can_forward': False,
+                'can_contact_via_message': getattr(request.user, 'can_contact_via_message', False) or request.user.role in ('ADMIN', 'SUPER_ADMIN', 'MANAGER'),
+            },
         })
 
 
@@ -324,10 +337,39 @@ class CounselorNoteCreateView(APIView):
             if started and ended and ended < started:
                 raise ValidationError({'call': 'Call end must be after start.'})
             call = {'started_at': started, 'ended_at': ended, 'duration_seconds': duration}
+        kind = request.data.get('kind') or None
         note, created = add_counselor_note(user=request.user, lead_id=id, body=request.data.get('notes'),
-                                           client_event_id=client_event_id, call=call)
+                                           client_event_id=client_event_id, call=call, kind=kind)
         return Response({'success': True, 'created': created, 'note': note_data(note)},
                         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+class CounselorLeadMessageContactView(APIView):
+    """Mark lead as contacted by message for future intake / next-year students. Requires admin approval."""
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated, IsActiveCounselor]
+
+    def post(self, request, id):
+        client_event_id = request.data.get('client_event_id') or None
+        if client_event_id:
+            try:
+                client_event_id = uuid.UUID(str(client_event_id))
+            except ValueError:
+                raise ValidationError({'client_event_id': 'Must be a valid UUID.'})
+        notes = request.data.get('notes')
+        note, created = mark_counselor_lead_contacted_by_message(
+            user=request.user,
+            lead_id=id,
+            notes=notes,
+            client_event_id=client_event_id,
+        )
+        return Response({
+            'success': True,
+            'created': created,
+            'note': note_data(note),
+            'counselor_contact_status': 'CONTACTED_BY_MESSAGE',
+            'message': 'Lead marked as contacted by message.',
+        }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 class CounselorAdmissionRequestView(APIView):

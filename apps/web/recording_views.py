@@ -99,6 +99,8 @@ def call_recordings_list(request):
 
     callers = User.objects.filter(role=User.Role.CALLER).order_by('first_name', 'username') if is_management else []
 
+    active_filters_count = sum(1 for v in [search_query, caller_id, outcome, date_from, date_to] if v)
+
     page_obj = paginate(request, queryset)
 
     return page(
@@ -116,4 +118,5 @@ def call_recordings_list(request):
         callers=callers,
         outcomes=Call.Outcome.choices,
         is_management=is_management,
+        active_filters_count=active_filters_count,
     )

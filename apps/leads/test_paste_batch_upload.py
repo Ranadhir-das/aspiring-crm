@@ -87,7 +87,7 @@ class PhoneNormalizationTests(TestCase):
         invalid_cases = [
             ("93921303", "too short"),
             ("5123456789", "must start with 6, 7, 8, or 9"),
-            ("1234567890", "must start with 6, 7, 8, or 9"),
+            ("2345678901", "must start with 6, 7, 8, or 9"),
             ("9876543210123", "too long"),
             ("+1 5551234567", "Unsupported country code"),
             ("939213abcd", "invalid characters"),
@@ -99,6 +99,27 @@ class PhoneNormalizationTests(TestCase):
             self.assertIsNone(normalized, f"Expected {raw} to be rejected")
             self.assertIsNotNone(reason)
             self.assertIn(reason_snippet.lower(), reason.lower())
+
+    def test_bangladesh_mobile_formats(self):
+        cases = [
+            ("+880 1712345678", "+8801712345678"),
+            ("+8801712345678", "+8801712345678"),
+            ("+88 01712345678", "+8801712345678"),
+            ("+88 1712345678", "+8801712345678"),
+            ("+881712345678", "+8801712345678"),
+            ("880 1712345678", "+8801712345678"),
+            ("8801712345678", "+8801712345678"),
+            ("88 01712345678", "+8801712345678"),
+            ("881712345678", "+8801712345678"),
+            ("88 1712345678", "+8801712345678"),
+            ("01712345678", "+8801712345678"),
+            ("1712345678", "+8801712345678"),
+            ("{ +880 1812-345678 },", "+8801812345678"),
+        ]
+        for raw, expected in cases:
+            normalized, reason = normalize_indian_mobile(raw)
+            self.assertEqual(normalized, expected, f"Failed for {raw}")
+            self.assertIsNone(reason)
 
     def test_parse_pasted_phone_numbers(self):
         text = """
@@ -352,6 +373,32 @@ class PasteBatchServiceTests(TestCase):
         self.assertEqual(result["skipped_count"], 3)
         self.assertEqual(len(result["invalid_entries"]), 3)
         self.assertIsNone(result["batch_id"])
+
+    def test_bangladesh_duplicate_detection_cross_format(self):
+        # Create an existing lead in CRM with normalized Bangladesh number
+        Lead.objects.create(name="BD Student", phone="+8801712345678", status=Lead.Status.CALLED)
+
+        # Paste block containing Bangladesh number variations and one new BD number
+        pasted = "+880 1712345678\n01712345678\n8801712345678\n1712345678\n+880 1812345678"
+        result = commit_paste_import(pasted, self.admin, preferred_course="MBBS")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["created_count"], 1)
+        self.assertEqual(result["duplicate_count"], 4)
+        self.assertEqual(Lead.objects.filter(phone="+8801712345678").count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="+8801812345678").count(), 1)
+
+    def test_commit_paste_import_creates_bangladesh_leads(self):
+        pasted = "+88 01712345678\n8801812345678\n"
+        result = commit_paste_import(pasted, self.admin, preferred_course="BTECH")
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["created_count"], 2)
+        batch = LeadImportBatch.objects.get(pk=result["batch_id"])
+        leads = Lead.objects.filter(import_batch=batch)
+        self.assertEqual(leads.count(), 2)
+        phones = {lead.phone for lead in leads}
+        self.assertEqual(phones, {"+8801712345678", "+8801812345678"})
 
 
 class PasteBatchWebViewTests(TestCase):

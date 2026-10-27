@@ -55,6 +55,7 @@ class CounselorNote(models.Model):
     class Kind(models.TextChoices):
         CALL = 'CALL', 'Counselor call'
         NOTE = 'NOTE', 'Note'
+        MESSAGE = 'MESSAGE', 'Counselor message'
 
     lead = models.ForeignKey('leads.Lead', on_delete=models.CASCADE, related_name='counselor_notes')
     assignment = models.ForeignKey(

@@ -1,5 +1,28 @@
-<section class="panel report-controls spaced"><form method="get" id="report-filter" class="filters">
-{% for field in filters %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}
-<button class="button primary">Update report</button><a class="text-link" href="{{ request.path }}">Reset</a>
-{{ filters.non_field_errors }}</form><p class="report-note">{{ window.start|date:'d M Y, H:i' }} to {{ window.end|date:'d M Y, H:i' }} (end exclusive) ? {{ workspace_timezone }}. End hour includes that entire hour.</p>
-{% if not report_valid %}<p class="notice error">The selected filters are invalid. Showing the default period until you correct them.</p>{% endif %}</section>
+<section class="performance-filter-card">
+  <form method="get" id="report-filter" class="performance-filter-form">
+    {% for field in filters %}
+    <div class="performance-filter-field">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {{ field.errors }}
+    </div>
+    {% endfor %}
+    <div class="performance-filter-actions">
+      <button class="performance-apply-btn" type="submit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        Update report
+      </button>
+      <a class="performance-reset-btn" href="{{ request.path }}">Reset</a>
+    </div>
+    {{ filters.non_field_errors }}
+  </form>
+  <div class="performance-filter-meta">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span>Window: <strong>{{ window.start|date:'d M Y, H:i' }}</strong> to <strong>{{ window.end|date:'d M Y, H:i' }}</strong> · Timezone: {{ workspace_timezone }}</span>
+  </div>
+  {% if not report_valid %}
+  <div class="performance-notice error">
+    The selected date filters are invalid. Showing the default 30-day period until you correct them.
+  </div>
+  {% endif %}
+</section>

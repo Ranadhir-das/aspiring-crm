@@ -94,6 +94,10 @@ function filterNavigation() {
   if (navSearchClear) {
     navSearchClear.style.display = q ? 'flex' : 'none';
   }
+  const navShortcut = document.getElementById('nav-search-shortcut');
+  if (navShortcut) {
+    navShortcut.style.display = q ? 'none' : 'inline-block';
+  }
 
   if (!q) {
     if (quickPills) quickPills.style.display = '';
@@ -530,3 +534,9 @@ if (teamCallNode) {
   const totalEl = document.getElementById('team-call-total');
   if (totalEl) totalEl.textContent = total;
 }
+
+// Ensure clicking anywhere inside .sidebar-search-box area focuses input
+document.querySelector('.sidebar-search-box')?.addEventListener('click', (e) => {
+  if (e.target && (e.target.id === 'nav-search-clear' || e.target.closest('#nav-search-clear'))) return;
+  navSearchInput?.focus();
+});

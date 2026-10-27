@@ -1,0 +1,179 @@
+{% extends 'web/base.html' %}
+{% load static %}
+{% load web_tags %}
+
+{% block title %}Lead Consultations{% endblock %}
+{% block breadcrumb %}Consultations{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/consultations-page.css' %}?v=1">
+
+<!-- Page Heading -->
+<div class="page-heading consultations-header">
+  <div>
+    <div class="eyebrow">TEAM COLLABORATION</div>
+    <h1>Lead Consultations<span class="accent">.</span></h1>
+    <p class="heading-subtitle">Manager and senior advisor consultations requested on lead dossiers by team callers.</p>
+  </div>
+  <div class="actions header-actions">
+    <a class="button action-btn" href="{% url 'web:leads' %}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      <span>Leads Directory ↗</span>
+    </a>
+  </div>
+</div>
+
+<!-- 1. Top Filter Section (Placed above cards) -->
+<section class="consultations-filter-card">
+  <div class="consultations-filter-head">
+    <div class="consultations-filter-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span>Filter &amp; Search Consultations</span>
+    </div>
+    {% if active_filters_count > 0 %}
+    <span class="consultations-active-pill">
+      <span class="dot"></span>
+      {{ active_filters_count }} filter{% if active_filters_count > 1 %}s{% endif %} active
+    </span>
+    {% endif %}
+  </div>
+
+  <form method="get" class="consultations-filter-form" action="{% url 'web:consultations' %}">
+    <!-- Keyword Search -->
+    <div class="consultations-search-box">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" name="q" value="{{ search }}" placeholder="Search lead, author or note details…" aria-label="Search">
+    </div>
+
+    <!-- Status Filter -->
+    <div class="consultations-select-field">
+      <select name="status" aria-label="Filter by status">
+        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Consultations</option>
+        <option value="open" {% if status_filter == 'open' %}selected{% endif %}>Open Requests</option>
+        <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Resolved</option>
+      </select>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="consultations-filter-actions">
+      <button type="submit" class="btn-filter-submit">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        <span>Apply Filter</span>
+      </button>
+      <a href="{% url 'web:consultations' %}" class="btn-filter-clear">Reset</a>
+    </div>
+  </form>
+</section>
+
+<!-- 2. Four KPI Metric Cards (Placed directly below filter section) -->
+{% if metrics %}
+<section class="consultations-metrics-grid">
+  {% for metric in metrics %}
+  <div class="consultation-metric-card">
+    <div class="metric-top-bar">
+      <span class="metric-label">{{ metric.label }}</span>
+      <span class="count-pill">{{ metric.pill }}</span>
+    </div>
+    <div class="metric-number">{{ metric.value }}</div>
+    <div class="metric-bottom-bar">
+      <span>{{ metric.desc }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- 3. Contained Scrollable Table with Sticky Header -->
+<section class="consultations-panel">
+  <div class="consultations-panel-head">
+    <div>
+      <h2>Consultation Logs</h2>
+      <p>Escalations and guidance requests flagged for management intervention.</p>
+    </div>
+    <span class="count-pill">
+      {{ records.paginator.count|default:records|length }} request{% if records.paginator.count != 1 %}s{% endif %}
+    </span>
+  </div>
+
+  <div class="consultations-table-scroll">
+    <table class="consultations-table">
+      <thead>
+        <tr>
+          <th>Lead / Contact</th>
+          <th>Requested By</th>
+          <th>Consultation Note</th>
+          <th>Status</th>
+          <th>Logged At</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td>
+            <a class="person" href="{% url 'web:lead-collaboration' r.lead_id %}">
+              <span class="avatar subtle">{{ r.lead.name|first|upper }}</span>
+              <span>
+                <strong>{{ r.lead.name }}</strong>
+                <small>{{ r.lead.phone }}</small>
+              </span>
+            </a>
+          </td>
+          <td>
+            {% if r.author %}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="avatar small">{{ r.author.first_name|default:r.author.username|first|upper }}</span>
+              <span>{% employee_link r.author %}</span>
+            </div>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="notes-cell" style="max-width: 320px; font-size: 12.5px; line-height: 1.4;">
+            {{ r.note|linebreaksbr }}
+          </td>
+          <td>
+            {% if r.resolved %}
+            <span class="badge" style="background: rgba(16, 185, 129, 0.12); color: #10b981; font-weight: 700;">Resolved</span>
+            {% else %}
+            <span class="badge" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; font-weight: 700;">Open Request</span>
+            {% endif %}
+          </td>
+          <td>
+            <span style="white-space: nowrap; font-size: 12px;">{{ r.created_at|date:'d M Y, H:i' }}</span>
+          </td>
+          <td style="text-align: right; white-space: nowrap;">
+            <div style="display: inline-flex; align-items: center; gap: 8px;">
+              {% if not r.resolved %}
+              <form method="post" action="{% url 'web:consult-resolve' r.pk %}" style="display: inline-block; margin: 0;">
+                {% csrf_token %}
+                <button type="submit" class="btn-resolve-consult" title="Mark consultation as resolved">
+                  ✓ Resolve
+                </button>
+              </form>
+              {% endif %}
+              <a class="text-link" href="{% url 'web:lead-collaboration' r.lead_id %}" style="font-size: 12px;">View Lead ↗</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="empty" style="padding: 48px 20px; text-align: center;">
+            <div style="font-size: 32px; margin-bottom: 8px;">🤝</div>
+            <strong style="font-size: 15px; display: block; margin-bottom: 4px;">No consultations found</strong>
+            <p style="color: var(--muted); font-size: 13px; max-width: 420px; margin: 0 auto;">No consultation notes matching the selected criteria.</p>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if records %}
+  <div style="padding: 12px 18px; border-top: 1px solid var(--border);">
+    {% include 'web/pagination.html' %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+

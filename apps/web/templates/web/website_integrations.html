@@ -1,81 +1,199 @@
 {% extends 'web/base.html' %}
+{% load static %}
 {% load web_tags %}
 {% block title %}Website integrations{% endblock %}
 {% block breadcrumb %}Website integrations{% endblock %}
+
 {% block content %}
-<div class="page-heading">
+<link rel="stylesheet" href="{% static 'web/website-integrations.css' %}?v=1">
+
+<!-- Page Heading -->
+<div class="page-heading integrations-header">
   <div>
     <div class="eyebrow">INTEGRATIONS &amp; WEBHOOKS</div>
     <h1>Website integrations<span class="accent">.</span></h1>
-    <p>Manage external web forms, API credentials, allowed origins, and intake routing.</p>
+    <p class="heading-subtitle">Manage external web forms, API credentials, allowed origins, and intake routing.</p>
   </div>
-  <div class="actions">
-    <a class="button" href="{% url 'web:services' %}">Service catalog ↗</a>
-    <a class="button" href="{% url 'web:lead-routing' %}">Lead routing ↗</a>
-    <a class="button primary" href="{% url 'web:website-integration-create' %}">+ Add website</a>
-  </div>
-</div>
-
-<div class="metrics">
-  <div class="metric">
-    <div class="metric-top"><span>Total integrations</span><span class="metric-icon">⚡</span></div>
-    <strong>{{ total_sources }}</strong>
-    <div class="metric-bottom">Configured sources</div>
-  </div>
-  <div class="metric">
-    <div class="metric-top"><span>Active sources</span><span class="metric-icon mint">✓</span></div>
-    <strong>{{ active_sources }}</strong>
-    <div class="metric-bottom"><span class="pill mint">Accepting submissions</span></div>
-  </div>
-  <div class="metric">
-    <div class="metric-top"><span>Inactive sources</span><span class="metric-icon amber">✕</span></div>
-    <strong>{{ inactive_sources }}</strong>
-    <div class="metric-bottom">Blocked / Disabled</div>
-  </div>
-  <div class="metric">
-    <div class="metric-top"><span>Total submissions</span><span class="metric-icon">📥</span></div>
-    <strong>{{ total_submissions }}</strong>
-    <div class="metric-bottom">Form leads received</div>
+  <div class="actions header-actions">
+    <a class="button action-btn" href="{% url 'web:services' %}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span>Service catalog ↗</span>
+    </a>
+    <a class="button action-btn" href="{% url 'web:lead-routing' %}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span>Lead routing ↗</span>
+    </a>
+    <a class="action-add-btn" href="{% url 'web:website-integration-create' %}">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>Add website</span>
+    </a>
   </div>
 </div>
 
-<section class="panel">
-  <div class="panel-heading">
+<!-- 1. Top Filter Section (Placed above cards as per standard) -->
+<section class="integrations-filter-card">
+  <div class="integrations-filter-head">
+    <div class="integrations-filter-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      <span>Filter &amp; Search Integrations</span>
+    </div>
+    <div class="integrations-filter-badges">
+      {% if active_filters_count > 0 %}
+      <span class="active-filters-pill">
+        <span class="dot"></span>
+        {{ active_filters_count }} filter{% if active_filters_count > 1 %}s{% endif %} active
+      </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="get" class="integrations-filter-form">
+    <input type="hidden" name="tab" value="{{ selected_tab|default:'all' }}">
+
+    <!-- Search Text Box -->
+    <div class="integrations-search-box">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" name="q" placeholder="Search website name, code, origin..." value="{{ search_query }}">
+    </div>
+
+    <!-- Status Dropdown -->
+    <div class="integrations-select-field">
+      <select name="status" aria-label="Filter by status" onchange="this.form.submit()">
+        <option value="">All statuses</option>
+        <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active only</option>
+        <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive only</option>
+      </select>
+    </div>
+
+    <!-- Default Service Dropdown -->
+    <div class="integrations-select-field">
+      <select name="service" aria-label="Filter by service" onchange="this.form.submit()">
+        <option value="">All services</option>
+        {% for s in all_services %}
+        <option value="{{ s.code }}" {% if selected_service == s.code %}selected{% endif %}>{{ s.name }} ({{ s.code }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Buttons -->
+    <div class="integrations-filter-actions">
+      <button class="btn-filter-submit" type="submit">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Apply Filter</span>
+      </button>
+      {% if active_filters_count > 0 or search_query or selected_service or selected_status %}
+      <a class="btn-filter-clear" href="{% querystring q=None service=None status=None page=None %}" title="Reset all filters">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <span>Reset</span>
+      </a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+<!-- 2. Four Metric KPI Cards (Reflect active filtered dataset) -->
+<div class="integrations-metrics-grid">
+  <a href="{% querystring tab='all' page=None %}" class="integration-metric-card card-total {% if selected_tab == 'all' or not selected_tab %}is-active-tab{% endif %}" title="View all integrations">
+    <div class="metric-top-bar">
+      <span class="metric-label">Total integrations</span>
+      <span class="metric-icon-circle">⚡</span>
+    </div>
+    <div class="metric-number">{{ total_sources }}</div>
+    <div class="metric-bottom-bar">Configured sources</div>
+  </a>
+
+  <a href="{% querystring tab='active' status='active' page=None %}" class="integration-metric-card card-active {% if selected_tab == 'active' or selected_status == 'active' %}is-active-tab{% endif %}" title="View active sources">
+    <div class="metric-top-bar">
+      <span class="metric-label">Active sources</span>
+      <span class="metric-icon-circle mint">✓</span>
+    </div>
+    <div class="metric-number">{{ active_sources }}</div>
+    <div class="metric-bottom-bar">
+      <span class="pill mint">Accepting submissions</span>
+    </div>
+  </a>
+
+  <a href="{% querystring tab='inactive' status='inactive' page=None %}" class="integration-metric-card card-inactive {% if selected_tab == 'inactive' or selected_status == 'inactive' %}is-active-tab{% endif %}" title="View inactive sources">
+    <div class="metric-top-bar">
+      <span class="metric-label">Inactive sources</span>
+      <span class="metric-icon-circle amber">✕</span>
+    </div>
+    <div class="metric-number">{{ inactive_sources }}</div>
+    <div class="metric-bottom-bar">Blocked / Disabled</div>
+  </a>
+
+  <div class="integration-metric-card card-submissions" title="Total submissions received">
+    <div class="metric-top-bar">
+      <span class="metric-label">Total submissions</span>
+      <span class="metric-icon-circle blue">📥</span>
+    </div>
+    <div class="metric-number">{{ total_submissions }}</div>
+    <div class="metric-bottom-bar">Form leads received</div>
+  </div>
+</div>
+
+<!-- 3. Navigation Tabs -->
+<div class="integrations-tabs-bar">
+  <a class="integrations-tab-link {% if selected_tab == 'all' or not selected_tab and not selected_status %}active{% endif %}" href="{% querystring tab='all' status=None page=None %}">
+    <span>All Integrations</span>
+    <span class="tab-counter-badge">{{ total_sources }}</span>
+  </a>
+  <a class="integrations-tab-link {% if selected_tab == 'active' or selected_status == 'active' %}active{% endif %}" href="{% querystring tab='active' status='active' page=None %}">
+    <span>Active Sources</span>
+    <span class="tab-counter-badge">{{ active_sources }}</span>
+  </a>
+  <a class="integrations-tab-link {% if selected_tab == 'inactive' or selected_status == 'inactive' %}active{% endif %}" href="{% querystring tab='inactive' status='inactive' page=None %}">
+    <span>Inactive Sources</span>
+    <span class="tab-counter-badge">{{ inactive_sources }}</span>
+  </a>
+</div>
+
+<!-- 4. Connected Website Sources Table with Contained Scroll & Sticky Header -->
+<section class="integrations-panel">
+  <div class="integrations-panel-head">
     <div>
       <h2>Connected website sources</h2>
       <p>External websites authorized to submit lead enquiries into the admissions CRM.</p>
     </div>
+    <span class="count-pill">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      {{ sources|length }} Source{% if sources|length != 1 %}s{% endif %}
+    </span>
   </div>
-  <div class="table-scroll">
-    <table>
+
+  <div class="integrations-table-scroll">
+    <table class="integrations-table">
       <thead>
         <tr>
-          <th>Website Name</th>
-          <th>Source Code</th>
-          <th>Default Service</th>
-          <th>Allowed Services</th>
-          <th>Status</th>
-          <th>API Key</th>
-          <th>Allowed Origins</th>
-          <th>Submissions</th>
-          <th>Last Activity</th>
-          <th>Actions</th>
+          <th style="min-width: 190px;">Website Name</th>
+          <th style="min-width: 120px;">Source Code</th>
+          <th style="min-width: 120px;">Default Service</th>
+          <th style="min-width: 140px;">Allowed Services</th>
+          <th style="min-width: 110px;">Status</th>
+          <th style="min-width: 180px;">API Key</th>
+          <th style="min-width: 180px;">Allowed Origins</th>
+          <th style="min-width: 100px; text-align: center;">Submissions</th>
+          <th style="min-width: 140px;">Last Activity</th>
+          <th style="min-width: 250px; text-align: right;">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for source in sources %}
         <tr>
           <td>
-            <a class="text-link" href="{% url 'web:website-integration-detail' source.pk %}">
-              <strong>{{ source.name }}</strong>
-            </a>
+            <div class="source-title-cell">
+              <a href="{% url 'web:website-integration-detail' source.pk %}">
+                <strong>{{ source.name }}</strong>
+              </a>
+              <small>ID: #{{ source.pk }}</small>
+            </div>
           </td>
           <td>
-            <code>{{ source.code }}</code>
+            <span class="code-badge">{{ source.code }}</span>
           </td>
           <td>
             {% if source.default_service %}
-            <span class="badge">{{ source.default_service.code }}</span>
+            <span class="service-chip">{{ source.default_service.code }}</span>
             {% else %}
             <span class="muted">—</span>
             {% endif %}
@@ -83,63 +201,83 @@
           <td>
             <div style="display: flex; gap: 4px; flex-wrap: wrap;">
               {% for svc in source.allowed_services.all %}
-              <span class="badge ghost">{{ svc.code }}</span>
+              <span class="service-chip ghost">{{ svc.code }}</span>
               {% empty %}
-              <span class="muted">—</span>
+              <span class="muted" style="font-size: 11px;">None</span>
               {% endfor %}
             </div>
           </td>
           <td>
             {% if source.is_active %}
-            <span class="badge interested">Active</span>
+            <span class="status-badge active">
+              <span class="dot"></span>
+              Active
+            </span>
             {% else %}
-            <span class="badge not_interested">Inactive</span>
+            <span class="status-badge inactive">
+              <span class="dot"></span>
+              Inactive
+            </span>
             {% endif %}
           </td>
           <td>
-            <code style="font-size: 11px; letter-spacing: 0.5px;">{{ source.api_key_masked }}</code>
+            <div class="api-key-box" title="API Key snippet">
+              <span>{{ source.api_key_masked }}</span>
+              <button type="button" class="icon-button" style="padding: 2px 4px; font-size: 11px;" onclick="navigator.clipboard.writeText('{{ source.api_key_masked }}'); alert('Masked key reference copied.');" title="Copy key reference">
+                📋
+              </button>
+            </div>
           </td>
           <td>
             {% if source.allowed_origins %}
             <div style="display: flex; flex-direction: column; gap: 2px;">
               {% for origin in source.allowed_origins %}
-              <span style="font-size: 11px; font-family: monospace;">{{ origin }}</span>
+              <span class="domain-origin-tag" title="{{ origin }}">{{ origin }}</span>
               {% endfor %}
             </div>
             {% else %}
-            <span class="muted" title="Server-to-server only (no browser Origin restrictions)">Any (server-side)</span>
+            <span class="muted" style="font-size: 11px;" title="Server-to-server only (no browser Origin restrictions)">Any (server-side)</span>
             {% endif %}
           </td>
-          <td>
-            <strong>{{ source.submission_count }}</strong>
+          <td style="text-align: center;">
+            <span class="submission-stat-badge">{{ source.submission_count }}</span>
           </td>
           <td>
             {% if source.last_submitted_at %}
-            <span style="font-size: 12px;">{{ source.last_submitted_at|date:"d M Y, H:i" }}</span>
+            <span style="font-size: 12px; font-weight: 550;">{{ source.last_submitted_at|date:"d M Y" }}</span>
+            <small style="display: block; color: var(--muted); font-size: 11px;">{{ source.last_submitted_at|date:"H:i" }}</small>
             {% else %}
-            <span class="muted">Never</span>
+            <span class="muted" style="font-size: 11px;">Never</span>
             {% endif %}
           </td>
-          <td>
-            <div class="actions" style="gap: 6px;">
-              <a class="button small" href="{% url 'web:website-integration-detail' source.pk %}">Manage</a>
-              <a class="button small" href="{% url 'web:website-integration-edit' source.pk %}">Edit</a>
-              <form method="post" action="{% url 'web:website-integration-toggle-active' source.pk %}" style="display:inline;">
+          <td style="text-align: right;">
+            <div class="table-actions-group">
+              <a class="table-btn" href="{% url 'web:website-integration-detail' source.pk %}">
+                <span>Manage</span>
+              </a>
+              <a class="table-btn" href="{% url 'web:website-integration-edit' source.pk %}">
+                <span>Edit</span>
+              </a>
+              <form method="post" action="{% url 'web:website-integration-toggle-active' source.pk %}" style="display:inline; margin: 0;">
                 {% csrf_token %}
-                <button class="button small" type="submit">
+                <button class="table-btn toggle-btn {% if source.is_active %}deactivate{% else %}activate{% endif %}" type="submit">
                   {% if source.is_active %}Deactivate{% else %}Activate{% endif %}
                 </button>
               </form>
-              <form method="post" action="{% url 'web:website-integration-regenerate-key' source.pk %}" style="display:inline;" onsubmit="return confirm('Regenerating this API key will immediately invalidate the existing key. Any website using the old key will stop working until updated. Continue?');">
+              <form method="post" action="{% url 'web:website-integration-regenerate-key' source.pk %}" style="display:inline; margin: 0;" onsubmit="return confirm('Regenerating this API key will immediately invalidate the existing key. Any website using the old key will stop working until updated. Continue?');">
                 {% csrf_token %}
-                <button class="button small" type="submit" style="color: var(--danger, #f43f5e);">Regen Key</button>
+                <button class="table-btn regen-btn" type="submit">Regen</button>
               </form>
             </div>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="10" class="empty">No website integrations configured yet. Click "+ Add website" to connect your first web form.</td>
+          <td colspan="10" style="padding: 40px 20px; text-align: center;">
+            <p style="font-size: 14px; font-weight: 600; margin-bottom: 6px; color: var(--text);">No website integrations found.</p>
+            <p class="muted" style="font-size: 12px; margin: 0 0 14px 0;">Try adjusting your filter keywords or create your first website integration.</p>
+            <a class="action-add-btn" href="{% url 'web:website-integration-create' %}" style="display: inline-flex;">+ Add website</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -147,4 +285,3 @@
   </div>
 </section>
 {% endblock %}
-

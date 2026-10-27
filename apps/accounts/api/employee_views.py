@@ -226,16 +226,19 @@ class AdminEmployeeCapabilityView(APIView):
         if 'can_act_as_counselor' in request.data:
             target.can_act_as_counselor = bool(request.data['can_act_as_counselor'])
             updated_fields.append('can_act_as_counselor')
+        if 'can_contact_via_message' in request.data:
+            target.can_contact_via_message = bool(request.data['can_contact_via_message'])
+            updated_fields.append('can_contact_via_message')
 
         if not updated_fields:
-            return Response({'detail': 'Provide can_act_as_caller and/or can_act_as_counselor.'}, status=400)
+            return Response({'detail': 'Provide can_act_as_caller, can_act_as_counselor, and/or can_contact_via_message.'}, status=400)
 
         target.save(update_fields=updated_fields + ['updated_at'])
         AuditEvent.objects.create(
             actor=request.user,
             category='EMPLOYEE',
             description=(f'Updated capabilities for employee #{target.pk} ({target.username}): '
-                         f'caller={target.can_act_as_caller}, counselor={target.can_act_as_counselor}')
+                         f'caller={target.can_act_as_caller}, counselor={target.can_act_as_counselor}, message_contact={target.can_contact_via_message}')
         )
         return Response({
             'detail': 'Employee capabilities updated.',

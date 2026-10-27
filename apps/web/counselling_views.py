@@ -58,9 +58,11 @@ def meeting_links(notes):
 def counselling_list(request):
     form = CounsellingFilterForm(request.GET)
     query = Counselling.objects.select_related('lead', 'caller').order_by('-conducted_at', '-pk')
+    active_filters_count = 0
     if form.is_valid():
         data = form.cleaned_data
-        if data['q']:
+        if data.get('q'):
+            active_filters_count += 1
             search = data['q']
             query = query.filter(
                 Q(lead__name__icontains=search) | Q(lead__phone__icontains=search)
@@ -69,22 +71,48 @@ def counselling_list(request):
                 | Q(caller__first_name__icontains=search) | Q(caller__last_name__icontains=search)
                 | Q(caller__username__icontains=search) | Q(notes__icontains=search)
                 | Q(college__icontains=search) | Q(course__icontains=search))
-        if data['caller']:
+        if data.get('caller'):
+            active_filters_count += 1
             query = query.filter(caller=data['caller'])
-        if data['counselling_type']:
+        if data.get('counselling_type'):
+            active_filters_count += 1
             query = query.filter(counselling_type=data['counselling_type'])
-        if data['channel']:
+        if data.get('channel'):
+            active_filters_count += 1
             query = query.filter(lead__isnull=data['channel'] == 'external')
-        if data['start_date']:
+        if data.get('start_date'):
+            active_filters_count += 1
             query = query.filter(conducted_at__date__gte=data['start_date'])
-        if data['end_date']:
+        if data.get('end_date'):
+            active_filters_count += 1
             query = query.filter(conducted_at__date__lte=data['end_date'])
     else:
         query = query.none()
+
+    total_sessions = query.count()
+    lead_sessions = query.filter(lead__isnull=False).count()
+    ext_sessions = query.filter(lead__isnull=True).count()
+    online_sessions = query.filter(counselling_type__in=['GOOGLE_MEET', 'ONLINE', 'PHONE']).count()
+
+    metrics = [
+        {'label': 'Total Sessions', 'value': total_sessions, 'pill': 'Conducted', 'desc': 'All student consultations'},
+        {'label': 'CRM Lead Students', 'value': lead_sessions, 'pill': 'Pipeline', 'desc': 'Registered lead inquiries'},
+        {'label': 'External Visitors', 'value': ext_sessions, 'pill': 'Walk-in', 'desc': 'Direct walk-ins / external'},
+        {'label': 'Online / Meet Sessions', 'value': online_sessions, 'pill': 'Digital', 'desc': 'Virtual & phone guidance'},
+    ]
+
     records = paginate(request, query)
     for record in records:
         record.meeting_links = meeting_links(record.notes)
-    return page(request, 'counselling', 'counselling', filter_form=form, records=records)
+    return page(
+        request,
+        'counselling',
+        'counselling',
+        filter_form=form,
+        records=records,
+        active_filters_count=active_filters_count,
+        metrics=metrics,
+    )
 
 
 @workspace(management=True)

@@ -19,20 +19,57 @@ from .workforce_views import ADMINS, roles
 @roles(ADMINS)
 @require_GET
 def apostilles(request):
-    query = Apostille.objects.select_related('lead', 'caller')
+    query = Apostille.objects.select_related('lead', 'caller').order_by('-created_at')
     search = request.GET.get('q', '').strip()
+    caller = request.GET.get('caller', '').strip()
+    candidate_type = request.GET.get('candidate_type', '').strip()
+    active_filters_count = 0
+
     if search:
-        query = query.filter(Q(name__icontains=search) | Q(phone__icontains=search) |
-                             Q(lead__name__icontains=search) | Q(lead__phone__icontains=search) | Q(country__icontains=search))
-    caller = request.GET.get('caller', '')
-    candidate_type = request.GET.get('candidate_type', '')
+        active_filters_count += 1
+        query = query.filter(
+            Q(name__icontains=search)
+            | Q(phone__icontains=search)
+            | Q(lead__name__icontains=search)
+            | Q(lead__phone__icontains=search)
+            | Q(country__icontains=search)
+        )
     if caller:
+        active_filters_count += 1
         query = query.filter(caller_id=caller) if caller.isdigit() else query.none()
     if candidate_type:
+        active_filters_count += 1
         query = query.filter(candidate_type=candidate_type)
-    return page(request, 'apostilles', 'apostilles', records=paginate(request, query), search=search,
-                callers=User.objects.filter(role='CALLER').order_by('first_name', 'username'),
-                selected_caller=caller, selected_type=candidate_type, candidate_types=Apostille.CandidateType.choices)
+
+    total_apostilles = query.count()
+    aggregates = query.aggregate(
+        total_docs=Sum('number_of_documents'),
+        total_amount=Sum('amount_received'),
+    )
+    total_docs = aggregates['total_docs'] or 0
+    total_amount = aggregates['total_amount'] or Decimal('0.00')
+    total_points = sum(calculate_apostille_points(amt) for amt in query.values_list('amount_received', flat=True))
+
+    metrics = [
+        {'label': 'Total Apostilles', 'value': total_apostilles, 'pill': 'Processed', 'desc': 'Candidate dossiers'},
+        {'label': 'Total Documents', 'value': total_docs, 'pill': 'Documents', 'desc': 'Attested & legalized'},
+        {'label': 'Revenue Received', 'value': f'₹{total_amount:,.2f}', 'pill': 'Payments', 'desc': 'Gross service revenue'},
+        {'label': 'Points Awarded', 'value': total_points, 'pill': 'Incentives', 'desc': 'Caller incentive points'},
+    ]
+
+    return page(
+        request,
+        'apostilles',
+        'apostilles',
+        records=paginate(request, query),
+        search=search,
+        callers=User.objects.filter(role='CALLER').order_by('first_name', 'username'),
+        selected_caller=caller,
+        selected_type=candidate_type,
+        candidate_types=Apostille.CandidateType.choices,
+        active_filters_count=active_filters_count,
+        metrics=metrics,
+    )
 
 
 @roles(ADMINS)

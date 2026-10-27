@@ -1,17 +1,17 @@
 from django.contrib import messages
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Max, Q, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from apps.leads.models import WebsiteLeadSubmission, WebsiteSource
+from apps.leads.models import Service, WebsiteLeadSubmission, WebsiteSource
 from .forms import WebsiteSourceForm
 from .views import page, workspace
 
 
 @workspace(management=True)
 def website_integrations_list(request):
-    sources = (
+    base_sources = (
         WebsiteSource.objects.select_related("default_service")
         .prefetch_related("allowed_services")
         .annotate(
@@ -21,20 +21,64 @@ def website_integrations_list(request):
         .order_by("-is_active", "name", "pk")
     )
 
-    total_sources = sources.count()
-    active_sources = sum(1 for s in sources if s.is_active)
-    inactive_sources = total_sources - active_sources
-    total_submissions = WebsiteLeadSubmission.objects.count()
+    q = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "").strip()
+    service_filter = request.GET.get("service", "").strip()
+    tab = request.GET.get("tab", "all").strip()
+
+    # Prioritize tab if status isn't explicitly set
+    if not status_filter and tab in ("active", "inactive"):
+        status_filter = tab
+
+    scoped_sources = base_sources
+    if q:
+        scoped_sources = scoped_sources.filter(
+            Q(name__icontains=q)
+            | Q(code__icontains=q)
+        )
+
+    if service_filter:
+        scoped_sources = scoped_sources.filter(
+            Q(default_service__code=service_filter)
+            | Q(allowed_services__code=service_filter)
+        ).distinct()
+
+    # Dynamic metrics calculated on the scoped/filtered queryset
+    total_sources = scoped_sources.count()
+    active_sources = scoped_sources.filter(is_active=True).count()
+    inactive_sources = scoped_sources.filter(is_active=False).count()
+    total_submissions = scoped_sources.aggregate(total=Sum("submission_count"))["total"] or 0
+
+    # Display list filtered by status/tab
+    display_sources = scoped_sources
+    if status_filter == "active":
+        display_sources = scoped_sources.filter(is_active=True)
+    elif status_filter == "inactive":
+        display_sources = scoped_sources.filter(is_active=False)
+
+    active_filters_count = sum([
+        bool(q),
+        bool(service_filter),
+        bool(status_filter and status_filter != "all"),
+    ])
+
+    all_services = Service.objects.all().order_by("name")
 
     return page(
         request,
         "website_integrations",
         "website-integrations",
-        sources=sources,
+        sources=display_sources,
         total_sources=total_sources,
         active_sources=active_sources,
         inactive_sources=inactive_sources,
         total_submissions=total_submissions,
+        all_services=all_services,
+        search_query=q,
+        selected_status=status_filter,
+        selected_service=service_filter,
+        selected_tab=tab,
+        active_filters_count=active_filters_count,
     )
 
 
