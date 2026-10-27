@@ -71,6 +71,7 @@ def user_data(user):
         'role': user.role,
         'needs_onboarding': needs_onboarding(user),
         'can_manage_apostille_leads': is_apostille_caller(user),
+        'can_contact_via_message': getattr(user, 'can_contact_via_message', False),
     }
     try:
         from apps.accounts import capabilities
@@ -79,6 +80,7 @@ def user_data(user):
             'counselor': capabilities.is_counselor_capable(user),
             'dual_role': capabilities.is_dual_role(user),
             'admin': user.role in {'ADMIN', 'SUPER_ADMIN'},
+            'can_contact_via_message': getattr(user, 'can_contact_via_message', False),
         }
     except (ImportError, AttributeError):
         pass
@@ -118,6 +120,10 @@ class MobileVerifyLoginView(PublicAuthView):
             consent = serializers.BooleanField(default=False)
             latitude = serializers.FloatField(required=False, allow_null=True)
             longitude = serializers.FloatField(required=False, allow_null=True)
+            accuracy = serializers.FloatField(required=False, allow_null=True)
+            recorded_at = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+            timestamp = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+            is_mocked = serializers.BooleanField(required=False, default=False)
             login_remark = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
         data = Input(data=request.data)
         data.is_valid(raise_exception=True)
@@ -161,6 +167,60 @@ class MobileVerifyLoginView(PublicAuthView):
                 return Response({'detail': 'Your photo did not match your approved photo. Please sign in again and retake it in good light.'}, status=403)
             if LeaveRequest.objects.filter(employee=user, status='APPROVED', start_date__lte=timezone.localdate(), end_date__gte=timezone.localdate()).exists():
                 return Response({'detail': 'You have approved leave today. Contact your administrator before checking in.'}, status=409)
+
+        # Geofence enforcement for employee login
+        is_admin_user = (
+            getattr(user, "role", None) in [User.Role.SUPER_ADMIN, User.Role.ADMIN] or
+            getattr(user, "is_superuser", False)
+        )
+        if not is_admin_user:
+            from apps.activity.policy_services import (
+                ProtectedAction,
+                PolicyValidationError,
+                evaluate_protected_action,
+                get_active_policy_exception,
+                parse_and_validate_gps_reading,
+            )
+            from apps.activity.models import PolicyException
+
+            gps_reading = None
+            lat = values.get('latitude')
+            lon = values.get('longitude')
+            acc = values.get('accuracy')
+            rec_str = values.get('recorded_at') or values.get('timestamp')
+            is_mock = values.get('is_mocked', False)
+
+            if lat is not None and lon is not None:
+                try:
+                    gps_reading = parse_and_validate_gps_reading(
+                        latitude=lat,
+                        longitude=lon,
+                        accuracy=acc if acc is not None else 999.0,
+                        recorded_at=rec_str or now,
+                        is_mocked=is_mock,
+                        now=now,
+                    )
+                except PolicyValidationError as pve:
+                    if not get_active_policy_exception(user, PolicyException.RuleType.LOGIN_GEOFENCE, at_time=now):
+                        return Response({
+                            'detail': pve.message,
+                            'code': pve.code,
+                            **getattr(pve, 'extra', {}),
+                        }, status=422)
+
+            res = evaluate_protected_action(
+                user=user,
+                action=ProtectedAction.LOGIN,
+                gps_reading=gps_reading,
+                now=now,
+            )
+            if not res.permitted:
+                return Response({
+                    'detail': res.error_message,
+                    'code': res.error_code,
+                    'distance_meters': getattr(res.geofence_result, 'distance_meters', None),
+                }, status=422)
+
         close_open_sessions(user, now)
         if verification or face_exempt:
             attendance, _ = Attendance.objects.get_or_create(employee=user, date=timezone.localdate(), defaults={'checked_in': now, 'login_remark': login_remark})
@@ -220,6 +280,45 @@ class MobileSessionView(APIView):
             return Response({'detail': 'Session has ended.'}, status=409)
         now = timezone.now()
         if event['action'] == 'logout':
+            is_admin_user = (
+                getattr(request.user, "role", None) in [User.Role.SUPER_ADMIN, User.Role.ADMIN] or
+                getattr(request.user, "is_superuser", False)
+            )
+            # 8-hour work duration enforcement on employee logout
+            if not is_admin_user:
+                from apps.activity.models import WorkSession, PolicyException
+                from apps.activity.policy_services import (
+                    calculate_persisted_net_work_seconds,
+                    get_active_policy_exception,
+                    MIN_NET_WORK_SECONDS,
+                )
+                work_session = WorkSession.objects.filter(
+                    user=request.user,
+                    status__in=[WorkSession.Status.ACTIVE, WorkSession.Status.PAUSED],
+                ).first()
+                if work_session:
+                    net_secs = calculate_persisted_net_work_seconds(work_session, now=now)
+                    has_duration_exc = get_active_policy_exception(
+                        request.user, PolicyException.RuleType.MIN_DURATION, at_time=now
+                    )
+                    if not has_duration_exc and net_secs < MIN_NET_WORK_SECONDS:
+                        shortfall = MIN_NET_WORK_SECONDS - net_secs
+                        hours_done = net_secs // 3600
+                        mins_done = (net_secs % 3600) // 60
+                        hours_rem = shortfall // 3600
+                        mins_rem = (shortfall % 3600) // 60
+                        return Response({
+                            "detail": (
+                                f"Logout blocked: Minimum 8 hours net work time required before signing out. "
+                                f"Completed: {hours_done}h {mins_done}m ({hours_rem}h {mins_rem}m remaining). "
+                                "An approved administrator exception is required to sign out early."
+                            ),
+                            "code": "INSUFFICIENT_WORK_DURATION",
+                            "net_seconds": net_secs,
+                            "required_seconds": MIN_NET_WORK_SECONDS,
+                            "shortfall_seconds": shortfall,
+                        }, status=422)
+
             try:
                 from apps.activity.services import close_session_for_logout
                 close_session_for_logout(request.user, logout_time=now)

@@ -116,6 +116,23 @@ class CounselorLoginAuthenticationTests(TestCase):
 
     # 6. Mobile Counselor login succeeds with username and password only (no face verification required)
     def test_mobile_counselor_login_succeeds_without_face_verification(self):
+        from decimal import Decimal
+        from apps.activity.models import OfficeLocation, EmployeeOfficeAssignment
+
+        office = OfficeLocation.objects.create(
+            name="HQ Office",
+            code="HQ_COUNSELOR_LOGIN_TEST",
+            latitude=Decimal("28.613900"),
+            longitude=Decimal("77.209000"),
+            radius_meters=50,
+            is_active=True,
+        )
+        EmployeeOfficeAssignment.objects.create(
+            user=self.counselor,
+            office=office,
+            is_primary=True,
+        )
+
         login_res = self.api_client.post(
             '/api/v1/mobile/login/',
             {'username': 'counselor_user', 'password': 'ValidPassword123!'},
@@ -129,7 +146,13 @@ class CounselorLoginAuthenticationTests(TestCase):
         challenge_id = login_res.data['challenge']
         verify_res = self.api_client.post(
             '/api/v1/mobile/login/verify/',
-            {'challenge': challenge_id, 'login_remark': 'Morning check-in'},
+            {
+                'challenge': challenge_id,
+                'login_remark': 'Morning check-in',
+                'latitude': 28.613900,
+                'longitude': 77.209000,
+                'accuracy': 10.0,
+            },
             format='json',
         )
         self.assertEqual(verify_res.status_code, 200)

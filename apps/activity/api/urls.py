@@ -9,6 +9,9 @@ from .views import (
     CurrentActivityView,
     EndActivityView,
     PauseActivityView,
+    PolicyExceptionApproveView,
+    PolicyExceptionListView,
+    PolicyExceptionRevokeView,
     ResumeActivityView,
     SwitchActivityView,
 )
@@ -21,5 +24,8 @@ urlpatterns = [
     path("switch/", SwitchActivityView.as_view(), name="mobile-activity-switch"),
     path("end/", EndActivityView.as_view(), name="mobile-activity-end"),
     path("history/", ActivityHistoryView.as_view(), name="mobile-activity-history"),
+    path("exceptions/", PolicyExceptionListView.as_view(), name="mobile-activity-exceptions"),
+    path("exceptions/<uuid:pk>/approve/", PolicyExceptionApproveView.as_view(), name="mobile-activity-exception-approve"),
+    path("exceptions/<uuid:pk>/revoke/", PolicyExceptionRevokeView.as_view(), name="mobile-activity-exception-revoke"),
 ]
 

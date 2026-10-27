@@ -14,6 +14,27 @@ class CounselorLoginTests(TestCase):
         self.user = User.objects.create_user('counselor-login', password='secret-password', role='COUNSELOR')
         self.api = APIClient()
 
+        from decimal import Decimal
+        from apps.activity.models import OfficeLocation, EmployeeOfficeAssignment
+        self.office = OfficeLocation.objects.create(
+            name="HQ Office",
+            code="HQ_COUNSELOR_EXEMPT_TEST",
+            latitude=Decimal("28.613900"),
+            longitude=Decimal("77.209000"),
+            radius_meters=50,
+            is_active=True,
+        )
+        EmployeeOfficeAssignment.objects.create(
+            user=self.user,
+            office=self.office,
+            is_primary=True,
+        )
+        self.gps_payload = {
+            'latitude': 28.613900,
+            'longitude': 77.209000,
+            'accuracy': 10.0,
+        }
+
     def begin(self, **extra):
         return self.api.post('/api/v1/mobile/login/', dict(username=self.user.username, password='secret-password', **extra), format='json')
 
@@ -23,14 +44,14 @@ class CounselorLoginTests(TestCase):
         AttendancePhotoRequest.objects.create(employee=self.user, action='ENROLL', photo=b'old')
         first = self.begin(); self.assertEqual(first.status_code, 200)
         self.assertFalse(first.data['photo_required'])
-        response = self.api.post('/api/v1/mobile/login/verify/', {'challenge': first.data['challenge']}, format='json')
+        response = self.api.post('/api/v1/mobile/login/verify/', {'challenge': first.data['challenge'], **self.gps_payload}, format='json')
         self.assertEqual(response.status_code, 200, response.data)
         self.assertFalse(response.data['user']['needs_onboarding'])
         self.assertTrue(CallerSession.objects.filter(caller=self.user, verified_at__isnull=False).exists())
         photo.assert_not_called(); verify.assert_not_called()
         self.api.credentials(HTTP_AUTHORIZATION='Token ' + response.data['token'])
         self.assertEqual(self.api.get('/api/v1/mobile/me/').status_code, 200)
-        self.assertEqual(self.api.post('/api/v1/mobile/login/verify/', {'challenge': first.data['challenge']}).status_code, 404)
+        self.assertEqual(self.api.post('/api/v1/mobile/login/verify/', {'challenge': first.data['challenge'], **self.gps_payload}).status_code, 404)
         self.assertEqual(self.api.post('/api/v1/mobile/session/', {'action': 'logout', 'session_id': response.data['session_id']}).status_code, 200)
         self.assertEqual(self.api.get('/api/v1/mobile/me/').status_code, 401)
 

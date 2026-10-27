@@ -3,6 +3,7 @@ Comprehensive test suite for Vaani Activity Tracking Phase 2:
 Authentication Integration and Mobile API Endpoints.
 """
 from datetime import datetime, timedelta
+from decimal import Decimal
 from unittest.mock import patch
 import zoneinfo
 
@@ -17,6 +18,9 @@ from apps.activity.models import (
     ActivityBreak,
     ActivityCategory,
     BreakReasonConfig,
+    EmployeeOfficeAssignment,
+    OfficeLocation,
+    PolicyException,
     WorkActivitySegment,
     WorkSession,
 )
@@ -55,6 +59,21 @@ class MobileActivityApiTestCase(TestCase):
             caller=self.other_user,
             verified_at=timezone.now(),
             expires_at=timezone.now() + timedelta(hours=8),
+        )
+
+        # Assigned authorized office
+        self.office = OfficeLocation.objects.create(
+            name="HQ Office",
+            code="HQ",
+            latitude=Decimal("28.613900"),
+            longitude=Decimal("77.209000"),
+            radius_meters=50,
+            is_active=True,
+        )
+        EmployeeOfficeAssignment.objects.create(
+            user=self.user,
+            office=self.office,
+            is_primary=True,
         )
 
         # Categories
@@ -338,12 +357,21 @@ class MobileActivityApiTestCase(TestCase):
     # -----------------------------------------------------------------------
 
     def test_end_activity_session_does_not_invalidate_token_or_attendance(self):
-        t0 = timezone.now() - timedelta(hours=2)
+        t0 = timezone.now() - timedelta(hours=8, minutes=5)
         attendance = Attendance.objects.create(employee=self.user, date=timezone.localdate(t0), checked_in=t0)
         session = WorkSession.objects.create(user=self.user, attendance=attendance, status=WorkSession.Status.ACTIVE, started_at=t0)
         WorkActivitySegment.objects.create(session=session, category=self.cat_calling, started_at=t0)
 
-        res = self.client.post("/api/v1/mobile/activity/end/", {}, format="json", **self.auth_headers())
+        res = self.client.post(
+            "/api/v1/mobile/activity/end/",
+            {
+                "latitude": 28.613900,
+                "longitude": 77.209000,
+                "accuracy": 10.0,
+            },
+            format="json",
+            **self.auth_headers(),
+        )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["session"]["status"], "COMPLETED")
         self.assertEqual(res.data["session"]["closure_reason"], "MANUAL")
@@ -400,6 +428,7 @@ class LoginLogoutIntegrationTestCase(TestCase):
         self.client = APIClient()
         self.user = User.objects.create_user(
             username="caller_login_test",
+            password="testpassword123",
             role=User.Role.CALLER,
             can_act_as_caller=True,
         )
@@ -409,6 +438,24 @@ class LoginLogoutIntegrationTestCase(TestCase):
             is_active=True,
             is_default_for_caller=True,
         )
+        self.office = OfficeLocation.objects.create(
+            name="HQ Login Office",
+            code="HQ_LOGIN",
+            latitude=Decimal("28.613900"),
+            longitude=Decimal("77.209000"),
+            radius_meters=50,
+            is_active=True,
+        )
+        EmployeeOfficeAssignment.objects.create(
+            user=self.user,
+            office=self.office,
+            is_primary=True,
+        )
+        self.gps_payload = {
+            "latitude": 28.613900,
+            "longitude": 77.209000,
+            "accuracy": 10.0,
+        }
 
     @patch("apps.accounts.capabilities.is_face_verification_exempt", return_value=True)
     def test_successful_login_starts_work_session(self, mock_exempt):
@@ -420,7 +467,7 @@ class LoginLogoutIntegrationTestCase(TestCase):
 
         res = self.client.post(
             "/api/v1/mobile/login/verify/",
-            {"challenge": str(challenge.pk), "consent": True},
+            {"challenge": str(challenge.pk), "consent": True, **self.gps_payload},
             format="json",
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -435,14 +482,14 @@ class LoginLogoutIntegrationTestCase(TestCase):
     @patch("apps.accounts.capabilities.is_face_verification_exempt", return_value=True)
     def test_repeated_login_reuses_existing_session_without_resetting_start_time(self, mock_exempt):
         challenge1 = AttendancePhotoChallenge.objects.create(employee=self.user, action="IN")
-        self.client.post("/api/v1/mobile/login/verify/", {"challenge": str(challenge1.pk)}, format="json")
+        self.client.post("/api/v1/mobile/login/verify/", {"challenge": str(challenge1.pk), **self.gps_payload}, format="json")
 
         session1 = WorkSession.objects.get(user=self.user, status=WorkSession.Status.ACTIVE)
         original_started_at = session1.started_at
 
         # Second login on same day (e.g. app reopened)
         challenge2 = AttendancePhotoChallenge.objects.create(employee=self.user, action="IN")
-        self.client.post("/api/v1/mobile/login/verify/", {"challenge": str(challenge2.pk)}, format="json")
+        self.client.post("/api/v1/mobile/login/verify/", {"challenge": str(challenge2.pk), **self.gps_payload}, format="json")
 
         session2 = WorkSession.objects.get(user=self.user, status=WorkSession.Status.ACTIVE)
         self.assertEqual(session1.id, session2.id)
@@ -457,7 +504,7 @@ class LoginLogoutIntegrationTestCase(TestCase):
         self.cat_calling.save()
 
         challenge = AttendancePhotoChallenge.objects.create(employee=self.user, action="IN")
-        res = self.client.post("/api/v1/mobile/login/verify/", {"challenge": str(challenge.pk)}, format="json")
+        res = self.client.post("/api/v1/mobile/login/verify/", {"challenge": str(challenge.pk), **self.gps_payload}, format="json")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn("token", res.data)
 
@@ -467,11 +514,18 @@ class LoginLogoutIntegrationTestCase(TestCase):
     @patch("apps.accounts.capabilities.is_face_verification_exempt", return_value=True)
     def test_logout_closes_activity_session_and_cleans_token(self, mock_exempt):
         challenge = AttendancePhotoChallenge.objects.create(employee=self.user, action="IN")
-        login_res = self.client.post("/api/v1/mobile/login/verify/", {"challenge": str(challenge.pk)}, format="json")
+        login_res = self.client.post("/api/v1/mobile/login/verify/", {"challenge": str(challenge.pk), **self.gps_payload}, format="json")
         token_key = login_res.data["token"]
         session_id = login_res.data["session_id"]
 
         work_session = WorkSession.objects.get(user=self.user, status=WorkSession.Status.ACTIVE)
+        t_start = timezone.now() - timedelta(hours=8, minutes=5)
+        work_session.started_at = t_start
+        work_session.save(update_fields=["started_at"])
+        seg = work_session.segments.first()
+        if seg:
+            seg.started_at = t_start
+            seg.save(update_fields=["started_at"])
 
         # Explicit logout
         logout_res = self.client.post(
@@ -504,7 +558,7 @@ class LoginLogoutIntegrationTestCase(TestCase):
         )
         res = self.client.post(
             "/api/v1/mobile/login/verify/",
-            {"challenge": str(challenge.pk), "consent": True},
+            {"challenge": str(challenge.pk), "consent": True, **self.gps_payload},
             format="json",
         )
         self.assertEqual(res.status_code, status.HTTP_200_OK)

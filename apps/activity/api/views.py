@@ -243,6 +243,62 @@ class ResumeActivityView(BaseActivityView):
             if not category:
                 return Response({"detail": "Invalid or inactive target category."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Geofence validation on resuming breaks that require it (e.g. Lunch when configured)
+        open_break = session.breaks.filter(ended_at__isnull=True).select_related("reason_config").first()
+        is_admin_user = (
+            getattr(request.user, "role", None) in ["SUPER_ADMIN", "ADMIN"] or
+            getattr(request.user, "is_superuser", False)
+        )
+        if open_break and open_break.reason_config and open_break.reason_config.requires_geofence_resume:
+            if not is_admin_user:
+                from apps.activity.policy_services import (
+                    ProtectedAction,
+                    PolicyValidationError,
+                    evaluate_protected_action,
+                    get_active_policy_exception,
+                    parse_and_validate_gps_reading,
+                )
+                from apps.activity.models import PolicyException
+
+                gps_reading = None
+                lat = data.get("latitude")
+                lon = data.get("longitude")
+                acc = data.get("accuracy")
+                rec_str = data.get("recorded_at") or data.get("timestamp")
+                is_mock = data.get("is_mocked", False)
+
+                if lat is not None and lon is not None:
+                    try:
+                        gps_reading = parse_and_validate_gps_reading(
+                            latitude=lat,
+                            longitude=lon,
+                            accuracy=acc if acc is not None else 999.0,
+                            recorded_at=rec_str or now,
+                            is_mocked=is_mock,
+                            now=now,
+                        )
+                    except PolicyValidationError as pve:
+                        if not get_active_policy_exception(request.user, PolicyException.RuleType.LUNCH_GEOFENCE, at_time=now):
+                            return Response({
+                                "detail": pve.message,
+                                "code": pve.code,
+                                **getattr(pve, "extra", {}),
+                            }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+                res = evaluate_protected_action(
+                    user=request.user,
+                    action=ProtectedAction.LUNCH_RESUME,
+                    gps_reading=gps_reading,
+                    session=session,
+                    now=now,
+                )
+                if not res.permitted:
+                    return Response({
+                        "detail": res.error_message,
+                        "code": res.error_code,
+                        "distance_meters": getattr(res.geofence_result, "distance_meters", None),
+                    }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
         session, segment = resume_work_session(
             session_id=session.id,
             user=request.user,
@@ -311,6 +367,66 @@ class EndActivityView(BaseActivityView):
         ).first()
         if not session:
             return Response({"detail": "No active or paused session to end."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Geofence & 8-hour net work duration validation on End Shift
+        is_admin_user = (
+            getattr(request.user, "role", None) in ["SUPER_ADMIN", "ADMIN"] or
+            getattr(request.user, "is_superuser", False)
+        )
+        if not is_admin_user:
+            from apps.activity.policy_services import (
+                ProtectedAction,
+                PolicyValidationError,
+                evaluate_protected_action,
+                get_active_policy_exception,
+                parse_and_validate_gps_reading,
+            )
+            from apps.activity.models import PolicyException
+
+            gps_reading = None
+            lat = data.get("latitude")
+            lon = data.get("longitude")
+            acc = data.get("accuracy")
+            rec_str = data.get("recorded_at") or data.get("timestamp")
+            is_mock = data.get("is_mocked", False)
+
+            if lat is not None and lon is not None:
+                try:
+                    gps_reading = parse_and_validate_gps_reading(
+                        latitude=lat,
+                        longitude=lon,
+                        accuracy=acc if acc is not None else 999.0,
+                        recorded_at=rec_str or now,
+                        is_mocked=is_mock,
+                        now=now,
+                    )
+                except PolicyValidationError as pve:
+                    if not get_active_policy_exception(request.user, PolicyException.RuleType.END_SHIFT_GEOFENCE, at_time=now):
+                        return Response({
+                            "detail": pve.message,
+                            "code": pve.code,
+                            **getattr(pve, "extra", {}),
+                        }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+            res = evaluate_protected_action(
+                user=request.user,
+                action=ProtectedAction.END_SHIFT,
+                gps_reading=gps_reading,
+                session=session,
+                now=now,
+            )
+            if not res.permitted:
+                shortfall = None
+                if res.required_work_seconds and res.net_work_seconds is not None:
+                    shortfall = max(0, res.required_work_seconds - res.net_work_seconds)
+                return Response({
+                    "detail": res.error_message,
+                    "code": res.error_code,
+                    "net_seconds": res.net_work_seconds,
+                    "required_seconds": res.required_work_seconds,
+                    "shortfall_seconds": shortfall,
+                    "distance_meters": getattr(res.geofence_result, "distance_meters", None),
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         closed_session = end_work_session(
             session_id=session.id,
@@ -525,4 +641,140 @@ class ActivityHistoryView(BaseActivityView):
             },
             "sessions": serialized_sessions,
         })
+
+
+class PolicyExceptionListView(BaseActivityView):
+    """
+    GET /api/v1/mobile/activity/exceptions/
+    POST /api/v1/mobile/activity/exceptions/
+    Lists policy exceptions or requests a new exception.
+    """
+    def get(self, request):
+        from apps.activity.models import PolicyException
+        from .serializers import PolicyExceptionSerializer
+
+        user = request.user
+        qs = PolicyException.objects.all().select_related("user", "approved_by", "requested_by")
+
+        is_admin = user.role in ["SUPER_ADMIN", "ADMIN"] or user.is_superuser
+        is_manager = user.role == "MANAGER"
+
+        if is_admin:
+            pass
+        elif is_manager:
+            from apps.accounts.models import User
+            team_ids = list(User.objects.filter(manager=user).values_list("id", flat=True))
+            team_ids.append(user.id)
+            qs = qs.filter(user_id__in=team_ids)
+        else:
+            qs = qs.filter(user=user)
+
+        user_filter = request.query_params.get("user_id")
+        if user_filter and is_admin:
+            qs = qs.filter(user_id=user_filter)
+
+        rule_filter = request.query_params.get("rule_type")
+        if rule_filter:
+            qs = qs.filter(rule_type=rule_filter)
+
+        return Response(PolicyExceptionSerializer(qs.order_by("-created_at")[:100], many=True).data)
+
+    def post(self, request):
+        from apps.activity.models import PolicyException
+        from apps.activity.policy_services import (
+            PolicyValidationError,
+            request_policy_exception,
+            approve_policy_exception,
+        )
+        from .serializers import (
+            PolicyExceptionSerializer,
+            RequestPolicyExceptionSerializer,
+        )
+
+        serializer = RequestPolicyExceptionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        target_user = request.user
+        if data.get("user_id"):
+            from apps.accounts.models import User
+            is_admin = request.user.role in ["SUPER_ADMIN", "ADMIN"] or request.user.is_superuser
+            is_manager = request.user.role == "MANAGER"
+            target = User.objects.filter(id=data["user_id"]).first()
+            if not target:
+                return Response({"detail": "Target user not found."}, status=status.HTTP_404_NOT_FOUND)
+            if not is_admin:
+                if is_manager and target.manager_id != request.user.id and target.id != request.user.id:
+                    return Response({"detail": "Managers can only request exceptions for their team members."}, status=status.HTTP_403_FORBIDDEN)
+                elif not is_manager and target.id != request.user.id:
+                    return Response({"detail": "Employees can only request exceptions for themselves."}, status=status.HTTP_403_FORBIDDEN)
+            target_user = target
+
+        try:
+            exc = request_policy_exception(
+                user=target_user,
+                rule_type=data["rule_type"],
+                reason=data["reason"],
+                valid_from=data["valid_from"],
+                valid_until=data["valid_until"],
+                requested_by=request.user,
+            )
+            # If an admin created it and requested auto-approval
+            if (request.user.role in ["SUPER_ADMIN", "ADMIN"] or request.user.is_superuser) and request.data.get("auto_approve"):
+                exc = approve_policy_exception(exc.id, approver=request.user)
+        except PolicyValidationError as pve:
+            return Response({"detail": pve.message, "code": pve.code}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(PolicyExceptionSerializer(exc).data, status=status.HTTP_201_CREATED)
+
+
+class PolicyExceptionApproveView(BaseActivityView):
+    """
+    POST /api/v1/mobile/activity/exceptions/<uuid:pk>/approve/
+    Strict permission: Only ADMIN and SUPER_ADMIN can approve.
+    """
+    def post(self, request, pk):
+        from apps.activity.policy_services import (
+            PolicyValidationError,
+            UnauthorizedApproverError,
+            approve_policy_exception,
+        )
+        from .serializers import PolicyExceptionSerializer
+
+        try:
+            exc = approve_policy_exception(exception_id=pk, approver=request.user)
+        except UnauthorizedApproverError as uae:
+            return Response({"detail": str(uae.message), "code": uae.code}, status=status.HTTP_403_FORBIDDEN)
+        except PolicyValidationError as pve:
+            return Response({"detail": pve.message, "code": pve.code}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(PolicyExceptionSerializer(exc).data)
+
+
+class PolicyExceptionRevokeView(BaseActivityView):
+    """
+    POST /api/v1/mobile/activity/exceptions/<uuid:pk>/revoke/
+    Strict permission: Only ADMIN and SUPER_ADMIN can revoke.
+    """
+    def post(self, request, pk):
+        from apps.activity.policy_services import (
+            PolicyValidationError,
+            UnauthorizedApproverError,
+            revoke_policy_exception,
+        )
+        from .serializers import PolicyExceptionSerializer
+
+        reason = request.data.get("reason", "").strip()
+        if not reason:
+            return Response({"detail": "A revocation reason is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            exc = revoke_policy_exception(exception_id=pk, revoker=request.user, revocation_reason=reason)
+        except UnauthorizedApproverError as uae:
+            return Response({"detail": str(uae.message), "code": uae.code}, status=status.HTTP_403_FORBIDDEN)
+        except PolicyValidationError as pve:
+            return Response({"detail": pve.message, "code": pve.code}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(PolicyExceptionSerializer(exc).data)
+
 

@@ -5,6 +5,9 @@ from .models import (
     ActivityBreak,
     ActivityLog,
     BreakReasonConfig,
+    EmployeeOfficeAssignment,
+    OfficeLocation,
+    PolicyException,
     WorkActivitySegment,
     WorkSession,
 )
@@ -51,10 +54,11 @@ class BreakReasonConfigAdmin(admin.ModelAdmin):
         "code",
         "warning_threshold_minutes",
         "requires_note",
+        "requires_geofence_resume",
         "is_active",
         "sort_order",
     )
-    list_filter = ("is_active", "requires_note")
+    list_filter = ("is_active", "requires_note", "requires_geofence_resume")
     search_fields = ("name", "code")
     ordering = ("sort_order", "name")
 
@@ -96,3 +100,41 @@ class WorkSessionAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
     inlines = [WorkActivitySegmentInline, ActivityBreakInline]
     ordering = ("-started_at",)
+
+
+@admin.register(OfficeLocation)
+class OfficeLocationAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "latitude", "longitude", "radius_meters", "is_active", "created_at")
+    list_filter = ("is_active",)
+    search_fields = ("name", "code")
+    readonly_fields = ("radius_meters", "created_at", "updated_at")
+    ordering = ("name",)
+
+
+@admin.register(EmployeeOfficeAssignment)
+class EmployeeOfficeAssignmentAdmin(admin.ModelAdmin):
+    list_display = ("user", "office", "is_primary", "is_active", "created_at")
+    list_filter = ("is_primary", "is_active", "office")
+    search_fields = ("user__username", "user__first_name", "user__last_name", "office__name", "office__code")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("-is_primary", "user__username")
+
+
+@admin.register(PolicyException)
+class PolicyExceptionAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "user",
+        "rule_type",
+        "is_approved",
+        "approved_by",
+        "valid_from",
+        "valid_until",
+        "is_active",
+        "revoked_at",
+    )
+    list_filter = ("rule_type", "is_approved", "is_active")
+    search_fields = ("user__username", "reason", "approved_by__username")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("-created_at",)
+
