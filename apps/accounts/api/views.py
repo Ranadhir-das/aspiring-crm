@@ -173,7 +173,8 @@ class MobileVerifyLoginView(PublicAuthView):
             getattr(user, "role", None) in [User.Role.SUPER_ADMIN, User.Role.ADMIN] or
             getattr(user, "is_superuser", False)
         )
-        if not is_admin_user:
+        from apps.activity.policy_services import is_gps_geofence_enforcement_enabled
+        if not is_admin_user and is_gps_geofence_enforcement_enabled():
             from apps.activity.policy_services import (
                 ProtectedAction,
                 PolicyValidationError,

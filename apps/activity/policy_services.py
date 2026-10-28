@@ -554,6 +554,15 @@ class ProtectedAction:
     LOGOUT = "LOGOUT"
 
 
+def is_gps_geofence_enforcement_enabled() -> bool:
+    """
+    Returns True if GPS quality and office geofence enforcement are active.
+    Can be disabled globally via settings.GPS_GEOFENCE_ENFORCEMENT_ENABLED
+    (e.g., during mobile app updates or transition periods).
+    """
+    return getattr(settings, "GPS_GEOFENCE_ENFORCEMENT_ENABLED", True)
+
+
 def evaluate_protected_action(
     user,
     action: str,
@@ -568,18 +577,20 @@ def evaluate_protected_action(
     """
     server_now = now or timezone.now()
 
+    gps_enforced = is_gps_geofence_enforcement_enabled()
+
     # Determine mapped rule types
     if action == ProtectedAction.LOGIN:
         rule_type = PolicyException.RuleType.LOGIN_GEOFENCE
-        geofence_required = True
+        geofence_required = gps_enforced
         duration_required = False
     elif action == ProtectedAction.LUNCH_RESUME:
         rule_type = PolicyException.RuleType.LUNCH_GEOFENCE
-        geofence_required = True
+        geofence_required = gps_enforced
         duration_required = False
     elif action == ProtectedAction.END_SHIFT:
         rule_type = PolicyException.RuleType.END_SHIFT_GEOFENCE
-        geofence_required = True
+        geofence_required = gps_enforced
         duration_required = True
     elif action == ProtectedAction.LOGOUT:
         rule_type = PolicyException.RuleType.MIN_DURATION

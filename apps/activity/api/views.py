@@ -250,7 +250,8 @@ class ResumeActivityView(BaseActivityView):
             getattr(request.user, "is_superuser", False)
         )
         if open_break and open_break.reason_config and open_break.reason_config.requires_geofence_resume:
-            if not is_admin_user:
+            from apps.activity.policy_services import is_gps_geofence_enforcement_enabled
+            if not is_admin_user and is_gps_geofence_enforcement_enabled():
                 from apps.activity.policy_services import (
                     ProtectedAction,
                     PolicyValidationError,
@@ -380,6 +381,7 @@ class EndActivityView(BaseActivityView):
                 evaluate_protected_action,
                 get_active_policy_exception,
                 parse_and_validate_gps_reading,
+                is_gps_geofence_enforcement_enabled,
             )
             from apps.activity.models import PolicyException
 
@@ -390,7 +392,7 @@ class EndActivityView(BaseActivityView):
             rec_str = data.get("recorded_at") or data.get("timestamp")
             is_mock = data.get("is_mocked", False)
 
-            if lat is not None and lon is not None:
+            if is_gps_geofence_enforcement_enabled() and lat is not None and lon is not None:
                 try:
                     gps_reading = parse_and_validate_gps_reading(
                         latitude=lat,

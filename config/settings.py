@@ -243,6 +243,11 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5_000_000
 FACE_MODEL_DIR = Path(env('FACE_MODEL_DIR', default=str(BASE_DIR / 'face_models')))
 FACE_MATCH_THRESHOLD = env.float('FACE_MATCH_THRESHOLD', default=0.363)
 
+# Global switch controlling office geofence & GPS quality enforcement for protected employee actions.
+# Set to False via GPS_GEOFENCE_ENFORCEMENT_ENABLED=False in .env to temporarily allow logins/resumes
+# without GPS or with degraded GPS signals. Defaults to True for security.
+GPS_GEOFENCE_ENFORCEMENT_ENABLED = env.bool('GPS_GEOFENCE_ENFORCEMENT_ENABLED', default=True)
+
 # Local dev default assumes caller-app is checked out as a sibling directory and built via
 # scripts/build-android.ps1. Override with a real path once a signed release APK is hosted
 # (see the deferred VPS deployment plan — this needs to move off local disk at deploy time).
