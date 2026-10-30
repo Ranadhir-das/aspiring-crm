@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -216,10 +216,20 @@ def calculate_daily_attendance_record(
         corr_id = correction_request.pk
         corr_status = correction_request.status
         if correction_request.status == AttendanceCorrectionRequest.Status.APPROVED:
-            has_duration_exception = True
-            exception_status = f"Approved Correction: {correction_request.get_request_type_display()}"
-            if correction_request.review_notes:
-                exception_notes = correction_request.review_notes
+            if correction_request.request_type == AttendanceCorrectionRequest.RequestType.LATE_ARRIVAL:
+                exception_status = "Approved Late Arrival"
+                if correction_request.review_notes:
+                    exception_notes = correction_request.review_notes
+            elif correction_request.request_type == AttendanceCorrectionRequest.RequestType.EARLY_SHIFT_END:
+                has_duration_exception = True
+                exception_status = "Approved Early Shift-End"
+                if correction_request.review_notes:
+                    exception_notes = correction_request.review_notes
+            else:
+                has_duration_exception = True
+                exception_status = f"Approved Correction: {correction_request.get_request_type_display()}"
+                if correction_request.review_notes:
+                    exception_notes = correction_request.review_notes
 
     # 4. Determine Status
     required_work_seconds = MIN_NET_WORK_SECONDS  # 28,800 (8h)
@@ -253,7 +263,12 @@ def calculate_daily_attendance_record(
     elif has_completed or (sessions and final_end):
         if total_net_seconds >= MIN_NET_WORK_SECONDS or has_duration_exception:
             status_code = "FULL_SHIFT"
-            status_label = "Full Shift Completed (8h+)" if total_net_seconds >= MIN_NET_WORK_SECONDS else "Full Shift (Exception Approved)"
+            if total_net_seconds >= MIN_NET_WORK_SECONDS:
+                status_label = "Full Shift Completed (8h+)"
+            elif correction_request and correction_request.request_type == AttendanceCorrectionRequest.RequestType.EARLY_SHIFT_END:
+                status_label = "Full Shift (Early End Approved)"
+            else:
+                status_label = "Full Shift (Exception Approved)"
             status_badge_class = "badge-success"
         else:
             status_code = "SHORT_SHIFT"
@@ -273,11 +288,13 @@ def calculate_daily_attendance_record(
         status_label = "Absent"
         status_badge_class = "badge-danger"
 
-    notes = ""
+    note_parts = []
     if legacy_attendance and legacy_attendance.login_remark:
-        notes = legacy_attendance.login_remark
-    elif sessions and sessions[0].admin_closure_note:
-        notes = sessions[0].admin_closure_note
+        note_parts.append(legacy_attendance.login_remark)
+    if sessions and sessions[0].admin_closure_note:
+        if sessions[0].admin_closure_note not in note_parts:
+            note_parts.append(sessions[0].admin_closure_note)
+    notes = " | ".join(note_parts)
 
     return AttendanceDayRecord(
         employee_id=employee.pk,
@@ -430,10 +447,16 @@ def get_attendance_records(
     for ex in exceptions_qs:
         exceptions_by_emp.setdefault(ex.user_id, []).append(ex)
 
-    # 8. Batch fetch AttendanceCorrectionRequests
+    # 8. Batch fetch AttendanceCorrectionRequests (prioritizing APPROVED)
     corrections_qs = AttendanceCorrectionRequest.objects.filter(
         employee_id__in=emp_ids, date__gte=start_date, date__lte=end_date
-    ).order_by("-created_at")
+    ).annotate(
+        priority=Case(
+            When(status=AttendanceCorrectionRequest.Status.APPROVED, then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
+    ).order_by("priority", "-created_at")
     corrections_by_emp_date: dict[tuple[int, date], AttendanceCorrectionRequest] = {}
     for cr in corrections_qs:
         key = (cr.employee_id, cr.date)

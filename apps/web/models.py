@@ -71,6 +71,8 @@ class AttendanceCorrectionRequest(models.Model):
         MISSED_START = "MISSED_START", "Missed Shift Start"
         WRONG_HOURS = "WRONG_HOURS", "Incorrect Recorded Hours"
         OTHER = "OTHER", "Other Discrepancy"
+        LATE_ARRIVAL = "LATE_ARRIVAL", "Late Arrival Request"
+        EARLY_SHIFT_END = "EARLY_SHIFT_END", "Early Shift-End Request"
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending Review"

@@ -227,6 +227,17 @@ def start_work_session(
             f"Failed to start session for user {user.username}: active session conflict."
         ) from exc
 
+    # Bind any pending or approved attendance request for this employee on this date lacking a session
+    try:
+        from apps.web.models import AttendanceCorrectionRequest
+        AttendanceCorrectionRequest.objects.filter(
+            employee=user,
+            date=session_date,
+            session__isnull=True,
+        ).update(session=session)
+    except Exception:
+        pass
+
     # 5. Create initial open WorkActivitySegment
     WorkActivitySegment.objects.create(
         session=session,

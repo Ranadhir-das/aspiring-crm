@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+from decimal import Decimal
 import os
 from django.core.validators import URLValidator
 from django.db import transaction
@@ -12,9 +14,29 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from apps.accounts.models import User
-from apps.web.models import Attendance, LeaveRequest, Project, WorkReport, Holiday, AuditEvent
+from apps.web.models import Attendance, AttendanceCorrectionRequest, LeaveRequest, Project, WorkReport, Holiday, AuditEvent
 from apps.web.workforce_forms import LeaveForm
 from apps.web.models import AttendancePhotoChallenge, AttendancePhotoRequest, Notice, NoticeAttachment
+
+
+def serialize_attendance_request(req: AttendanceCorrectionRequest) -> dict:
+    return {
+        'id': req.pk,
+        'date': req.date.isoformat(),
+        'session_id': req.session_id,
+        'request_type': req.request_type,
+        'request_type_display': req.get_request_type_display(),
+        'reason': req.reason,
+        'requested_start': req.requested_start.isoformat() if req.requested_start else None,
+        'requested_end': req.requested_end.isoformat() if req.requested_end else None,
+        'requested_net_hours': str(req.requested_net_hours) if req.requested_net_hours is not None else None,
+        'status': req.status,
+        'status_display': req.get_status_display(),
+        'reviewed_by_name': (req.reviewed_by.get_full_name() or req.reviewed_by.username) if req.reviewed_by else None,
+        'reviewed_at': req.reviewed_at.isoformat() if req.reviewed_at else None,
+        'review_notes': req.review_notes or '',
+        'created_at': req.created_at.isoformat(),
+    }
 
 
 class EmployeeView(APIView):
@@ -33,6 +55,12 @@ class EmployeeHomeView(EmployeeView):
             'role': user.role, 'role_label': user.get_role_display(),
             'date': today,
             'attendance': list(Attendance.objects.filter(employee=user).order_by('-date').values('id', 'date', 'status', 'checked_in', 'checked_out')[:30]),
+            'attendance_requests': [
+                serialize_attendance_request(r)
+                for r in AttendanceCorrectionRequest.objects.filter(employee=user)
+                .select_related('reviewed_by')
+                .order_by('-created_at')[:20]
+            ],
             'leaves': list(LeaveRequest.objects.filter(employee=user).order_by('-created_at').values('id', 'start_date', 'end_date', 'reason', 'status', 'review_note')[:50]),
             'projects': list(Project.objects.filter(employee=user).order_by('status', 'due_date').values('id', 'title', 'description', 'due_date', 'status')[:100]),
             'reports': list(WorkReport.objects.filter(employee=user).order_by('-date')
@@ -244,3 +272,197 @@ class AdminEmployeeCapabilityView(APIView):
             'detail': 'Employee capabilities updated.',
             'user': user_data(target),
         })
+
+
+class EmployeeAttendanceRequestView(EmployeeView):
+    def get(self, request):
+        user = request.user
+        qs = AttendanceCorrectionRequest.objects.filter(employee=user).select_related('reviewed_by')
+        status_filter = request.query_params.get('status', '').strip().upper()
+        if status_filter in dict(AttendanceCorrectionRequest.Status.choices):
+            qs = qs.filter(status=status_filter)
+        requests = [serialize_attendance_request(r) for r in qs.order_by('-created_at')[:50]]
+        return Response({'requests': requests})
+
+    @transaction.atomic
+    def post(self, request):
+        user = request.user
+        data = request.data or {}
+
+        # 1. Date validation
+        raw_date = data.get('date')
+        if not raw_date:
+            return Response({'detail': 'Date is required.'}, status=400)
+        try:
+            from datetime import date as dt_date
+            if isinstance(raw_date, dt_date):
+                target_date = raw_date
+            else:
+                target_date = datetime.strptime(str(raw_date)[:10], '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return Response({'detail': 'Invalid date format (expected YYYY-MM-DD).'}, status=400)
+
+        today = timezone.localdate()
+        if target_date < today - timedelta(days=30):
+            return Response({'detail': 'Requests cannot be submitted for dates older than 30 days.'}, status=400)
+        if target_date > today + timedelta(days=7):
+            return Response({'detail': 'Requests cannot be submitted more than 7 days in advance.'}, status=400)
+
+        # 2. Request type validation (Strictly restrict mobile to LATE_ARRIVAL and EARLY_SHIFT_END)
+        req_type = data.get('request_type', '').strip().upper()
+        allowed_mobile_types = {
+            AttendanceCorrectionRequest.RequestType.LATE_ARRIVAL,
+            AttendanceCorrectionRequest.RequestType.EARLY_SHIFT_END,
+        }
+        if req_type not in allowed_mobile_types:
+            return Response(
+                {'detail': 'Only LATE_ARRIVAL and EARLY_SHIFT_END requests can be submitted via the mobile app.'},
+                status=400,
+            )
+
+        # 3. Reason validation
+        reason = (data.get('reason') or '').strip()
+        if len(reason) < 10:
+            return Response({'detail': 'Reason must be at least 10 characters long.'}, status=400)
+        if len(reason) > 2000:
+            return Response({'detail': 'Reason cannot exceed 2000 characters.'}, status=400)
+
+        # 4. Check for duplicate pending requests
+        existing_pending = AttendanceCorrectionRequest.objects.filter(
+            employee=user,
+            date=target_date,
+            request_type=req_type,
+            status=AttendanceCorrectionRequest.Status.PENDING,
+        ).exists()
+        if existing_pending:
+            req_name = dict(AttendanceCorrectionRequest.RequestType.choices).get(req_type, req_type)
+            return Response({
+                'detail': f'A pending {req_name} already exists for {target_date.isoformat()}.'
+            }, status=400)
+
+        # 5. Optional time fields validation (accepts ISO strings or time formats HH:MM / HH:MM AM/PM)
+        def parse_time_field(raw_val, field_name):
+            if not raw_val:
+                return None, None
+            val_str = str(raw_val).strip()
+            # Try ISO format
+            try:
+                dt = datetime.fromisoformat(val_str.replace('Z', '+00:00'))
+                if timezone.is_naive(dt):
+                    dt = timezone.make_aware(dt)
+                return dt, None
+            except (ValueError, TypeError):
+                pass
+            # Try time-only formats combined with target_date
+            for fmt in ('%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M%p'):
+                try:
+                    t = datetime.strptime(val_str, fmt).time()
+                    combined = datetime.combine(target_date, t)
+                    dt = timezone.make_aware(combined)
+                    return dt, None
+                except ValueError:
+                    continue
+            return None, f'Invalid {field_name} format (expected ISO datetime or HH:MM).'
+
+        requested_start = None
+        raw_start = data.get('requested_start')
+        if raw_start:
+            requested_start, err = parse_time_field(raw_start, 'requested_start')
+            if err:
+                return Response({'detail': err}, status=400)
+            if timezone.localtime(requested_start).date() != target_date:
+                return Response({'detail': 'requested_start date must match requested date.'}, status=400)
+
+        requested_end = None
+        raw_end = data.get('requested_end')
+        if raw_end:
+            requested_end, err = parse_time_field(raw_end, 'requested_end')
+            if err:
+                return Response({'detail': err}, status=400)
+            if timezone.localtime(requested_end).date() != target_date:
+                return Response({'detail': 'requested_end date must match requested date.'}, status=400)
+
+        if requested_start and requested_end and requested_end < requested_start:
+            return Response({'detail': 'requested_end cannot precede requested_start.'}, status=400)
+
+        requested_net_hours = None
+        raw_hours = data.get('requested_net_hours')
+        if raw_hours not in (None, ''):
+            try:
+                requested_net_hours = Decimal(str(raw_hours))
+                if requested_net_hours < 0 or requested_net_hours > Decimal('24.00'):
+                    return Response({'detail': 'requested_net_hours must be between 0 and 24.'}, status=400)
+            except Exception:
+                return Response({'detail': 'Invalid requested_net_hours format.'}, status=400)
+
+        # 6. Associate session or attendance if present
+        from apps.activity.models import WorkSession
+        session = None
+        session_id = data.get('session_id')
+        if session_id:
+            try:
+                session = WorkSession.objects.get(id=session_id, user=user)
+                sess_date = getattr(session, 'date', None) or (
+                    timezone.localtime(session.started_at).date() if session.started_at else None
+                )
+                if sess_date and sess_date != target_date:
+                    return Response({'detail': 'Specified session does not match requested date.'}, status=400)
+            except (WorkSession.DoesNotExist, ValueError):
+                return Response({'detail': 'Invalid session_id for employee.'}, status=400)
+
+        if not session:
+            # Active session on target date preferred
+            session = WorkSession.objects.filter(
+                user=user, date=target_date, status=WorkSession.Status.ACTIVE
+            ).first()
+            if not session:
+                session = WorkSession.objects.filter(
+                    user=user, date=target_date
+                ).order_by('-started_at').first()
+
+        attendance = Attendance.objects.filter(employee=user, date=target_date).first()
+
+        correction = AttendanceCorrectionRequest.objects.create(
+            employee=user,
+            date=target_date,
+            session=session,
+            attendance=attendance,
+            request_type=req_type,
+            reason=reason,
+            requested_start=requested_start,
+            requested_end=requested_end,
+            requested_net_hours=requested_net_hours,
+            status=AttendanceCorrectionRequest.Status.PENDING,
+        )
+
+        AuditEvent.objects.create(
+            actor=user,
+            category='ATTENDANCE',
+            description=f'Mobile submitted {correction.get_request_type_display()} for {correction.date} (#{correction.pk})',
+        )
+
+        return Response(serialize_attendance_request(correction), status=201)
+
+
+class EmployeeAttendanceRequestDetailView(EmployeeView):
+    @transaction.atomic
+    def delete(self, request, pk):
+        correction = get_object_or_404(
+            AttendanceCorrectionRequest.objects.select_for_update(),
+            pk=pk,
+            employee=request.user,
+        )
+        if correction.status != AttendanceCorrectionRequest.Status.PENDING:
+            return Response({'detail': 'Only pending requests can be cancelled.'}, status=400)
+
+        req_id = correction.pk
+        req_type_name = correction.get_request_type_display()
+        req_date = correction.date
+        correction.delete()
+
+        AuditEvent.objects.create(
+            actor=request.user,
+            category='ATTENDANCE',
+            description=f'Cancelled mobile attendance request #{req_id} ({req_type_name}) for {req_date}',
+        )
+        return Response(status=204)

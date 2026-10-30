@@ -3,6 +3,7 @@ from .api import (
     AdjustmentView,
     CallerPointsView,
     CallerProgressView,
+    CallerTalkTimeView,
     MilestoneView,
     PeerAppreciationStatusView,
     PeerAppreciationView,
@@ -11,6 +12,8 @@ from .api import (
 urlpatterns = [
     path('me/', CallerPointsView.as_view(), name='points-me'),
     path('callers/<int:caller_id>/', CallerPointsView.as_view(), name='points-caller'),
+    path('talk-time/', CallerTalkTimeView.as_view(), name='points-talk-time'),
+    path('callers/<int:caller_id>/talk-time/', CallerTalkTimeView.as_view(), name='points-caller-talk-time'),
     path('progress/', CallerProgressView.as_view(), name='points-progress'),
     path('adjustments/', AdjustmentView.as_view(), name='points-adjustment'),
     path('milestones/', MilestoneView.as_view(), name='points-milestone'),

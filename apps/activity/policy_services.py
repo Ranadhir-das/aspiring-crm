@@ -660,13 +660,91 @@ def evaluate_protected_action(
 
     # 2. Duration evaluation (if applicable for End Shift or Logout)
     net_work_seconds = None
+    duration_bypassed = False
     if duration_required and session:
         net_work_seconds = calculate_persisted_net_work_seconds(session, now=server_now)
-        duration_exception = get_active_policy_exception(
-            user, PolicyException.RuleType.MIN_DURATION, at_time=server_now
-        )
-        if not duration_exception:
-            if net_work_seconds < MIN_NET_WORK_SECONDS:
+        if net_work_seconds < MIN_NET_WORK_SECONDS:
+            session_date = getattr(session, 'date', None) or (
+                timezone.localtime(server_now).date() if timezone.is_aware(server_now) else server_now.date()
+            )
+
+            # Check approved EARLY_SHIFT_END requests for this employee and date
+            from apps.web.models import AttendanceCorrectionRequest
+            approved_requests = list(AttendanceCorrectionRequest.objects.filter(
+                employee=user,
+                date=session_date,
+                request_type=AttendanceCorrectionRequest.RequestType.EARLY_SHIFT_END,
+                status=AttendanceCorrectionRequest.Status.APPROVED,
+            ).order_by('-reviewed_at', '-created_at'))
+
+            matching_request = None
+            for req in approved_requests:
+                if req.session_id is not None:
+                    if req.session_id == session.id:
+                        # Session match verified: verify employee and date integrity
+                        if session.user_id == user.id and session_date == req.date:
+                            matching_request = req
+                            break
+                    # If bound to a different session, approval does NOT authorize this session
+                    continue
+                else:
+                    # Request lacks a session association: bind it atomically to this matching shift
+                    if session.user_id == user.id and session_date == req.date:
+                        updated = AttendanceCorrectionRequest.objects.filter(
+                            pk=req.pk,
+                            session__isnull=True,
+                        ).update(session=session)
+                        if updated:
+                            req.session = session
+                            matching_request = req
+                            break
+
+            if matching_request:
+                # Check approved departure time
+                if matching_request.requested_end and server_now < matching_request.requested_end:
+                    dep_time_str = timezone.localtime(matching_request.requested_end).strftime("%I:%M %p")
+                    return PolicyEvaluationResult(
+                        permitted=False,
+                        rule_type=PolicyException.RuleType.MIN_DURATION,
+                        net_work_seconds=net_work_seconds,
+                        required_work_seconds=MIN_NET_WORK_SECONDS,
+                        geofence_result=geofence_result,
+                        error_message=(
+                            f"Action blocked: Approved early shift-end time is {dep_time_str}. "
+                            f"You cannot end your shift before the approved departure time."
+                        ),
+                        error_code="INSUFFICIENT_WORK_DURATION",
+                    )
+                # Check requested net work hours if specified
+                if matching_request.requested_net_hours is not None:
+                    req_min_seconds = int(matching_request.requested_net_hours * 3600)
+                    if net_work_seconds < req_min_seconds:
+                        return PolicyEvaluationResult(
+                            permitted=False,
+                            rule_type=PolicyException.RuleType.MIN_DURATION,
+                            net_work_seconds=net_work_seconds,
+                            required_work_seconds=req_min_seconds,
+                            geofence_result=geofence_result,
+                            error_message=(
+                                f"Action blocked: Minimum {matching_request.requested_net_hours} hours net work time required for this approved departure. "
+                                f"Completed: {net_work_seconds // 3600}h {(net_work_seconds % 3600) // 60}m."
+                            ),
+                            error_code="INSUFFICIENT_WORK_DURATION",
+                        )
+                duration_bypassed = True
+
+            if not duration_bypassed:
+                # Check for an unrelated, standalone PolicyException
+                standalone_exc = get_active_policy_exception(
+                    user, PolicyException.RuleType.MIN_DURATION, at_time=server_now
+                )
+                if standalone_exc:
+                    # If this exception was generated for an attendance correction request,
+                    # do not let it bypass if the request did not match this session or departure time
+                    if "Approved Early Shift-End Request #" not in (standalone_exc.reason or ""):
+                        duration_bypassed = True
+
+            if not duration_bypassed:
                 shortfall = MIN_NET_WORK_SECONDS - net_work_seconds
                 hours_done = net_work_seconds // 3600
                 mins_done = (net_work_seconds % 3600) // 60
@@ -690,7 +768,7 @@ def evaluate_protected_action(
     return PolicyEvaluationResult(
         permitted=True,
         rule_type=rule_type,
-        bypassed_by_exception=(active_exc is not None),
+        bypassed_by_exception=(active_exc is not None or duration_bypassed),
         exception=active_exc,
         geofence_result=geofence_result,
         net_work_seconds=net_work_seconds,

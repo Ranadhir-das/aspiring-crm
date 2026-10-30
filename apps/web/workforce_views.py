@@ -2,7 +2,7 @@ from django.utils.html import format_html_join
 from django.template.loader import render_to_string
 import csv
 import calendar
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from functools import wraps
 from django import forms
@@ -588,6 +588,9 @@ def employee_attendance_history(request, user_id):
 def attendance_corrections_list(request):
     selected_status = request.GET.get('status', '').strip()
     query = AttendanceCorrectionRequest.objects.select_related('employee', 'reviewed_by').order_by('-pk')
+    is_admin = request.user.role in ADMINS or getattr(request.user, 'is_superuser', False)
+    if not is_admin and request.user.role == 'MANAGER':
+        query = query.filter(Q(employee__manager=request.user) | Q(employee=request.user))
     if selected_status:
         query = query.filter(status=selected_status)
 
@@ -602,23 +605,99 @@ def attendance_corrections_list(request):
 
 @require_POST
 @workspace(management=True)
+@transaction.atomic
 def attendance_correction_action(request, pk):
-    correction = get_object_or_404(AttendanceCorrectionRequest, pk=pk)
+    correction = get_object_or_404(AttendanceCorrectionRequest.objects.select_for_update(), pk=pk)
+
+    # Prevent re-reviewing already resolved requests
+    if correction.status != AttendanceCorrectionRequest.Status.PENDING:
+        messages.error(request, f'Attendance request #{correction.pk} has already been {correction.status.lower()}.')
+        return redirect('web:attendance-corrections')
+
+    # Prevent self-approval (managers or admins cannot approve their own requests)
+    if correction.employee_id == request.user.id:
+        messages.error(request, 'You cannot review your own attendance request.')
+        return redirect('web:attendance-corrections')
+
+    # Enforce team scoping: managers can only approve/reject requests for employees in their team
+    is_admin = request.user.role in ADMINS or getattr(request.user, 'is_superuser', False)
+    if not is_admin:
+        if request.user.role == 'MANAGER':
+            if correction.employee.manager_id != request.user.id:
+                messages.error(request, 'You can only review attendance requests for employees in your team.')
+                return redirect('web:attendance-corrections')
+        else:
+            messages.error(request, 'You do not have permission to review attendance requests.')
+            return redirect('web:attendance-corrections')
+
     action = request.POST.get('action', '').strip().upper()
     notes = request.POST.get('review_notes', '').strip()
 
-    if action in {'APPROVE', 'REJECT'}:
-        new_status = AttendanceCorrectionRequest.Status.APPROVED if action == 'APPROVE' else AttendanceCorrectionRequest.Status.REJECTED
-        correction.status = new_status
-        correction.reviewed_by = request.user
-        correction.reviewed_at = timezone.now()
-        correction.review_notes = notes
-        correction.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_notes'])
-        audit(request, 'POLICY', f'Admin {request.user.username} {action.lower()}d attendance correction #{correction.pk} for {correction.employee.username}')
-        messages.success(request, f'Attendance correction request #{correction.pk} marked as {new_status}.')
-    else:
+    if action not in {'APPROVE', 'REJECT'}:
         messages.error(request, 'Invalid action specified.')
+        return redirect('web:attendance-corrections')
 
+    new_status = AttendanceCorrectionRequest.Status.APPROVED if action == 'APPROVE' else AttendanceCorrectionRequest.Status.REJECTED
+    correction.status = new_status
+    correction.reviewed_by = request.user
+    correction.reviewed_at = timezone.now()
+    correction.review_notes = notes
+    correction.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_notes'])
+
+    if action == 'APPROVE':
+        if correction.request_type == AttendanceCorrectionRequest.RequestType.EARLY_SHIFT_END:
+            from apps.activity.models import PolicyException, WorkSession
+            from datetime import datetime, time
+
+            # Bind to employee session on requested date if not already bound
+            if not correction.session:
+                sess = WorkSession.objects.filter(
+                    user=correction.employee,
+                    date=correction.date,
+                    status=WorkSession.Status.ACTIVE,
+                ).first()
+                if not sess:
+                    sess = WorkSession.objects.filter(
+                        user=correction.employee,
+                        date=correction.date,
+                    ).order_by('-started_at').first()
+                if sess:
+                    correction.session = sess
+                    correction.save(update_fields=['session'])
+
+            start_of_day = timezone.make_aware(datetime.combine(correction.date, time.min))
+            end_of_day = timezone.make_aware(datetime.combine(correction.date, time.max))
+            valid_from = correction.requested_end or start_of_day
+
+            PolicyException.objects.create(
+                user=correction.employee,
+                rule_type=PolicyException.RuleType.MIN_DURATION,
+                reason=f"Approved Early Shift-End Request #{correction.pk} by {request.user.username}: {correction.reason}",
+                requested_by=correction.employee,
+                approved_by=request.user,
+                is_approved=True,
+                approved_at=timezone.now(),
+                valid_from=valid_from,
+                valid_until=end_of_day,
+                is_active=True,
+            )
+        elif correction.request_type == AttendanceCorrectionRequest.RequestType.LATE_ARRIVAL:
+            att = Attendance.objects.filter(employee=correction.employee, date=correction.date).first()
+            if att:
+                approval_note = f"Late Arrival Approved by {request.user.get_role_display()} {request.user.username}"
+                if notes:
+                    approval_note += f": {notes}"
+                if att.login_remark:
+                    if approval_note not in att.login_remark:
+                        att.login_remark = f"{att.login_remark} | {approval_note}"[:500]
+                else:
+                    att.login_remark = approval_note[:500]
+                att.save(update_fields=['login_remark'])
+
+    reviewer_role = request.user.get_role_display()
+    verb = "approved" if action == "APPROVE" else "rejected"
+    audit(request, 'POLICY', f'{reviewer_role} {request.user.username} {verb} attendance correction #{correction.pk} ({correction.get_request_type_display()}) for {correction.employee.username}')
+    messages.success(request, f'Attendance request #{correction.pk} ({correction.get_request_type_display()}) marked as {new_status}.')
     return redirect('web:attendance-corrections')
 
 

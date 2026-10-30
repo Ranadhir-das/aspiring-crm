@@ -553,11 +553,15 @@ class PolicyException(models.Model):
             if not self.approved_at:
                 raise ValidationError({"approved_at": "Approved exception must have an approval timestamp."})
 
-            # Strictly enforce that only ADMIN and SUPER_ADMIN can approve
+            # Strictly enforce that only ADMIN and SUPER_ADMIN (and MANAGER for MIN_DURATION) can approve
             role = getattr(self.approved_by, "role", None)
             is_super = getattr(self.approved_by, "is_superuser", False)
-            if role not in [User.Role.SUPER_ADMIN, User.Role.ADMIN] and not is_super:
-                raise ValidationError({"approved_by": "Only administrators (ADMIN or SUPER_ADMIN) can approve policy exceptions. Managers cannot approve."})
+            if self.rule_type == self.RuleType.MIN_DURATION:
+                if role not in [User.Role.SUPER_ADMIN, User.Role.ADMIN, User.Role.MANAGER] and not is_super:
+                    raise ValidationError({"approved_by": "Only management (ADMIN, SUPER_ADMIN, or MANAGER) can approve minimum duration exceptions."})
+            else:
+                if role not in [User.Role.SUPER_ADMIN, User.Role.ADMIN] and not is_super:
+                    raise ValidationError({"approved_by": "Only administrators (ADMIN or SUPER_ADMIN) can approve policy exceptions. Managers cannot approve."})
         else:
             if self.approved_by or self.approved_at:
                 raise ValidationError({"is_approved": "Unapproved exception cannot have an approver or approval timestamp."})

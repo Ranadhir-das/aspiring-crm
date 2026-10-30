@@ -43,11 +43,12 @@ class LeadForm(forms.ModelForm):
         widgets = {'notes': forms.Textarea(attrs={'rows': 4})}
 
     def clean_phone(self):
-        from apps.leads.utils import normalize_phone
         phone = self.cleaned_data['phone'].strip()
-        if len(normalize_phone(phone) or '') < 7:
-            raise forms.ValidationError('Enter a valid phone number.')
-        return phone
+        from apps.leads.phone_normalization import normalize_phone_number
+        norm, reason = normalize_phone_number(phone)
+        if not norm:
+            raise forms.ValidationError(reason or 'Enter a valid Indian or Bangladesh mobile number.')
+        return norm
 
     def clean_pcb_percentage(self):
         value = self.cleaned_data.get('pcb_percentage')
@@ -159,12 +160,12 @@ class QuickLeadForm(forms.Form):
     phone = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'placeholder': 'Phone number', 'inputmode': 'tel'}))
 
     def clean_phone(self):
-        from apps.leads.utils import normalize_phone
-        value = self.cleaned_data['phone']
-        normalized = normalize_phone(value)
-        if not normalized or len(normalized) < 7:
-            raise forms.ValidationError('Enter a valid phone number with at least 7 digits.')
-        return value
+        value = self.cleaned_data['phone'].strip()
+        from apps.leads.phone_normalization import normalize_phone_number
+        norm, reason = normalize_phone_number(value)
+        if not norm:
+            raise forms.ValidationError(reason or 'Enter a valid Indian or Bangladesh mobile number.')
+        return norm
 
 QuickLeadFormSet = forms.formset_factory(QuickLeadForm, extra=10, max_num=1000, validate_max=True, min_num=1, validate_min=True)
 
@@ -274,12 +275,12 @@ class AdmissionForm(forms.ModelForm):
             if not phone:
                 self.add_error('walk_in_phone', 'Phone number is required for external student admissions.')
             else:
-                from apps.leads.utils import normalize_phone
-                normalized = normalize_phone(phone)
-                if not normalized or len(normalized) < 7:
-                    self.add_error('walk_in_phone', 'Enter a valid phone number with at least 7 digits.')
+                from apps.leads.phone_normalization import normalize_phone_number
+                norm, reason = normalize_phone_number(phone)
+                if not norm:
+                    self.add_error('walk_in_phone', reason or 'Enter a valid Indian or Bangladesh mobile number.')
                 else:
-                    cleaned_data['walk_in_phone'] = phone
+                    cleaned_data['walk_in_phone'] = norm
 
             if not cleaned_data.get('candidate_type') or cleaned_data.get('candidate_type') == Admission.CandidateType.LEAD:
                 cleaned_data['candidate_type'] = Admission.CandidateType.EXTERNAL

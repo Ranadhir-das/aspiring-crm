@@ -1,5 +1,15 @@
 from .employee_views import PhotoChallengeView, PhotoAttendanceView, AdminEmployeeCapabilityView
-from .employee_views import EmployeeHomeView, EmployeeLeaveView, EmployeeProjectView, EmployeeReportView, EmployeeReportPhotoView, EmployeeNoticeView, EmployeeNoticeAttachmentDownloadView
+from .employee_views import (
+    EmployeeHomeView,
+    EmployeeLeaveView,
+    EmployeeProjectView,
+    EmployeeReportView,
+    EmployeeReportPhotoView,
+    EmployeeNoticeView,
+    EmployeeNoticeAttachmentDownloadView,
+    EmployeeAttendanceRequestView,
+    EmployeeAttendanceRequestDetailView,
+)
 from django.urls import include, path
 
 from .views import MobileLoginView, MobileMeView, MobileSessionView, MobileVerifyLoginView
@@ -25,6 +35,8 @@ urlpatterns = [
     path('employee/', EmployeeHomeView.as_view()),
     path('employee/leaves/', EmployeeLeaveView.as_view()),
     path('employee/leaves/<int:pk>/', EmployeeLeaveView.as_view()),
+    path('employee/attendance-requests/', EmployeeAttendanceRequestView.as_view(), name='mobile-employee-attendance-requests'),
+    path('employee/attendance-requests/<int:pk>/', EmployeeAttendanceRequestDetailView.as_view(), name='mobile-employee-attendance-request-detail'),
     path('employee/projects/<int:pk>/', EmployeeProjectView.as_view()),
     path('employee/reports/', EmployeeReportView.as_view()),
     path('employee/reports/<int:pk>/photo/', EmployeeReportPhotoView.as_view()),
