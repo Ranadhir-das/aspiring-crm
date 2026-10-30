@@ -1,0 +1,219 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Assign Branches: {{ employee|user_name }} · Vaani CRM{% endblock %}
+{% block breadcrumb %}<a href="{% url 'web:branches' %}">Branches</a> / <a href="{% url 'web:employee-branch-assignments' %}">Staff Assignments</a> / {{ employee|user_name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/branches.css' %}?v=55">
+
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">WORKFORCE LOCATION ALLOCATION</div>
+    <h1>Configure Workplace for {% employee_link employee %}<span class="accent">.</span></h1>
+    <p>Designate their primary home branch and authorize secondary locations if the employee commutes between offices.</p>
+  </div>
+  <a class="button" href="{% url 'web:employee-branch-assignments' %}">← Back to Staff Assignments</a>
+</div>
+
+<div class="dashboard-grid">
+  <!-- Assignment Form Panel -->
+  <section class="panel form-panel">
+    <div class="panel-heading">
+      <h2>Workplace designations</h2>
+    </div>
+
+    <form method="post" id="assignment-form">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+      <div class="notice error" style="margin-bottom: 20px;">
+        {% for err in form.non_field_errors %}{{ err }}<br>{% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Primary Branch Selector -->
+      <div class="field" style="margin-bottom: 24px;">
+        <label for="id_primary_branch">
+          <strong style="font-size: 0.95rem;">Primary Workplace Branch *</strong>
+        </label>
+        {{ form.primary_branch }}
+        {% if form.primary_branch.errors %}
+        <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 4px;">{{ form.primary_branch.errors.0 }}</span>
+        {% endif %}
+        <small class="muted">
+          Mandatory. This is the employee's main office for attendance records and default reporting.
+        </small>
+      </div>
+
+      <!-- Additional Authorized Branches -->
+      <div class="branch-assign-card">
+        <div style="margin-bottom: 12px;">
+          <strong style="font-size: 0.95rem; color: var(--text);">Additional Authorized Branches (Optional)</strong>
+          <p class="muted" style="font-size: 0.82rem; margin: 4px 0 0 0;">
+            Select any secondary branches where this employee is authorized to work and check in:
+          </p>
+        </div>
+
+        {% if form.fields.additional_branches.queryset.exists %}
+        <div class="branches-checklist-box">
+          {% for checkbox in form.additional_branches %}
+          <div class="checkbox" style="display: flex; align-items: center; gap: 10px;">
+            {{ checkbox.tag }}
+            <label for="{{ checkbox.id_for_label }}" style="margin-bottom: 0; cursor: pointer; color: var(--text); font-size: 0.88rem;">
+              {{ checkbox.choice_label }}
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="muted" style="font-size: 0.82rem;">No other active branches are configured.</p>
+        {% endif %}
+
+        {% if form.additional_branches.errors %}
+        <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 6px;">{{ form.additional_branches.errors.0 }}</span>
+        {% endif %}
+
+        <div class="policy-callout-box">
+          ℹ️ When geofence enforcement is active, employee login and break resume will succeed within 50m of either their Primary Branch OR any of these Authorized Branches.
+        </div>
+      </div>
+
+      <!-- Shift & Attendance Policy Section -->
+      {% if 'shift_workflow_enabled' in form.fields or 'shift_geofence_enforced' in form.fields %}
+      <div class="branch-assign-card">
+        <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+          <div>
+            <strong style="font-size: 0.95rem; color: var(--text);">Shift & Attendance Policy</strong>
+            <p class="muted" style="font-size: 0.82rem; margin: 4px 0 0 0;">
+              Configure employee shift start requirement, 8-hour net duration, and office geofence verification.
+            </p>
+          </div>
+          <span style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; background: rgba(165, 154, 255, 0.15); color: var(--accent);">OPT-IN POLICY</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <!-- Explicit Shift Workflow -->
+          {% if 'shift_workflow_enabled' in form.fields %}
+          <div class="policy-option-card">
+            <div class="checkbox" style="display: flex; align-items: flex-start; gap: 10px;">
+              {{ form.shift_workflow_enabled }}
+              <div style="flex: 1;">
+                <label for="{{ form.shift_workflow_enabled.id_for_label }}" style="margin-bottom: 0; cursor: pointer; color: var(--text); font-weight: 600; font-size: 0.9rem;">
+                  {{ form.shift_workflow_enabled.label }}
+                </label>
+                <p class="muted" style="font-size: 0.82rem; margin: 4px 0 0 0; line-height: 1.45;">
+                  {{ form.shift_workflow_enabled.help_text }}
+                </p>
+                {% if form.shift_workflow_enabled.errors %}
+                <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 6px;">
+                  {{ form.shift_workflow_enabled.errors.0 }}
+                </span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Office Geofence Enforcement -->
+          {% if 'shift_geofence_enforced' in form.fields %}
+          <div class="policy-option-card">
+            <div class="checkbox" style="display: flex; align-items: flex-start; gap: 10px;">
+              {{ form.shift_geofence_enforced }}
+              <div style="flex: 1;">
+                <label for="{{ form.shift_geofence_enforced.id_for_label }}" style="margin-bottom: 0; cursor: pointer; color: var(--text); font-weight: 600; font-size: 0.9rem;">
+                  {{ form.shift_geofence_enforced.label }}
+                </label>
+                <p class="muted" style="font-size: 0.82rem; margin: 4px 0 0 0; line-height: 1.45;">
+                  {{ form.shift_geofence_enforced.help_text }}
+                </p>
+                {% if form.shift_geofence_enforced.errors %}
+                <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 6px;">
+                  {{ form.shift_geofence_enforced.errors.0 }}
+                </span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="policy-callout-box">
+          ℹ️ When geofence enforcement is active, employee mobile operations must be within 50m of either their Primary Branch OR any Authorized Additional Branches.
+        </div>
+      </div>
+      {% endif %}
+
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <button type="submit" class="button primary">Save Workplace Assignments</button>
+        <a class="button" href="{% url 'web:employee-branch-assignments' %}">Cancel</a>
+      </div>
+    </form>
+  </section>
+
+  <!-- Employee Summary Panel -->
+  <section class="panel">
+    <div class="panel-heading">
+      <h2>Employee profile</h2>
+    </div>
+
+    <div style="padding: 18px 20px;">
+      <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 18px;">
+        <div class="account-avatar" style="width: 44px; height: 44px; font-size: 1.1rem;">
+          {{ employee.get_full_name|default:employee.username|first|upper }}
+        </div>
+        <div>
+          <strong style="font-size: 1.05rem; display: block;">{{ employee.get_full_name|default:employee.username }}</strong>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">@{{ employee.username }}</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem;">
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+          <span class="muted">Role / Department:</span>
+          <strong>{{ employee.get_role_display }}</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+          <span class="muted">Designation:</span>
+          <span>{{ employee.designation|default:"Not specified" }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+          <span class="muted">Email:</span>
+          <span>{{ employee.email|default:"None" }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+          <span class="muted">Current Primary:</span>
+          {% if current_primary %}
+          <span class="badge-primary-office">{{ current_primary.name }}</span>
+          {% else %}
+          <span class="badge-warning">Unassigned</span>
+          {% endif %}
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+          <span class="muted">Authorized Branches:</span>
+          {% if current_additional %}
+          <span style="text-align: right;">{{ current_additional|length }} location{{ current_additional|pluralize }}</span>
+          {% else %}
+          <span class="muted">None</span>
+          {% endif %}
+        </div>
+        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+          <span class="muted">Shift Workflow:</span>
+          {% if employee.shift_workflow_enabled %}
+          <span style="color: var(--mint, #53e0b7); font-weight: 600;">Explicit (Opted In)</span>
+          {% else %}
+          <span class="muted">Legacy (Default)</span>
+          {% endif %}
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span class="muted">Geofence Policy:</span>
+          {% if employee.shift_geofence_enforced %}
+          <span style="color: var(--accent); font-weight: 600;">Enforced (50m)</span>
+          {% else %}
+          <span class="muted">Disabled</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

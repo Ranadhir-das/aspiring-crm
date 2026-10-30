@@ -74,9 +74,9 @@ class AttendanceRemarkTest(TestCase):
         self.assertIsNotNone(att)
         self.assertEqual(att.login_remark, remark)
 
-        # Check attendance list view renders the remark
+        # Check attendance list view renders the remark under Exceptions / Notes
         resp_list = self.client.get(reverse('web:attendance'))
         self.assertEqual(resp_list.status_code, 200)
         content = resp_list.content.decode()
-        self.assertIn('Login Remark', content)
+        self.assertIn('Exceptions / Notes', content)
         self.assertIn(remark, content)

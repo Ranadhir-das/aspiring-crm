@@ -2,7 +2,7 @@ from django.utils.html import format_html_join
 from django.template.loader import render_to_string
 import csv
 import calendar
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from functools import wraps
 from django import forms
@@ -25,7 +25,7 @@ from .forms import MANAGEMENT
 from .views import workspace, page, paginate, visible_leads
 from .models import (LeaveRequest, Attendance, Holiday, WorkReport, Project, Expense,
                      Payroll, PayrollQuery, AuditEvent, LeadCollaboration, LeadQualification,
-                     Customer, Invoice, Payment, FEEDBACK)
+                     Customer, Invoice, Payment, FEEDBACK, AttendanceCorrectionRequest)
 from .workforce_forms import (RegistrationForm, EmployeeForm, LeaveForm, ReportForm, HolidayForm,
                              ProjectForm, ExpenseForm, PayrollForm, CustomerForm, InvoiceForm,
                              InvoiceItemFormSet, PaymentForm, QualificationForm, DistributionForm)
@@ -142,13 +142,42 @@ def employee_edit(request, pk):
     employee = get_object_or_404(User, pk=pk)
     if employee.pk == request.user.pk or (request.user.role != 'SUPER_ADMIN' and employee.role in ADMINS):
         raise PermissionDenied
+    old_shift_workflow_enabled = employee.shift_workflow_enabled
+    old_geofence_enforced = employee.shift_geofence_enforced
     form = EmployeeForm(request.POST or None, instance=employee, actor=request.user)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        audit(request, 'EMPLOYEE', f'Updated account {employee.pk}; role {employee.role}; caller_cap={employee.can_act_as_caller}; counselor_cap={employee.can_act_as_counselor}; message_cap={employee.can_contact_via_message}; active {employee.is_active}')
+        if 'shift_workflow_enabled' in form.cleaned_data:
+            new_wf = form.cleaned_data['shift_workflow_enabled']
+            if old_shift_workflow_enabled != new_wf:
+                audit(request, 'POLICY', f'Admin {request.user.username} changed shift_workflow_enabled for {employee.username} (id={employee.pk}) from {old_shift_workflow_enabled} to {new_wf}')
+        if 'shift_geofence_enforced' in form.cleaned_data:
+            new_geofence_enforced = form.cleaned_data['shift_geofence_enforced']
+            if old_geofence_enforced != new_geofence_enforced:
+                audit(request, 'POLICY', f'Admin {request.user.username} changed shift_geofence_enforced for {employee.username} (id={employee.pk}) from {old_geofence_enforced} to {new_geofence_enforced}')
+        audit(request, 'EMPLOYEE', f'Updated account {employee.pk}; role {employee.role}; caller_cap={employee.can_act_as_caller}; counselor_cap={employee.can_act_as_counselor}; message_cap={employee.can_contact_via_message}; shift_workflow_enabled={employee.shift_workflow_enabled}; shift_geofence_enforced={employee.shift_geofence_enforced}; active {employee.is_active}')
         messages.success(request, 'Employee account updated.')
         return redirect('web:employees')
-    return form_page(request, f'Manage {employee_name(employee)}', form, 'employees', subtitle='Activate an approved employee account and assign their department role.')
+
+    from apps.activity.models import EmployeeOfficeAssignment
+    primary_assignment = EmployeeOfficeAssignment.objects.filter(
+        user=employee, is_active=True, is_primary=True
+    ).select_related('office').first()
+    additional_assignments = list(EmployeeOfficeAssignment.objects.filter(
+        user=employee, is_active=True, is_primary=False
+    ).select_related('office'))
+
+    return page(
+        request,
+        'employee_manage',
+        'employees',
+        title=f'Manage {employee_name(employee)}',
+        form=form,
+        employee=employee,
+        primary_office=primary_assignment.office if primary_assignment else None,
+        additional_offices=[a.office for a in additional_assignments],
+        subtitle='Activate an approved employee account and assign their department role.',
+    )
 
 
 @workspace(employee=True)
@@ -253,12 +282,365 @@ def leave_action(request, pk):
 
 @workspace(employee=True)
 def attendance(request):
-    query, filters = filtered(request, scoped(Attendance.objects.select_related('employee'), request.user))
-    records = paginate(request, query.order_by('-date', 'employee__username'))
-    rows = [{'cells': [r.date, r.employee, r.get_status_display(), r.checked_in or '—', r.checked_out or '—', f'{r.hours} h', r.login_remark or '—']} for r in records]
-    return table_page(request, 'Attendance', 'attendance', ['Date', 'Employee', 'Status', 'Check-in', 'Check-out', 'Elapsed time', 'Login Remark'], rows,
-        records=records, filters=filters, attendance_controls=True,
-        subtitle='Elapsed time is measured between check-in and check-out; it is not an estimate of active computer use.')
+    today = timezone.localdate()
+    view_param = request.GET.get('view', '').strip().lower()
+    date_str = request.GET.get('date', '').strip()
+    date_from_str = request.GET.get('date_from', '').strip()
+    date_to_str = request.GET.get('date_to', '').strip()
+
+    # 1. Determine view mode & parse dates (YYYY-MM-DD validation)
+    if view_param == 'range' or (not view_param and (date_from_str or date_to_str)):
+        view_mode = 'range'
+    else:
+        view_mode = 'daily'
+
+    if view_mode == 'daily':
+        if date_str:
+            try:
+                target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                messages.warning(request, f"Invalid date '{date_str}'. Expected format YYYY-MM-DD. Showing today's records.")
+                target_date = today
+        else:
+            target_date = today
+        start_date = target_date
+        end_date = target_date
+    else:
+        if date_from_str:
+            try:
+                start_date = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+            except ValueError:
+                messages.warning(request, f"Invalid 'From' date '{date_from_str}'. Expected format YYYY-MM-DD.")
+                start_date = today - timedelta(days=30)
+        else:
+            start_date = today - timedelta(days=30)
+
+        if date_to_str:
+            try:
+                end_date = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+            except ValueError:
+                messages.warning(request, f"Invalid 'To' date '{date_to_str}'. Expected format YYYY-MM-DD.")
+                end_date = today
+        else:
+            end_date = today
+
+        if start_date > end_date:
+            messages.info(request, f"Reversed date range detected. Automatically adjusted from {end_date} to {start_date}.")
+            start_date, end_date = end_date, start_date
+
+    # 2. Employee filter with validation & authorization
+    employee_param = request.GET.get('employee', '').strip() or request.GET.get('employee_id', '').strip()
+    employee_id = None
+    if employee_param:
+        if employee_param.isdigit():
+            req_emp_id = int(employee_param)
+            if request.user.role not in MANAGEMENT and not getattr(request.user, "is_superuser", False):
+                if req_emp_id != request.user.pk:
+                    messages.error(request, "Access denied: You are only authorized to view your own attendance records.")
+                    req_emp_id = request.user.pk
+                employee_id = req_emp_id
+            elif request.user.role == User.Role.MANAGER:
+                from apps.activity.models import EmployeeOfficeAssignment
+                mgr_branch_ids = list(EmployeeOfficeAssignment.objects.filter(
+                    user=request.user, is_active=True
+                ).values_list('office_id', flat=True))
+                if mgr_branch_ids:
+                    is_allowed = EmployeeOfficeAssignment.objects.filter(
+                        user_id=req_emp_id, office_id__in=mgr_branch_ids, is_active=True
+                    ).exists()
+                    if not is_allowed and req_emp_id != request.user.pk:
+                        messages.error(request, "Access denied: Selected employee is not assigned to your authorized branch.")
+                        req_emp_id = -1
+                employee_id = req_emp_id
+            else:
+                employee_id = req_emp_id
+        else:
+            messages.warning(request, f"Invalid employee ID '{employee_param}'.")
+            employee_id = -1
+    elif request.user.role not in MANAGEMENT and not getattr(request.user, "is_superuser", False):
+        employee_id = request.user.pk
+
+    # 3. Branch filter with validation & authorization
+    from apps.activity.models import OfficeLocation
+    branch_param = request.GET.get('branch', '').strip() or request.GET.get('branch_id', '').strip()
+    branch_id = None
+    if branch_param:
+        branch_obj = OfficeLocation.objects.filter(id=branch_param, is_active=True).first()
+        if not branch_obj:
+            messages.warning(request, f"Branch '{branch_param}' not found.")
+            branch_id = "00000000-0000-0000-0000-000000000000"
+        elif request.user.role == User.Role.MANAGER:
+            from apps.activity.models import EmployeeOfficeAssignment
+            is_mgr_branch = EmployeeOfficeAssignment.objects.filter(
+                user=request.user, office_id=branch_param, is_active=True
+            ).exists()
+            if not is_mgr_branch:
+                messages.error(request, "Access denied: You are not authorized to view this branch.")
+                branch_id = "00000000-0000-0000-0000-000000000000"
+            else:
+                branch_id = branch_param
+        else:
+            branch_id = branch_param
+
+    # 4. Status filter validation
+    from .attendance_services import (
+        ATTENDANCE_STATUS_CHOICES,
+        get_attendance_records,
+        get_daily_summary_kpis,
+        get_monthly_totals_from_records,
+    )
+    status_filter = request.GET.get('status', '').strip().upper()
+    valid_status_codes = {c[0] for c in ATTENDANCE_STATUS_CHOICES} | {"ACTIVE", "ON_LEAVE"}
+    if status_filter and status_filter not in valid_status_codes:
+        messages.warning(request, f"Unknown attendance status filter '{status_filter}'.")
+
+    # 5. Free-text search filter
+    search_q = request.GET.get('q', '').strip()
+
+    # 6. Fetch authoritative calculated records
+    records = get_attendance_records(
+        user=request.user,
+        start_date=start_date,
+        end_date=end_date,
+        employee_id=employee_id,
+        branch_id=branch_id,
+        status_filter=status_filter if status_filter else None,
+        q=search_q if search_q else None,
+    )
+
+    # 7. Exports (Respect identical filters, stream formula-sanitized results)
+    export_format = request.GET.get('export', '').strip().lower()
+    if export_format in {'csv', 'xlsx'}:
+        filename_base = f"attendance_{start_date.isoformat()}" if start_date == end_date else f"attendance_{start_date.isoformat()}_to_{end_date.isoformat()}"
+        if export_format == 'csv':
+            from .export_utils import export_attendance_csv
+            return export_attendance_csv(records, filename=f"{filename_base}.csv")
+        else:
+            from .export_utils import export_attendance_excel
+            return export_attendance_excel(records, filename=f"{filename_base}.xlsx")
+
+    # 8. KPIs & Monthly Totals
+    kpis = None
+    monthly_totals = None
+    if view_mode == 'daily':
+        kpis = get_daily_summary_kpis(
+            user=request.user,
+            target_date=start_date,
+            branch_id=branch_id if branch_id != "00000000-0000-0000-0000-000000000000" else None,
+            employee_id=employee_id if employee_id and employee_id > 0 else None,
+        )
+    else:
+        monthly_totals = get_monthly_totals_from_records(records)
+
+    # 9. Accessible employees and branches for filter dropdowns
+    if request.user.role in MANAGEMENT or getattr(request.user, "is_superuser", False):
+        if request.user.role == User.Role.MANAGER:
+            from apps.activity.models import EmployeeOfficeAssignment
+            mgr_branch_ids = list(EmployeeOfficeAssignment.objects.filter(
+                user=request.user, is_active=True
+            ).values_list('office_id', flat=True))
+            all_branches = OfficeLocation.objects.filter(id__in=mgr_branch_ids, is_active=True).order_by('name')
+            assigned_user_ids = EmployeeOfficeAssignment.objects.filter(
+                office_id__in=mgr_branch_ids, is_active=True
+            ).values_list('user_id', flat=True)
+            all_employees = User.objects.filter(pk__in=assigned_user_ids, is_active=True).order_by('first_name', 'username')
+        else:
+            all_branches = OfficeLocation.objects.filter(is_active=True).order_by('name')
+            all_employees = User.objects.filter(is_active=True).order_by('first_name', 'username')
+    else:
+        all_branches = OfficeLocation.objects.none()
+        all_employees = User.objects.filter(pk=request.user.pk)
+
+    # 10. Query string builders for pagination and export preservation
+    filter_params_dict = request.GET.copy()
+    filter_params_dict.pop('page', None)
+    filter_params_dict.pop('export', None)
+    filter_params_dict['view'] = view_mode
+    if view_mode == 'daily':
+        filter_params_dict['date'] = start_date.strftime('%Y-%m-%d')
+        filter_params_dict.pop('date_from', None)
+        filter_params_dict.pop('date_to', None)
+    else:
+        filter_params_dict['date_from'] = start_date.strftime('%Y-%m-%d')
+        filter_params_dict['date_to'] = end_date.strftime('%Y-%m-%d')
+        filter_params_dict.pop('date', None)
+
+    filter_params = filter_params_dict.urlencode()
+    export_query_string = filter_params
+
+    # 11. Pagination
+    paginated_records = paginate(request, records)
+    page_obj = paginated_records
+
+    pending_corrections_count = (
+        AttendanceCorrectionRequest.objects.filter(status='PENDING').count()
+        if request.user.role in MANAGEMENT or getattr(request.user, "is_superuser", False) else 0
+    )
+
+    return page(
+        request,
+        'attendance_dashboard',
+        'attendance',
+        page_obj=page_obj,
+        records=page_obj,
+        kpis=kpis,
+        monthly_totals=monthly_totals,
+        view_mode=view_mode,
+        target_date=start_date,
+        selected_date_str=start_date.strftime('%Y-%m-%d'),
+        selected_date_from_str=start_date.strftime('%Y-%m-%d'),
+        selected_date_to_str=end_date.strftime('%Y-%m-%d'),
+        selected_employee=employee_id if employee_id and employee_id > 0 else None,
+        selected_employee_id=str(employee_id) if employee_id and employee_id > 0 else "",
+        selected_branch=branch_id if branch_id != "00000000-0000-0000-0000-000000000000" else None,
+        selected_branch_id=str(branch_id) if branch_id and branch_id != "00000000-0000-0000-0000-000000000000" else "",
+        selected_status=status_filter,
+        status_choices=ATTENDANCE_STATUS_CHOICES,
+        all_branches=all_branches,
+        all_employees=all_employees,
+        filter_params=filter_params,
+        export_query_string=export_query_string,
+        search_q=search_q,
+        pending_corrections_count=pending_corrections_count,
+    )
+
+
+@workspace(employee=True)
+def employee_attendance_history(request, user_id):
+    target_employee = get_object_or_404(User, pk=user_id)
+    if request.user.pk != target_employee.pk and request.user.role not in MANAGEMENT and not getattr(request.user, "is_superuser", False):
+        raise PermissionDenied
+
+    today = timezone.localdate()
+    date_from_str = request.GET.get('date_from', '').strip()
+    date_to_str = request.GET.get('date_to', '').strip()
+    status_filter = request.GET.get('status', '').strip().upper()
+    export_format = request.GET.get('export', '').strip().lower()
+
+    try:
+        start_date = datetime.strptime(date_from_str, '%Y-%m-%d').date() if date_from_str else (today - timedelta(days=30))
+    except ValueError:
+        start_date = today - timedelta(days=30)
+    try:
+        end_date = datetime.strptime(date_to_str, '%Y-%m-%d').date() if date_to_str else today
+    except ValueError:
+        end_date = today
+
+    if end_date < start_date:
+        start_date, end_date = end_date, start_date
+
+    from .attendance_services import (
+        ATTENDANCE_STATUS_CHOICES,
+        get_attendance_records,
+        get_monthly_totals_from_records,
+    )
+    records = get_attendance_records(
+        user=request.user,
+        start_date=start_date,
+        end_date=end_date,
+        employee_id=target_employee.pk,
+        status_filter=status_filter if status_filter else None,
+    )
+
+    if export_format in {'csv', 'xlsx'}:
+        filename_base = f"attendance_{target_employee.username}_{start_date.isoformat()}_to_{end_date.isoformat()}"
+        if export_format == 'csv':
+            from .export_utils import export_attendance_csv
+            return export_attendance_csv(records, filename=f"{filename_base}.csv")
+        else:
+            from .export_utils import export_attendance_excel
+            return export_attendance_excel(records, filename=f"{filename_base}.xlsx")
+
+    monthly_totals = get_monthly_totals_from_records(records)
+
+    from apps.activity.models import EmployeeOfficeAssignment
+    primary_assignment = EmployeeOfficeAssignment.objects.filter(
+        user=target_employee, is_active=True, is_primary=True
+    ).select_related('office').first()
+
+    history_params = request.GET.copy()
+    history_params.pop('export', None)
+    history_params['date_from'] = start_date.strftime('%Y-%m-%d')
+    history_params['date_to'] = end_date.strftime('%Y-%m-%d')
+    if status_filter:
+        history_params['status'] = status_filter
+    export_query_string = history_params.urlencode()
+
+    return page(
+        request,
+        'employee_attendance_history',
+        'attendance',
+        target_employee=target_employee,
+        primary_branch=primary_assignment.office if primary_assignment else None,
+        records=records,
+        monthly_totals=monthly_totals,
+        selected_date_from=start_date,
+        selected_date_to=end_date,
+        selected_date_from_str=start_date.isoformat(),
+        selected_date_to_str=end_date.isoformat(),
+        selected_status=status_filter,
+        status_choices=ATTENDANCE_STATUS_CHOICES,
+        export_query_string=export_query_string,
+    )
+
+
+@workspace(management=True)
+def attendance_corrections_list(request):
+    selected_status = request.GET.get('status', '').strip()
+    query = AttendanceCorrectionRequest.objects.select_related('employee', 'reviewed_by').order_by('-pk')
+    if selected_status:
+        query = query.filter(status=selected_status)
+
+    return page(
+        request,
+        'attendance_corrections',
+        'attendance',
+        requests=list(query),
+        selected_status=selected_status,
+    )
+
+
+@require_POST
+@workspace(management=True)
+def attendance_correction_action(request, pk):
+    correction = get_object_or_404(AttendanceCorrectionRequest, pk=pk)
+    action = request.POST.get('action', '').strip().upper()
+    notes = request.POST.get('review_notes', '').strip()
+
+    if action in {'APPROVE', 'REJECT'}:
+        new_status = AttendanceCorrectionRequest.Status.APPROVED if action == 'APPROVE' else AttendanceCorrectionRequest.Status.REJECTED
+        correction.status = new_status
+        correction.reviewed_by = request.user
+        correction.reviewed_at = timezone.now()
+        correction.review_notes = notes
+        correction.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_notes'])
+        audit(request, 'POLICY', f'Admin {request.user.username} {action.lower()}d attendance correction #{correction.pk} for {correction.employee.username}')
+        messages.success(request, f'Attendance correction request #{correction.pk} marked as {new_status}.')
+    else:
+        messages.error(request, 'Invalid action specified.')
+
+    return redirect('web:attendance-corrections')
+
+
+@workspace(employee=True)
+def attendance_correction_submit(request):
+    from .workforce_forms import AttendanceCorrectionRequestForm
+    form = AttendanceCorrectionRequestForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        correction = form.save(commit=False)
+        correction.employee = request.user
+        correction.status = AttendanceCorrectionRequest.Status.PENDING
+        correction.save()
+        audit(request, 'POLICY', f'Employee {request.user.username} submitted attendance correction for {correction.date} ({correction.request_type})')
+        messages.success(request, 'Attendance correction request submitted successfully.')
+        return redirect('web:attendance-corrections' if request.user.role in MANAGEMENT else 'web:attendance')
+
+    return page(
+        request,
+        'attendance_correction_form',
+        'attendance',
+        form=form,
+    )
 
 
 @require_POST

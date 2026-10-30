@@ -1,0 +1,196 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Employee Branch Assignments · Vaani CRM{% endblock %}
+{% block breadcrumb %}<a href="{% url 'web:branches' %}">Branches</a> / Employee Assignments{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/branches.css' %}?v=55">
+
+<div class="branches-page">
+  <!-- Header -->
+  <div class="branches-header">
+    <div>
+      <div class="eyebrow">WORKFORCE LOCATION ALLOCATION</div>
+      <h1>Employee Branch Assignments<span class="accent">.</span></h1>
+      <p>Manage primary branch workplace designations and authorize multi-branch access for roaming staff.</p>
+    </div>
+    <div class="actions">
+      <a class="button" href="{% url 'web:branches' %}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        Branch List ↗
+      </a>
+      <a class="button primary" href="{% url 'web:branch-create' %}">+ Create Branch</a>
+    </div>
+  </div>
+
+  <!-- 3 KPI Metrics Grid -->
+  <div class="branches-metrics-grid">
+    <div class="branches-metric-card">
+      <div class="branches-metric-header">
+        <span>Assigned Staff</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+      </div>
+      <div class="branches-metric-value" style="color: #4ade80;">{{ kpis.assigned_employees }}</div>
+      <div class="branches-metric-meta">Active staff with assigned primary branch</div>
+    </div>
+
+    <div class="branches-metric-card">
+      <div class="branches-metric-header">
+        <span>Unassigned Staff</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      </div>
+      <div class="branches-metric-value" style="color: {% if kpis.unassigned_employees > 0 %}#f59e0b{% else %}var(--text){% endif %};">
+        {{ kpis.unassigned_employees }}
+      </div>
+      <div class="branches-metric-meta">Staff requiring branch designation</div>
+    </div>
+
+    <div class="branches-metric-card">
+      <div class="branches-metric-header">
+        <span>Multi-Branch Staff</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      </div>
+      <div class="branches-metric-value">{{ kpis.multi_branch_employees }}</div>
+      <div class="branches-metric-meta">Authorized across multiple office locations</div>
+    </div>
+  </div>
+
+  <!-- Filter Card -->
+  <section class="branches-filter-card">
+    <form method="get" class="branches-filter-form">
+      <div class="branches-search-field">
+        <span class="search-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input type="text" name="q" placeholder="Search staff name, username or email..." value="{{ search_query }}">
+      </div>
+
+      <div class="branches-filter-field">
+        <select name="branch" onchange="this.form.submit()">
+          <option value="">All branches</option>
+          {% for b in all_branches %}
+          <option value="{{ b.pk }}" {% if branch_filter == b.pk|stringformat:"s" %}selected{% endif %}>{{ b.name }} ({{ b.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="branches-filter-field">
+        <select name="assignment_status" onchange="this.form.submit()">
+          <option value="">All assignment statuses</option>
+          <option value="unassigned" {% if status_filter == 'unassigned' %}selected{% endif %}>⚠️ Unassigned only</option>
+          <option value="assigned" {% if status_filter == 'assigned' %}selected{% endif %}>Assigned only</option>
+          <option value="multi_branch" {% if status_filter == 'multi_branch' %}selected{% endif %}>Multi-branch only</option>
+        </select>
+      </div>
+
+      <div class="branches-filter-field">
+        <select name="role" onchange="this.form.submit()">
+          <option value="">All roles</option>
+          {% for code, label in roles %}
+          <option value="{{ code }}" {% if role_filter == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="branches-filter-actions">
+        {% if active_filters_count %}
+        <span class="branches-active-badge">{{ active_filters_count }} filter{{ active_filters_count|pluralize }} active</span>
+        {% endif %}
+        <button class="branches-apply-btn" type="submit">Filter</button>
+        {% if search_query or branch_filter or status_filter or role_filter %}
+        <a class="branches-reset-btn" href="{% url 'web:employee-branch-assignments' %}">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
+  <!-- Table Section -->
+  <section class="panel">
+    <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center;">
+      <h2>Staff Directory &amp; Branch Authorizations ({{ records.paginator.count }})</h2>
+      <small class="muted">1 Primary branch mandatory; additional branches permitted</small>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Role / Department</th>
+            <th>Primary Branch</th>
+            <th>Additional Authorized Branches</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in employee_rows %}
+          <tr>
+            <td>
+              <strong>{{ row.employee.get_full_name|default:row.employee.username }}</strong>
+              <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+                @{{ row.employee.username }} · {{ row.employee.email|default:"No email" }}
+              </div>
+            </td>
+            <td>
+              <span class="badge" style="font-size: 0.75rem;">{{ row.employee.get_role_display }}</span>
+              {% if row.employee.designation %}
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">{{ row.employee.designation }}</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if row.primary %}
+              <span class="badge-primary-office">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+                {{ row.primary.name }}
+              </span>
+              <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;">
+                Code: {{ row.primary.code }}
+              </div>
+              {% else %}
+              <span class="badge-warning">
+                ⚠️ Unassigned
+              </span>
+              <div style="font-size: 0.72rem; color: #f59e0b; margin-top: 3px;">
+                Cannot log in when geofence active
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              {% if row.additional %}
+              <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                {% for add_off in row.additional %}
+                <span class="badge-authorized-office" title="{{ add_off.name }}">
+                  {{ add_off.name }} ({{ add_off.code }})
+                </span>
+                {% endfor %}
+              </div>
+              {% else %}
+              <span style="font-size: 0.8rem; color: var(--text-muted);">None (Single location)</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">
+              <a class="button small primary" href="{% url 'web:employee-branch-assign-edit' row.employee.pk %}">
+                {% if row.is_unassigned %}Assign Branch{% else %}Edit Assignment{% endif %}
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+              <div style="font-size: 1rem; font-weight: 600; margin-bottom: 4px;">No matching staff found</div>
+              <p style="font-size: 0.85rem;">Adjust search filters to view employee branch assignments.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if records.has_other_pages %}
+    <div style="padding: 16px 20px; border-top: 1px solid var(--border);">
+      {% include 'web/pagination.html' with page_obj=records %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

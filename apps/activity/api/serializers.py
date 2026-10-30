@@ -36,6 +36,17 @@ class BreakReasonConfigSerializer(serializers.ModelSerializer):
         ]
 
 
+class StartActivitySerializer(serializers.Serializer):
+    category_id = serializers.IntegerField(required=False, allow_null=True)
+    note = serializers.CharField(required=False, allow_blank=True, default="", max_length=255)
+    latitude = serializers.FloatField(required=False, allow_null=True)
+    longitude = serializers.FloatField(required=False, allow_null=True)
+    accuracy = serializers.FloatField(required=False, allow_null=True)
+    recorded_at = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    timestamp = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    is_mocked = serializers.BooleanField(required=False, default=False)
+
+
 class PauseActivitySerializer(serializers.Serializer):
     break_reason_id = serializers.IntegerField(required=True)
     note = serializers.CharField(required=False, allow_blank=True, default="", max_length=255)

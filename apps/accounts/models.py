@@ -82,6 +82,18 @@ class User(AbstractUser):
         help_text="Approved by administrator to mark leads as contacted via text/WhatsApp message without calling.",
     )
 
+    shift_workflow_enabled = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Opt-in to the new shift workflow (explicit Start Shift, 8-hour net duration rule, decoupled shift lifecycle).",
+    )
+
+    shift_geofence_enforced = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Approved by administrator to enforce office geofencing for shift actions (Start Shift, Resume, End Shift) when new shift workflow is enabled.",
+    )
+
     manager = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,

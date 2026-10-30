@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import zoneinfo
 
 from django.db import models, transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -13,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.api.authentication import VerifiedSessionAuthentication
+from apps.accounts.models import User
 from apps.activity.models import (
     ActivityBreak,
     ActivityCategory,
@@ -31,9 +33,11 @@ from apps.activity.services import (
     end_work_session,
     pause_work_session,
     resume_work_session,
+    start_work_session,
     switch_activity_category,
 )
 from apps.performance.models import PointsEntry
+from apps.web.models import Attendance
 
 from .serializers import (
     ActivityCategorySerializer,
@@ -41,6 +45,7 @@ from .serializers import (
     EndActivitySerializer,
     PauseActivitySerializer,
     ResumeActivitySerializer,
+    StartActivitySerializer,
     SwitchActivitySerializer,
 )
 
@@ -176,6 +181,117 @@ class ActivityCategoriesView(BaseActivityView):
         })
 
 
+class StartActivityView(BaseActivityView):
+    """
+    POST /api/v1/mobile/activity/start/
+    Explicitly starts a new WorkSession for the authenticated user.
+    When location enforcement is enabled for the employee, requires valid GPS reading
+    within an authorized office location.
+    """
+    def post(self, request):
+        serializer = StartActivitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        now = timezone.now()
+
+        # Check if an active or paused session already exists
+        existing = WorkSession.objects.filter(
+            user=request.user,
+            status__in=[WorkSession.Status.ACTIVE, WorkSession.Status.PAUSED],
+        ).first()
+        if existing:
+            return Response(
+                {"detail": f"User already has an active or paused work session (id={existing.id})."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        category = None
+        if data.get("category_id"):
+            category = ActivityCategory.objects.filter(id=data["category_id"], is_active=True).first()
+            if not category:
+                return Response({"detail": "Invalid or inactive target category."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Geofence enforcement when enabled for this employee
+        from apps.activity.policy_services import (
+            ProtectedAction,
+            PolicyValidationError,
+            evaluate_protected_action,
+            get_active_policy_exception,
+            parse_and_validate_gps_reading,
+            is_employee_geofence_enforced,
+        )
+        from apps.activity.models import PolicyException
+
+        if is_employee_geofence_enforced(request.user):
+            lat = data.get("latitude")
+            lon = data.get("longitude")
+            acc = data.get("accuracy")
+            rec_str = data.get("recorded_at") or data.get("timestamp")
+            is_mock = data.get("is_mocked", False)
+
+            if lat is None or lon is None:
+                return Response({
+                    "detail": "A fresh, verified GPS reading is required to start your shift.",
+                    "code": "MISSING_GPS_READING",
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+            try:
+                gps_reading = parse_and_validate_gps_reading(
+                    latitude=lat,
+                    longitude=lon,
+                    accuracy=acc if acc is not None else 999.0,
+                    recorded_at=rec_str or now,
+                    is_mocked=is_mock,
+                    now=now,
+                )
+            except PolicyValidationError as pve:
+                if not get_active_policy_exception(request.user, PolicyException.RuleType.START_SHIFT_GEOFENCE, at_time=now):
+                    return Response({
+                        "detail": pve.message,
+                        "code": pve.code,
+                        **getattr(pve, "extra", {}),
+                    }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+                gps_reading = None
+
+            res = evaluate_protected_action(
+                user=request.user,
+                action=ProtectedAction.START_SHIFT,
+                gps_reading=gps_reading,
+                now=now,
+            )
+            if not res.permitted:
+                return Response({
+                    "detail": res.error_message,
+                    "code": res.error_code,
+                    "distance_meters": getattr(res.geofence_result, "distance_meters", None),
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+        # Retrieve or create today's attendance record with real shift start time
+        attendance, _ = Attendance.objects.get_or_create(
+            employee=request.user,
+            date=timezone.localdate(now),
+            defaults={"checked_in": now, "status": "PRESENT", "login_remark": data.get("note", "")},
+        )
+        if attendance.checked_in is None:
+            attendance.checked_in = now
+            attendance.save(update_fields=["checked_in"])
+
+        # Link open CallerSession if unlinked
+        from apps.accounts.models import CallerSession
+        CallerSession.objects.filter(caller=request.user, logged_out_at__isnull=True, attendance__isnull=True).update(attendance=attendance)
+
+        session = start_work_session(
+            user=request.user,
+            attendance=attendance,
+            category=category,
+            started_at=now,
+            note=data.get("note", ""),
+        )
+
+        return Response(serialize_current_session(session, now), status=status.HTTP_201_CREATED)
+
+
 class PauseActivityView(BaseActivityView):
     """
     POST /api/v1/mobile/activity/pause/
@@ -243,62 +359,62 @@ class ResumeActivityView(BaseActivityView):
             if not category:
                 return Response({"detail": "Invalid or inactive target category."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Geofence validation on resuming breaks that require it (e.g. Lunch when configured)
-        open_break = session.breaks.filter(ended_at__isnull=True).select_related("reason_config").first()
-        is_admin_user = (
-            getattr(request.user, "role", None) in ["SUPER_ADMIN", "ADMIN"] or
-            getattr(request.user, "is_superuser", False)
+        # Geofence validation on resuming work when enforcement is enabled for this employee
+        from apps.activity.policy_services import (
+            ProtectedAction,
+            PolicyValidationError,
+            evaluate_protected_action,
+            get_active_policy_exception,
+            parse_and_validate_gps_reading,
+            is_employee_geofence_enforced,
         )
-        if open_break and open_break.reason_config and open_break.reason_config.requires_geofence_resume:
-            from apps.activity.policy_services import is_gps_geofence_enforcement_enabled
-            if not is_admin_user and is_gps_geofence_enforcement_enabled():
-                from apps.activity.policy_services import (
-                    ProtectedAction,
-                    PolicyValidationError,
-                    evaluate_protected_action,
-                    get_active_policy_exception,
-                    parse_and_validate_gps_reading,
-                )
-                from apps.activity.models import PolicyException
+        from apps.activity.models import PolicyException
 
-                gps_reading = None
-                lat = data.get("latitude")
-                lon = data.get("longitude")
-                acc = data.get("accuracy")
-                rec_str = data.get("recorded_at") or data.get("timestamp")
-                is_mock = data.get("is_mocked", False)
+        if is_employee_geofence_enforced(request.user):
+            gps_reading = None
+            lat = data.get("latitude")
+            lon = data.get("longitude")
+            acc = data.get("accuracy")
+            rec_str = data.get("recorded_at") or data.get("timestamp")
+            is_mock = data.get("is_mocked", False)
 
-                if lat is not None and lon is not None:
-                    try:
-                        gps_reading = parse_and_validate_gps_reading(
-                            latitude=lat,
-                            longitude=lon,
-                            accuracy=acc if acc is not None else 999.0,
-                            recorded_at=rec_str or now,
-                            is_mocked=is_mock,
-                            now=now,
-                        )
-                    except PolicyValidationError as pve:
-                        if not get_active_policy_exception(request.user, PolicyException.RuleType.LUNCH_GEOFENCE, at_time=now):
-                            return Response({
-                                "detail": pve.message,
-                                "code": pve.code,
-                                **getattr(pve, "extra", {}),
-                            }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            if lat is None or lon is None:
+                return Response({
+                    "detail": "A fresh, verified GPS reading is required to resume work.",
+                    "code": "MISSING_GPS_READING",
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-                res = evaluate_protected_action(
-                    user=request.user,
-                    action=ProtectedAction.LUNCH_RESUME,
-                    gps_reading=gps_reading,
-                    session=session,
+            try:
+                gps_reading = parse_and_validate_gps_reading(
+                    latitude=lat,
+                    longitude=lon,
+                    accuracy=acc if acc is not None else 999.0,
+                    recorded_at=rec_str or now,
+                    is_mocked=is_mock,
                     now=now,
                 )
-                if not res.permitted:
+            except PolicyValidationError as pve:
+                if not get_active_policy_exception(request.user, PolicyException.RuleType.LUNCH_GEOFENCE, at_time=now):
                     return Response({
-                        "detail": res.error_message,
-                        "code": res.error_code,
-                        "distance_meters": getattr(res.geofence_result, "distance_meters", None),
+                        "detail": pve.message,
+                        "code": pve.code,
+                        **getattr(pve, "extra", {}),
                     }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+                gps_reading = None
+
+            res = evaluate_protected_action(
+                user=request.user,
+                action=ProtectedAction.RESUME_WORK,
+                gps_reading=gps_reading,
+                session=session,
+                now=now,
+            )
+            if not res.permitted:
+                return Response({
+                    "detail": res.error_message,
+                    "code": res.error_code,
+                    "distance_meters": getattr(res.geofence_result, "distance_meters", None),
+                }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
         session, segment = resume_work_session(
             session_id=session.id,
@@ -367,6 +483,32 @@ class EndActivityView(BaseActivityView):
             status__in=[WorkSession.Status.ACTIVE, WorkSession.Status.PAUSED],
         ).first()
         if not session:
+            # Idempotency check: if session was already completed, return idempotent response
+            last_completed = WorkSession.objects.filter(
+                user=request.user,
+                status=WorkSession.Status.COMPLETED,
+            ).order_by("-ended_at").first()
+            if last_completed:
+                gross_seconds = max(0, int(((last_completed.ended_at or now) - last_completed.started_at).total_seconds()))
+                break_seconds = sum(
+                    max(0, int(((b.ended_at or now) - b.started_at).total_seconds()))
+                    for b in last_completed.breaks.all()
+                )
+                net_seconds = max(0, gross_seconds - break_seconds)
+                return Response({
+                    "detail": "Work session completed successfully.",
+                    "session": {
+                        "id": last_completed.id,
+                        "date": last_completed.date.isoformat(),
+                        "status": last_completed.status,
+                        "closure_reason": last_completed.closure_reason,
+                        "started_at": last_completed.started_at.isoformat(),
+                        "ended_at": last_completed.ended_at.isoformat() if last_completed.ended_at else None,
+                        "gross_seconds": gross_seconds,
+                        "break_seconds": break_seconds,
+                        "net_seconds": net_seconds,
+                    },
+                })
             return Response({"detail": "No active or paused session to end."}, status=status.HTTP_404_NOT_FOUND)
 
         # Geofence & 8-hour net work duration validation on End Shift
@@ -381,7 +523,7 @@ class EndActivityView(BaseActivityView):
                 evaluate_protected_action,
                 get_active_policy_exception,
                 parse_and_validate_gps_reading,
-                is_gps_geofence_enforcement_enabled,
+                is_employee_geofence_enforced,
             )
             from apps.activity.models import PolicyException
 
@@ -392,7 +534,13 @@ class EndActivityView(BaseActivityView):
             rec_str = data.get("recorded_at") or data.get("timestamp")
             is_mock = data.get("is_mocked", False)
 
-            if is_gps_geofence_enforcement_enabled() and lat is not None and lon is not None:
+            if is_employee_geofence_enforced(request.user):
+                if lat is None or lon is None:
+                    return Response({
+                        "detail": "A fresh, verified GPS reading is required to end your shift.",
+                        "code": "MISSING_GPS_READING",
+                    }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
                 try:
                     gps_reading = parse_and_validate_gps_reading(
                         latitude=lat,
@@ -409,6 +557,7 @@ class EndActivityView(BaseActivityView):
                             "code": pve.code,
                             **getattr(pve, "extra", {}),
                         }, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+                    gps_reading = None
 
             res = evaluate_protected_action(
                 user=request.user,
@@ -438,6 +587,12 @@ class EndActivityView(BaseActivityView):
             closed_by=request.user,
             admin_note=data.get("note", ""),
         )
+
+        # Update checked_out on attendance record
+        att_to_update = closed_session.attendance or Attendance.objects.filter(employee=request.user, date=closed_session.date).first()
+        if att_to_update:
+            att_to_update.checked_out = closed_session.ended_at
+            att_to_update.save(update_fields=["checked_out"])
 
         gross_seconds = max(0, int((closed_session.ended_at - closed_session.started_at).total_seconds()))
         break_seconds = 0
@@ -780,3 +935,73 @@ class PolicyExceptionRevokeView(BaseActivityView):
         return Response(PolicyExceptionSerializer(exc).data)
 
 
+class EmployeeShiftPolicyView(BaseActivityView):
+    """
+    GET / PATCH /api/v1/mobile/activity/employee-policy/<int:employee_id>/
+    Admin-only endpoint to view and update an employee's shift location enforcement.
+    """
+    def get(self, request, employee_id):
+        if not (getattr(request.user, "role", None) in ["SUPER_ADMIN", "ADMIN"] or getattr(request.user, "is_superuser", False)):
+            return Response({"detail": "Administrator access required."}, status=status.HTTP_403_FORBIDDEN)
+        employee = get_object_or_404(User, pk=employee_id)
+        return Response({
+            "employee_id": employee.id,
+            "username": employee.username,
+            "full_name": employee.get_full_name(),
+            "shift_workflow_enabled": employee.shift_workflow_enabled,
+            "shift_geofence_enforced": employee.shift_geofence_enforced,
+        })
+
+    def patch(self, request, employee_id):
+        if not (getattr(request.user, "role", None) in ["SUPER_ADMIN", "ADMIN"] or getattr(request.user, "is_superuser", False)):
+            return Response({"detail": "Administrator access required."}, status=status.HTTP_403_FORBIDDEN)
+        employee = get_object_or_404(User, pk=employee_id)
+        has_wf = "shift_workflow_enabled" in request.data
+        has_geo = "shift_geofence_enforced" in request.data
+        if not has_wf and not has_geo:
+            return Response({"detail": "Either 'shift_workflow_enabled' or 'shift_geofence_enforced' is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        target_wf = bool(request.data["shift_workflow_enabled"]) if has_wf else employee.shift_workflow_enabled
+        target_geo = bool(request.data["shift_geofence_enforced"]) if has_geo else employee.shift_geofence_enforced
+        if target_geo and not target_wf:
+            return Response(
+                {"detail": "Office Geofence Enforcement requires Explicit Shift Workflow to be enabled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.web.models import AuditEvent
+        update_fields = ["updated_at"]
+
+        if has_wf:
+            old_wf = employee.shift_workflow_enabled
+            new_wf = bool(request.data["shift_workflow_enabled"])
+            employee.shift_workflow_enabled = new_wf
+            update_fields.append("shift_workflow_enabled")
+            if old_wf != new_wf:
+                AuditEvent.objects.create(
+                    actor=request.user,
+                    category="POLICY",
+                    description=f"Admin {request.user.username} updated shift_workflow_enabled for {employee.username} (id={employee.pk}) from {old_wf} to {new_wf}",
+                )
+
+        if has_geo:
+            old_geo = employee.shift_geofence_enforced
+            new_geo = bool(request.data["shift_geofence_enforced"])
+            employee.shift_geofence_enforced = new_geo
+            update_fields.append("shift_geofence_enforced")
+            if old_geo != new_geo:
+                AuditEvent.objects.create(
+                    actor=request.user,
+                    category="POLICY",
+                    description=f"Admin {request.user.username} updated shift_geofence_enforced for {employee.username} (id={employee.pk}) from {old_geo} to {new_geo}",
+                )
+
+        employee.save(update_fields=update_fields)
+
+        return Response({
+            "employee_id": employee.id,
+            "username": employee.username,
+            "shift_workflow_enabled": employee.shift_workflow_enabled,
+            "shift_geofence_enforced": employee.shift_geofence_enforced,
+            "detail": f"Shift policy updated for {employee.username}.",
+        })

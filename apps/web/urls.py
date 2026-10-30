@@ -20,6 +20,7 @@ from . import location_views
 from . import counselor_views
 from . import workforce_views as workforce
 from . import workforce_activity_views
+from . import branch_views
 
 app_name = 'web'
 urlpatterns = [
@@ -72,6 +73,10 @@ urlpatterns = [
     path('leave/<int:pk>/action/', workforce.leave_action, name='leave-action'),
     path('attendance/', workforce.attendance, name='attendance'),
     path('attendance/action/', workforce.attendance_action, name='attendance-action'),
+    path('attendance/employee/<int:user_id>/', workforce.employee_attendance_history, name='employee-attendance-history'),
+    path('attendance/corrections/', workforce.attendance_corrections_list, name='attendance-corrections'),
+    path('attendance/corrections/<int:pk>/action/', workforce.attendance_correction_action, name='attendance-correction-action'),
+    path('attendance/corrections/request/', workforce.attendance_correction_submit, name='attendance-correction-submit'),
     path('holidays/', workforce.holidays, name='holidays'),
     path('holidays/new/', workforce.holiday_new, name='holiday-new'),
     path('holidays/<int:pk>/', workforce.holiday_new, name='holiday-edit'),
@@ -95,6 +100,12 @@ urlpatterns = [
     path('workforce/activity/', workforce_activity_views.activity_dashboard, name='workforce-activity'),
     path('workforce/activity/<int:pk>/', workforce_activity_views.activity_detail, name='workforce-activity-detail'),
     path('workforce/activity/settings/', workforce_activity_views.activity_settings, name='workforce-activity-settings'),
+    path('branches/', branch_views.branch_list, name='branches'),
+    path('branches/create/', branch_views.branch_create, name='branch-create'),
+    path('branches/<uuid:pk>/edit/', branch_views.branch_edit, name='branch-edit'),
+    path('branches/<uuid:pk>/toggle-status/', branch_views.branch_toggle_status, name='branch-toggle-status'),
+    path('branches/assignments/', branch_views.employee_branch_assignments_list, name='employee-branch-assignments'),
+    path('branches/assignments/<int:user_id>/edit/', branch_views.employee_branch_assign_edit, name='employee-branch-assign-edit'),
     path('activity/', workforce.activity_log, name='activity-log'),
     path('leads/<int:pk>/collaboration/', workforce.lead_collaboration, name='lead-collaboration'),
     path('consultations/', workforce.consultations, name='consultations'),

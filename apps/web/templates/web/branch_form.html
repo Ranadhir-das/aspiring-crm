@@ -1,0 +1,205 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}{{ title }} · Vaani CRM{% endblock %}
+{% block breadcrumb %}<a href="{% url 'web:branches' %}">Branches</a> / {{ title }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/branches.css' %}?v=55">
+
+<div class="page-heading">
+  <div>
+    <div class="eyebrow">OFFICE CONFIGURATION &amp; PERIMETER</div>
+    <h1>{{ title }}<span class="accent">.</span></h1>
+    <p>Configure office address, unique code, and verified coordinates for 50-metre geofence enforcement.</p>
+  </div>
+  <a class="button" href="{% url 'web:branches' %}">← Back to Branches</a>
+</div>
+
+<div class="dashboard-grid">
+  <!-- Form Panel -->
+  <section class="panel form-panel">
+    <div class="panel-heading">
+      <h2>Branch details</h2>
+    </div>
+
+    <form method="post" id="branch-form">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+      <div class="notice error" style="margin-bottom: 20px;">
+        {% for err in form.non_field_errors %}{{ err }}<br>{% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="field" style="margin-bottom: 18px;">
+        <label for="id_name"><strong>Branch / Office Name *</strong></label>
+        {{ form.name }}
+        {% if form.name.errors %}
+        <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 4px;">{{ form.name.errors.0 }}</span>
+        {% endif %}
+        <small class="muted">e.g. DGSME Branch, Kolkata Headquarters, Salt Lake Facility.</small>
+      </div>
+
+      <div class="field" style="margin-bottom: 18px;">
+        <label for="id_code"><strong>Branch Code (Unique) *</strong></label>
+        {{ form.code }}
+        {% if form.code.errors %}
+        <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 4px;">{{ form.code.errors.0 }}</span>
+        {% endif %}
+        <small class="muted">Stable identifier used in system logs and reports (e.g. DGSME, KOL_HQ).</small>
+      </div>
+
+      <div class="field" style="margin-bottom: 18px;">
+        <label for="id_address"><strong>Physical Address</strong></label>
+        {{ form.address }}
+        {% if form.address.errors %}
+        <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 4px;">{{ form.address.errors.0 }}</span>
+        {% endif %}
+        <small class="muted">Full postal address for employee reference and audit logs.</small>
+      </div>
+
+      <!-- Coordinates Group -->
+      <div class="branch-assign-card" style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div>
+            <strong style="font-size: 0.95rem; color: var(--text);">GPS Coordinates &amp; Geofence</strong>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">Strict 50-metre radius is enforced authoritatively from these coordinates.</div>
+          </div>
+          <button type="button" class="button small" id="btn-detect-location" style="display: inline-flex; align-items: center; gap: 5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            Detect My Device Location
+          </button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+          <div class="field">
+            <label for="id_latitude"><strong>Latitude *</strong></label>
+            {{ form.latitude }}
+            {% if form.latitude.errors %}
+            <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 4px;">{{ form.latitude.errors.0 }}</span>
+            {% endif %}
+            <small class="muted">-90.000000 to +90.000000</small>
+          </div>
+
+          <div class="field">
+            <label for="id_longitude"><strong>Longitude *</strong></label>
+            {{ form.longitude }}
+            {% if form.longitude.errors %}
+            <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 4px;">{{ form.longitude.errors.0 }}</span>
+            {% endif %}
+            <small class="muted">-180.000000 to +180.000000</small>
+          </div>
+        </div>
+
+        <div id="location-detect-status" style="font-size: 0.8rem; margin-top: 8px; color: var(--text-muted); display: none;"></div>
+
+        <!-- Geofence policy pill -->
+        <div style="margin-top: 14px; padding: 10px 14px; background: rgba(59, 130, 246, 0.08); border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2); display: flex; align-items: center; gap: 10px;">
+          <span class="radius-badge" style="font-size: 0.8rem;">50 Metres</span>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">
+            Enforced policy boundary. Non-admin logins require verified GPS reading within 50m of these coordinates.
+          </span>
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom: 20px;">
+        <label for="id_notes"><strong>Internal Operations Notes</strong></label>
+        {{ form.notes }}
+        {% if form.notes.errors %}
+        <span class="field-error" style="color: #f87171; font-size: 0.82rem; display: block; margin-top: 4px;">{{ form.notes.errors.0 }}</span>
+        {% endif %}
+        <small class="muted">Optional notes visible to administrators only (e.g. WiFi networks, floor details, contact person).</small>
+      </div>
+
+      <div class="field checkbox branch-assign-card" style="margin-bottom: 24px; padding: 14px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 0;">
+          {{ form.is_active }}
+          <div>
+            <strong style="color: var(--text);">Active Branch Location</strong>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">
+              When active, authorized employees can check in and resume breaks at this branch. Deactivating immediately blocks geofenced actions for this location.
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <button type="submit" class="button primary">
+          {% if is_create %}Save and Create Branch{% else %}Save Changes{% endif %}
+        </button>
+        <a class="button" href="{% url 'web:branches' %}">Cancel</a>
+      </div>
+    </form>
+  </section>
+
+  <!-- Sidebar / Staff List if editing -->
+  {% if not is_create and branch %}
+  <section class="panel">
+    <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center;">
+      <h2>Assigned Staff ({{ assignments|length }})</h2>
+      <a class="button small" href="{% url 'web:employee-branch-assignments' %}?branch={{ branch.pk }}">Manage All Staff ↗</a>
+    </div>
+
+    <div style="padding: 16px 20px;">
+      {% if assignments %}
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        {% for a in assignments %}
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px;">
+          <div>
+            <strong>{{ a.user.get_full_name|default:a.user.username }}</strong>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">@{{ a.user.username }} · {{ a.user.get_role_display }}</div>
+          </div>
+          <div>
+            {% if a.is_primary %}
+            <span class="badge-primary-office">Primary</span>
+            {% else %}
+            <span class="badge-authorized-office">Authorized</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="text-align: center; padding: 30px 10px; color: var(--text-muted);">
+        <p style="font-size: 0.85rem; margin-bottom: 12px;">No employees are currently assigned to this branch.</p>
+        <a class="button small" href="{% url 'web:employee-branch-assignments' %}">Assign Staff</a>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const btn = document.getElementById('btn-detect-location');
+  const statusEl = document.getElementById('location-detect-status');
+  const latInput = document.getElementById('id_latitude');
+  const lonInput = document.getElementById('id_longitude');
+
+  if (btn && navigator.geolocation) {
+    btn.addEventListener('click', function() {
+      statusEl.style.display = 'block';
+      statusEl.textContent = 'Acquiring GPS location from device...';
+      statusEl.style.color = 'var(--text-muted)';
+
+      navigator.geolocation.getCurrentPosition(
+        function(position) {
+          const lat = position.coords.latitude.toFixed(6);
+          const lon = position.coords.longitude.toFixed(6);
+          latInput.value = lat;
+          lonInput.value = lon;
+          statusEl.textContent = 'Coordinates updated: ' + lat + ', ' + lon + ' (accuracy: ±' + Math.round(position.coords.accuracy) + 'm)';
+          statusEl.style.color = '#34d399';
+        },
+        function(err) {
+          statusEl.textContent = 'Could not acquire location: ' + err.message + '. Please enter coordinates manually.';
+          statusEl.style.color = '#f87171';
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    });
+  }
+});
+</script>
+{% endblock %}

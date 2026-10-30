@@ -53,6 +53,9 @@ class GeofenceSwitchPolicyIntegrationTests(PolicyIntegrationBaseTestCase):
     def setUp(self):
         super().setUp()
         isolate_auth_throttles(self)
+        self.caller.shift_workflow_enabled = True
+        self.caller.shift_geofence_enforced = True
+        self.caller.save(update_fields=["shift_workflow_enabled", "shift_geofence_enforced"])
 
     def _setup_approved_photo_challenge(self):
         """Helper to create approved enrollment photo and fresh login challenge."""
@@ -89,11 +92,11 @@ class GeofenceSwitchPolicyIntegrationTests(PolicyIntegrationBaseTestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("token", resp.data)
 
-        # Confirm Attendance, Token, CallerSession, and WorkSession created
-        self.assertTrue(Attendance.objects.filter(employee=self.caller, date=timezone.localdate()).exists())
+        # Confirm Token, CallerSession created, WorkSession not auto-started
+        # For shift-workflow employees, Attendance record is created upon explicit Start Shift
         self.assertTrue(Token.objects.filter(user=self.caller).exists())
         self.assertTrue(CallerSession.objects.filter(caller=self.caller).exists())
-        self.assertTrue(WorkSession.objects.filter(user=self.caller, status=WorkSession.Status.ACTIVE).exists())
+        self.assertFalse(WorkSession.objects.filter(user=self.caller, status=WorkSession.Status.ACTIVE).exists())
 
     @override_settings(GPS_GEOFENCE_ENFORCEMENT_ENABLED=False)
     @patch("apps.accounts.api.views.validate_face_photo", return_value=b"valid_photo_bytes")
@@ -286,12 +289,11 @@ class GeofenceSwitchPolicyIntegrationTests(PolicyIntegrationBaseTestCase):
             "action": "logout",
         }, format="json")
 
-        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertEqual(resp.data.get("code"), "INSUFFICIENT_WORK_DURATION")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-        # Session was NOT logged out
-        self.caller_caller_session.refresh_from_db()
-        self.assertIsNone(self.caller_caller_session.logged_out_at)
+        # Work session is NOT ended on logout
+        session.refresh_from_db()
+        self.assertEqual(session.status, WorkSession.Status.ACTIVE)
 
     @override_settings(GPS_GEOFENCE_ENFORCEMENT_ENABLED=False)
     def test_switch_off_logout_under_8h_with_exception_succeeds(self):
@@ -337,8 +339,8 @@ class GeofenceSwitchPolicyIntegrationTests(PolicyIntegrationBaseTestCase):
     @override_settings(GPS_GEOFENCE_ENFORCEMENT_ENABLED=True)
     @patch("apps.accounts.api.views.validate_face_photo", return_value=b"valid_photo_bytes")
     @patch("apps.accounts.api.views.verify_face_photo", return_value=(0.95, True))
-    def test_switch_on_login_without_gps_rejected(self, mock_verify, mock_validate):
-        """When switch is enabled, login without GPS is rejected with MISSING_GPS_READING."""
+    def test_switch_on_login_without_gps_succeeds_decoupled(self, mock_verify, mock_validate):
+        """Under decoupled login flow, login without GPS succeeds."""
         challenge = self._setup_approved_photo_challenge()
 
         payload = {
@@ -347,48 +349,14 @@ class GeofenceSwitchPolicyIntegrationTests(PolicyIntegrationBaseTestCase):
         }
 
         resp = self.client.post("/api/v1/mobile/login/verify/", payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertEqual(resp.data.get("code"), "MISSING_GPS_READING")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("token", resp.data)
 
     @override_settings(GPS_GEOFENCE_ENFORCEMENT_ENABLED=True)
     @patch("apps.accounts.api.views.validate_face_photo", return_value=b"valid_photo_bytes")
     @patch("apps.accounts.api.views.verify_face_photo", return_value=(0.95, True))
-    def test_switch_on_login_poor_accuracy_rejected(self, mock_verify, mock_validate):
-        """When switch is enabled, login with poor accuracy is rejected with POOR_GPS_ACCURACY."""
-        challenge = self._setup_approved_photo_challenge()
-
-        payload = {
-            "challenge": str(challenge.pk),
-            "photo": "valid_base64_photo_data",
-            **self.coords_payload(lat=22.572646, lon=88.363895, acc=50.0),
-        }
-
-        resp = self.client.post("/api/v1/mobile/login/verify/", payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertEqual(resp.data.get("code"), "POOR_GPS_ACCURACY")
-
-    @override_settings(GPS_GEOFENCE_ENFORCEMENT_ENABLED=True)
-    @patch("apps.accounts.api.views.validate_face_photo", return_value=b"valid_photo_bytes")
-    @patch("apps.accounts.api.views.verify_face_photo", return_value=(0.95, True))
-    def test_switch_on_login_stale_gps_rejected(self, mock_verify, mock_validate):
-        """When switch is enabled, login with stale GPS (>60s) is rejected with STALE_GPS_READING."""
-        challenge = self._setup_approved_photo_challenge()
-
-        payload = {
-            "challenge": str(challenge.pk),
-            "photo": "valid_base64_photo_data",
-            **self.coords_payload(lat=22.572646, lon=88.363895, acc=10.0, age_sec=120),
-        }
-
-        resp = self.client.post("/api/v1/mobile/login/verify/", payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertEqual(resp.data.get("code"), "STALE_GPS_READING")
-
-    @override_settings(GPS_GEOFENCE_ENFORCEMENT_ENABLED=True)
-    @patch("apps.accounts.api.views.validate_face_photo", return_value=b"valid_photo_bytes")
-    @patch("apps.accounts.api.views.verify_face_photo", return_value=(0.95, True))
-    def test_switch_on_login_outside_office_rejected(self, mock_verify, mock_validate):
-        """When switch is enabled, login outside office geofence is rejected with GEOFENCE_VIOLATION."""
+    def test_switch_on_login_outside_office_succeeds_decoupled(self, mock_verify, mock_validate):
+        """Under decoupled login flow, login outside office geofence succeeds without error."""
         challenge = self._setup_approved_photo_challenge()
 
         payload = {
@@ -398,8 +366,8 @@ class GeofenceSwitchPolicyIntegrationTests(PolicyIntegrationBaseTestCase):
         }
 
         resp = self.client.post("/api/v1/mobile/login/verify/", payload, format="json")
-        self.assertEqual(resp.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
-        self.assertEqual(resp.data.get("code"), "GEOFENCE_VIOLATION")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn("token", resp.data)
 
     @override_settings(GPS_GEOFENCE_ENFORCEMENT_ENABLED=True)
     @patch("apps.accounts.api.views.validate_face_photo", return_value=b"valid_photo_bytes")
@@ -492,5 +460,5 @@ class GeofenceSwitchUnitTests(TestCase):
             action=ProtectedAction.LOGIN,
             gps_reading=None,
         )
-        self.assertFalse(result.permitted)
-        self.assertEqual(result.error_code, "MISSING_GPS_READING")
+        # Login is decoupled from geofencing
+        self.assertTrue(result.permitted)

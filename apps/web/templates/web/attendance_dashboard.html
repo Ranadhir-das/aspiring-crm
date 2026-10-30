@@ -1,0 +1,345 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Attendance Management · Vaani CRM{% endblock %}
+{% block breadcrumb %}Attendance Management{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=55">
+
+<div class="attendance-page">
+  <!-- Header -->
+  <div class="attendance-header">
+    <div>
+      <div class="eyebrow">WORKFORCE ATTENDANCE &amp; SHIFT VERIFICATION</div>
+      <h1>Attendance Management<span class="accent">.</span></h1>
+      <p>Verified net working hours based on explicit shift lifecycle, geofence compliance, and break deductions.</p>
+    </div>
+    <div class="actions">
+      {% if can_manage %}
+      <a class="button" href="{% url 'web:attendance-corrections' %}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        Correction Requests
+        {% if pending_corrections_count %}
+        <span style="display: inline-block; padding: 1px 6px; font-size: 0.72rem; font-weight: 700; border-radius: 10px; background: #f87171; color: #fff; margin-left: 5px;">{{ pending_corrections_count }}</span>
+        {% endif %}
+      </a>
+      {% endif %}
+
+      <!-- Export Buttons -->
+      <div class="export-group">
+        <a class="btn-export" href="?{{ export_query_string }}&export=csv" title="Download CSV Report">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          CSV Export
+        </a>
+        <a class="btn-export excel" href="?{{ export_query_string }}&export=xlsx" title="Download Formatted Excel Spreadsheet">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+          Excel (.xlsx)
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Summary Cards Grid (Shown for Daily View) -->
+  {% if kpis %}
+  <div class="attendance-kpis-grid">
+    <div class="attendance-kpi-card">
+      <div class="attendance-kpi-header">
+        <span>Total Staff</span>
+        <span>👥</span>
+      </div>
+      <div class="attendance-kpi-value">{{ kpis.total_staff }}</div>
+      <div class="attendance-kpi-meta">{{ kpis.target_date_formatted }}</div>
+    </div>
+
+    <div class="attendance-kpi-card kpi-full">
+      <div class="attendance-kpi-header">
+        <span>Full Shifts</span>
+        <span>✅</span>
+      </div>
+      <div class="attendance-kpi-value" style="color: var(--att-green);">{{ kpis.full_shift_count }}</div>
+      <div class="attendance-kpi-meta">&ge; 8h net verified work</div>
+    </div>
+
+    <div class="attendance-kpi-card kpi-active">
+      <div class="attendance-kpi-header">
+        <span>Active Shifts</span>
+        <span>⚡</span>
+      </div>
+      <div class="attendance-kpi-value" style="color: var(--att-mint);">{{ kpis.active_count }}</div>
+      <div class="attendance-kpi-meta">Currently in progress</div>
+    </div>
+
+    <div class="attendance-kpi-card kpi-short">
+      <div class="attendance-kpi-header">
+        <span>Short Shifts</span>
+        <span>⏱️</span>
+      </div>
+      <div class="attendance-kpi-value" style="color: var(--att-amber);">{{ kpis.short_shift_count }}</div>
+      <div class="attendance-kpi-meta">&lt; 8h net (unapproved)</div>
+    </div>
+
+    <div class="attendance-kpi-card kpi-missing">
+      <div class="attendance-kpi-header">
+        <span>Missing Checkout</span>
+        <span>⚠️</span>
+      </div>
+      <div class="attendance-kpi-value" style="color: var(--att-red);">{{ kpis.missing_checkout_count }}</div>
+      <div class="attendance-kpi-meta">Unended past sessions</div>
+    </div>
+
+    <div class="attendance-kpi-card kpi-leave">
+      <div class="attendance-kpi-header">
+        <span>Approved Leave</span>
+        <span>🏖️</span>
+      </div>
+      <div class="attendance-kpi-value" style="color: var(--att-blue);">{{ kpis.leave_count }}</div>
+      <div class="attendance-kpi-meta">Approved leave days</div>
+    </div>
+
+    <div class="attendance-kpi-card kpi-absent">
+      <div class="attendance-kpi-header">
+        <span>Absent</span>
+        <span>❌</span>
+      </div>
+      <div class="attendance-kpi-value" style="color: var(--att-red);">{{ kpis.absent_count }}</div>
+      <div class="attendance-kpi-meta">Past workday, no record</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Monthly / Range Summary Grid -->
+  {% if monthly_totals %}
+  <div class="attendance-kpis-grid">
+    <div class="attendance-kpi-card">
+      <div class="attendance-kpi-header"><span>Total Records</span><span>📋</span></div>
+      <div class="attendance-kpi-value">{{ monthly_totals.total_records }}</div>
+      <div class="attendance-kpi-meta">Filtered date range</div>
+    </div>
+    <div class="attendance-kpi-card kpi-full">
+      <div class="attendance-kpi-header"><span>Total Net Hours</span><span>⏱️</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-green);">{{ monthly_totals.total_net_hours }}h</div>
+      <div class="attendance-kpi-meta">Avg: {{ monthly_totals.avg_net_hours }}h / day</div>
+    </div>
+    <div class="attendance-kpi-card kpi-full">
+      <div class="attendance-kpi-header"><span>Full Shifts</span><span>✅</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-green);">{{ monthly_totals.full_shifts }}</div>
+      <div class="attendance-kpi-meta">&ge; 8h net work days</div>
+    </div>
+    <div class="attendance-kpi-card kpi-short">
+      <div class="attendance-kpi-header"><span>Short Shifts</span><span>⏱️</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-amber);">{{ monthly_totals.short_shifts }}</div>
+      <div class="attendance-kpi-meta">&lt; 8h net days</div>
+    </div>
+    <div class="attendance-kpi-card kpi-missing">
+      <div class="attendance-kpi-header"><span>Missing Checkouts</span><span>⚠️</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-red);">{{ monthly_totals.missing_checkouts }}</div>
+      <div class="attendance-kpi-meta">Needs resolution</div>
+    </div>
+    <div class="attendance-kpi-card kpi-leave">
+      <div class="attendance-kpi-header"><span>Leaves &amp; Holidays</span><span>🏖️</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-blue);">{{ monthly_totals.leaves }} / {{ monthly_totals.holidays }}</div>
+      <div class="attendance-kpi-meta">Approved leaves / Holidays</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Filter & Controls Card -->
+  <section class="attendance-filter-card">
+    <div class="attendance-view-switcher">
+      <a class="view-switch-btn {% if view_mode == 'daily' %}active{% endif %}" href="?view=daily&date={{ selected_date_str }}{% if selected_employee_id %}&employee={{ selected_employee_id }}{% endif %}{% if selected_branch_id %}&branch={{ selected_branch_id }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_q %}&q={{ search_q }}{% endif %}">
+        📅 Daily View
+      </a>
+      <a class="view-switch-btn {% if view_mode == 'range' %}active{% endif %}" href="?view=range&date_from={{ selected_date_from_str }}&date_to={{ selected_date_to_str }}{% if selected_employee_id %}&employee={{ selected_employee_id }}{% endif %}{% if selected_branch_id %}&branch={{ selected_branch_id }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}{% if search_q %}&q={{ search_q }}{% endif %}">
+        📊 Date Range / Monthly View
+      </a>
+    </div>
+
+    <form method="get" class="attendance-filter-form">
+      <input type="hidden" name="view" value="{{ view_mode }}">
+
+      {% if view_mode == 'daily' %}
+      <div class="att-field">
+        <label for="id_date">Attendance Date</label>
+        <input type="date" id="id_date" name="date" value="{{ selected_date_str }}">
+      </div>
+      {% else %}
+      <div class="att-field">
+        <label for="id_date_from">From Date</label>
+        <input type="date" id="id_date_from" name="date_from" value="{{ selected_date_from_str }}">
+      </div>
+      <div class="att-field">
+        <label for="id_date_to">To Date</label>
+        <input type="date" id="id_date_to" name="date_to" value="{{ selected_date_to_str }}">
+      </div>
+      {% endif %}
+
+      {% if can_manage %}
+      <div class="att-field">
+        <label for="id_employee">Employee</label>
+        <select id="id_employee" name="employee">
+          <option value="">All Employees</option>
+          {% for emp in all_employees %}
+          <option value="{{ emp.pk }}" {% if selected_employee_id == emp.pk|stringformat:"s" %}selected{% endif %}>
+            {{ emp.get_full_name|default:emp.username }} (@{{ emp.username }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="att-field">
+        <label for="id_branch">Workplace Branch</label>
+        <select id="id_branch" name="branch">
+          <option value="">All Branches</option>
+          {% for b in all_branches %}
+          <option value="{{ b.pk }}" {% if selected_branch_id == b.pk|stringformat:"s" %}selected{% endif %}>
+            {{ b.name }} ({{ b.code }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="att-field">
+        <label for="id_status">Status</label>
+        <select id="id_status" name="status">
+          <option value="">All Statuses</option>
+          {% for code, label in status_choices %}
+          <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="att-field">
+        <label for="id_q">Search</label>
+        <input type="text" id="id_q" name="q" value="{{ search_q }}" placeholder="Search name or branch...">
+      </div>
+
+      <div class="att-field">
+        <label for="id_q">Search</label>
+        <input type="text" id="id_q" name="q" value="{{ search_q }}" placeholder="Search name or branch...">
+      </div>
+
+      <div class="attendance-filter-actions">
+        <button type="submit" class="btn-filter-apply">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Apply Filters
+        </button>
+        <a class="btn-filter-reset" href="?view={{ view_mode }}">Reset</a>
+      </div>
+    </form>
+  </section>
+
+  <!-- Attendance Table Panel -->
+  <section class="attendance-table-card">
+    <div class="attendance-table-header">
+      <h2>
+        Attendance Records
+        <span style="font-size: 0.82rem; font-weight: 500; color: var(--att-muted); margin-left: 8px;">
+          ({{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }})
+        </span>
+      </h2>
+    </div>
+
+    {% if page_obj.object_list %}
+    <div class="table-responsive">
+      <table class="attendance-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Employee</th>
+            <th>Workplace Branch</th>
+            <th>Shift Start</th>
+            <th>Shift End</th>
+            <th>Gross</th>
+            <th>Breaks</th>
+            <th>Net Work Time</th>
+            <th>Req. (8h)</th>
+            <th>Attendance Status</th>
+            <th>Exceptions / Notes</th>
+            <th style="text-align: right;">History</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in page_obj %}
+          <tr>
+            <td>
+              <strong style="color: var(--att-text);">{{ r.date_formatted }}</strong>
+            </td>
+            <td>
+              <div style="font-weight: 600; color: var(--att-text);">{{ r.employee_name }}</div>
+              <div style="font-size: 0.75rem; color: var(--att-muted);">@{{ r.username }} · {{ r.role_display }}</div>
+            </td>
+            <td>
+              <span class="branch-pill">{{ r.primary_branch_name }}</span>
+            </td>
+            <td class="time-cell">{{ r.first_start_formatted }}</td>
+            <td class="time-cell">{{ r.final_end_formatted }}</td>
+            <td class="time-cell">{{ r.gross_formatted }}</td>
+            <td class="time-cell">
+              {% if r.break_seconds > 0 %}
+              <span class="break-tag">{{ r.break_formatted }}</span>
+              {% else %}
+              <span style="color: var(--att-muted);">-</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="duration-tag">{{ r.net_work_formatted }}</span>
+            </td>
+            <td class="time-cell" style="color: var(--att-muted);">
+              {% if r.required_work_seconds > 0 %}8h 0m{% else %}—{% endif %}
+            </td>
+            <td>
+              <span class="status-pill {{ r.status_badge_class }}">
+                {{ r.status_label }}
+              </span>
+            </td>
+            <td style="max-width: 220px; font-size: 0.78rem;">
+              {% if r.exception_status %}
+              <div style="color: var(--att-accent); font-weight: 600;">ℹ️ {{ r.exception_status }}</div>
+              {% endif %}
+              {% if r.exception_notes %}
+              <div style="color: var(--att-muted); margin-top: 2px;">{{ r.exception_notes|truncatechars:45 }}</div>
+              {% elif r.notes %}
+              <div style="color: var(--att-muted);">{{ r.notes|truncatechars:45 }}</div>
+              {% elif not r.exception_status %}
+              <span style="color: var(--att-muted);">-</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right; white-space: nowrap;">
+              <a class="button small" href="{% url 'web:employee-attendance-history' r.employee_id %}" title="View Monthly History">
+                History ↗
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div style="padding: 16px 20px; border-top: 1px solid var(--att-card-border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+      <span style="font-size: 0.82rem; color: var(--att-muted);">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+      </span>
+      <div style="display: flex; gap: 6px;">
+        {% if page_obj.has_previous %}
+        <a class="button small" href="?{{ filter_params }}&page={{ page_obj.previous_page_number }}">← Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a class="button small" href="?{{ filter_params }}&page={{ page_obj.next_page_number }}">Next →</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="attendance-empty">
+      <div class="attendance-empty-icon">📋</div>
+      <h3>No attendance records found</h3>
+      <p>No records matched the selected date and filter criteria. Adjust your filters or select a different date range.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

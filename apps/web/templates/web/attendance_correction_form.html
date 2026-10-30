@@ -1,0 +1,82 @@
+{% extends 'web/base.html' %}
+{% load static web_tags %}
+
+{% block title %}Submit Attendance Correction · Vaani CRM{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'web:attendance' %}">Attendance</a> / <a href="{% url 'web:attendance-corrections' %}">Corrections</a> / Submit Request
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=55">
+
+<div class="attendance-page" style="max-width: 800px; margin: 0 auto;">
+  <div class="attendance-header">
+    <div>
+      <div class="eyebrow">ATTENDANCE DISCREPANCY JUSTIFICATION</div>
+      <h1>Submit Attendance Correction<span class="accent">.</span></h1>
+      <p>Submit a formal correction request for missing checkout, incomplete shifts, or technical discrepancies for administrative review.</p>
+    </div>
+    <div class="actions">
+      <a class="button" href="{% url 'web:attendance-corrections' %}">← Back to Requests</a>
+    </div>
+  </div>
+
+  <section class="attendance-table-card" style="padding: 24px;">
+    <form method="post">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+      <div class="notice error" style="margin-bottom: 20px;">
+        {% for err in form.non_field_errors %}{{ err }}<br>{% endfor %}
+      </div>
+      {% endif %}
+
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="form-field">
+          <label for="{{ form.date.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Target Date *</label>
+          {{ form.date }}
+          {% if form.date.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.date.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-field">
+          <label for="{{ form.request_type.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Correction Type *</label>
+          {{ form.request_type }}
+          {% if form.request_type.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.request_type.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="form-field">
+            <label for="{{ form.requested_start.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Actual Start Time (Optional)</label>
+            {{ form.requested_start }}
+            {% if form.requested_start.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.requested_start.errors.0 }}</span>{% endif %}
+          </div>
+
+          <div class="form-field">
+            <label for="{{ form.requested_end.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Actual End Time (Optional)</label>
+            {{ form.requested_end }}
+            {% if form.requested_end.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.requested_end.errors.0 }}</span>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="{{ form.requested_net_hours.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Claimed Net Hours (Optional)</label>
+          {{ form.requested_net_hours }}
+          {% if form.requested_net_hours.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.requested_net_hours.errors.0 }}</span>{% endif %}
+          <small class="muted" style="font-size: 0.78rem; margin-top: 4px; display: block;">e.g. 8.00</small>
+        </div>
+
+        <div class="form-field">
+          <label for="{{ form.reason.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Reason &amp; Justification *</label>
+          {{ form.reason }}
+          {% if form.reason.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.reason.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div style="display: flex; gap: 12px; align-items: center; margin-top: 10px;">
+          <button type="submit" class="button primary">Submit Correction Request</button>
+          <a class="button" href="{% url 'web:attendance-corrections' %}">Cancel</a>
+        </div>
+      </div>
+    </form>
+  </section>
+</div>
+{% endblock %}

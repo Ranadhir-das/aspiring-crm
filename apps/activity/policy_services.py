@@ -396,9 +396,14 @@ def get_active_policy_exception(
     Returns None if no matching exception applies.
     """
     check_time = at_time or timezone.now()
+    rule_types = [rule_type]
+    if rule_type == PolicyException.RuleType.START_SHIFT_GEOFENCE:
+        rule_types.append(PolicyException.RuleType.LOGIN_GEOFENCE)
+    elif rule_type in (PolicyException.RuleType.LUNCH_GEOFENCE, PolicyException.RuleType.RESUME_GEOFENCE):
+        rule_types = [PolicyException.RuleType.LUNCH_GEOFENCE, PolicyException.RuleType.RESUME_GEOFENCE]
     return PolicyException.objects.filter(
         user=user,
-        rule_type=rule_type,
+        rule_type__in=rule_types,
         is_approved=True,
         is_active=True,
         revoked_at__isnull=True,
@@ -549,7 +554,9 @@ def revoke_policy_exception(
 
 class ProtectedAction:
     LOGIN = "LOGIN"
+    START_SHIFT = "START_SHIFT"
     LUNCH_RESUME = "LUNCH_RESUME"
+    RESUME_WORK = "RESUME_WORK"
     END_SHIFT = "END_SHIFT"
     LOGOUT = "LOGOUT"
 
@@ -561,6 +568,23 @@ def is_gps_geofence_enforcement_enabled() -> bool:
     (e.g., during mobile app updates or transition periods).
     """
     return getattr(settings, "GPS_GEOFENCE_ENFORCEMENT_ENABLED", True)
+
+
+def is_employee_geofence_enforced(user) -> bool:
+    """
+    Returns True if shift location enforcement is active for this employee.
+    Requires:
+    1. Global switch settings.GPS_GEOFENCE_ENFORCEMENT_ENABLED is True.
+    2. User is not superuser / admin role.
+    3. User has shift_workflow_enabled=True AND shift_geofence_enforced=True.
+    """
+    if not is_gps_geofence_enforcement_enabled():
+        return False
+    if getattr(user, "is_superuser", False) or getattr(user, "role", None) in ["SUPER_ADMIN", "ADMIN"]:
+        return False
+    if not getattr(user, "shift_workflow_enabled", False):
+        return False
+    return getattr(user, "shift_geofence_enforced", False)
 
 
 def evaluate_protected_action(
@@ -577,25 +601,30 @@ def evaluate_protected_action(
     """
     server_now = now or timezone.now()
 
-    gps_enforced = is_gps_geofence_enforcement_enabled()
+    emp_geofence_enforced = is_employee_geofence_enforced(user)
 
     # Determine mapped rule types
-    if action == ProtectedAction.LOGIN:
-        rule_type = PolicyException.RuleType.LOGIN_GEOFENCE
-        geofence_required = gps_enforced
+    if action == ProtectedAction.START_SHIFT:
+        rule_type = PolicyException.RuleType.START_SHIFT_GEOFENCE
+        geofence_required = emp_geofence_enforced
         duration_required = False
-    elif action == ProtectedAction.LUNCH_RESUME:
+    elif action in (ProtectedAction.RESUME_WORK, ProtectedAction.LUNCH_RESUME):
         rule_type = PolicyException.RuleType.LUNCH_GEOFENCE
-        geofence_required = gps_enforced
+        geofence_required = emp_geofence_enforced
         duration_required = False
     elif action == ProtectedAction.END_SHIFT:
         rule_type = PolicyException.RuleType.END_SHIFT_GEOFENCE
-        geofence_required = gps_enforced
-        duration_required = True
+        geofence_required = emp_geofence_enforced
+        # 8-hour net duration rule is only enforced for employees with the new shift workflow enabled
+        duration_required = bool(getattr(user, "shift_workflow_enabled", False))
+    elif action == ProtectedAction.LOGIN:
+        rule_type = PolicyException.RuleType.LOGIN_GEOFENCE
+        geofence_required = False  # Login is decoupled from geofencing
+        duration_required = False
     elif action == ProtectedAction.LOGOUT:
         rule_type = PolicyException.RuleType.MIN_DURATION
         geofence_required = False
-        duration_required = (session is not None and session.status in [WorkSession.Status.ACTIVE, WorkSession.Status.PAUSED])
+        duration_required = False  # Logout is decoupled from 8-hour duration
     else:
         raise ValueError(f"Unknown protected action: {action}")
 

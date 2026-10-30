@@ -1,0 +1,186 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Attendance History: {{ target_employee|user_name }} · Vaani CRM{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'web:attendance' %}">Attendance</a> / {{ target_employee|user_name }}
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=55">
+
+<div class="attendance-page">
+  <div class="attendance-header">
+    <div>
+      <div class="eyebrow">INDIVIDUAL ATTENDANCE &amp; SHIFT TIMELINE</div>
+      <h1>Attendance: {{ target_employee.get_full_name|default:target_employee.username }}<span class="accent">.</span></h1>
+      <p>@{{ target_employee.username }} · {{ target_employee.get_role_display }} · Workplace: {{ primary_branch.name|default:"Unassigned" }}</p>
+    </div>
+    <div class="actions">
+      <a class="button" href="{% url 'web:attendance' %}">← Back to Attendance Dashboard</a>
+      <div class="export-group">
+        <a class="btn-export" href="?{{ export_query_string }}&export=csv">
+          CSV Export
+        </a>
+        <a class="btn-export excel" href="?{{ export_query_string }}&export=xlsx">
+          Excel (.xlsx)
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly / Range Summary KPIs -->
+  {% if monthly_totals %}
+  <div class="attendance-kpis-grid">
+    <div class="attendance-kpi-card">
+      <div class="attendance-kpi-header"><span>Period</span><span>📅</span></div>
+      <div class="attendance-kpi-value" style="font-size: 1.25rem;">{{ selected_date_from_str }} — {{ selected_date_to_str }}</div>
+      <div class="attendance-kpi-meta">{{ monthly_totals.total_records }} days evaluated</div>
+    </div>
+    <div class="attendance-kpi-card kpi-full">
+      <div class="attendance-kpi-header"><span>Total Net Hours</span><span>⏱️</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-green);">{{ monthly_totals.total_net_hours }}h</div>
+      <div class="attendance-kpi-meta">Worked days: {{ monthly_totals.worked_days }}</div>
+    </div>
+    <div class="attendance-kpi-card kpi-full">
+      <div class="attendance-kpi-header"><span>Full Shifts</span><span>✅</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-green);">{{ monthly_totals.full_shifts }}</div>
+      <div class="attendance-kpi-meta">&ge; 8h verified net</div>
+    </div>
+    <div class="attendance-kpi-card kpi-short">
+      <div class="attendance-kpi-header"><span>Short Shifts</span><span>⏱️</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-amber);">{{ monthly_totals.short_shifts }}</div>
+      <div class="attendance-kpi-meta">&lt; 8h net (unapproved)</div>
+    </div>
+    <div class="attendance-kpi-card kpi-leave">
+      <div class="attendance-kpi-header"><span>Leave Days</span><span>🏖️</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-blue);">{{ monthly_totals.leaves }}</div>
+      <div class="attendance-kpi-meta">Approved leaves</div>
+    </div>
+    <div class="attendance-kpi-card kpi-absent">
+      <div class="attendance-kpi-header"><span>Absents</span><span>❌</span></div>
+      <div class="attendance-kpi-value" style="color: var(--att-red);">{{ monthly_totals.absents }}</div>
+      <div class="attendance-kpi-meta">Unaccounted workdays</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Date Range Filter -->
+  <section class="attendance-filter-card">
+    <form method="get" class="attendance-filter-form">
+      <div class="att-field">
+        <label for="id_date_from">From Date</label>
+        <input type="date" id="id_date_from" name="date_from" value="{{ selected_date_from_str }}">
+      </div>
+      <div class="att-field">
+        <label for="id_date_to">To Date</label>
+        <input type="date" id="id_date_to" name="date_to" value="{{ selected_date_to_str }}">
+      </div>
+      <div class="att-field">
+        <label for="id_status">Status</label>
+        <select id="id_status" name="status">
+          <option value="">All Statuses</option>
+          {% for code, label in status_choices %}
+          <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="att-field">
+        <label for="id_status">Status</label>
+        <select id="id_status" name="status">
+          <option value="">All Statuses</option>
+          {% for code, label in status_choices %}
+          <option value="{{ code }}" {% if selected_status == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="attendance-filter-actions">
+        <button type="submit" class="btn-filter-apply">Filter Period</button>
+        <a class="btn-filter-reset" href="?">Reset to This Month</a>
+      </div>
+    </form>
+  </section>
+
+  <!-- Records Table -->
+  <section class="attendance-table-card">
+    <div class="attendance-table-header">
+      <h2>Daily Attendance Timeline ({{ records|length }} days)</h2>
+    </div>
+
+    {% if records %}
+    <div class="table-responsive">
+      <table class="attendance-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Shift Start</th>
+            <th>Shift End</th>
+            <th>Gross</th>
+            <th>Breaks</th>
+            <th>Net Work Time</th>
+            <th>Req. (8h)</th>
+            <th>Attendance Status</th>
+            <th>Exceptions &amp; Notes</th>
+            <th style="text-align: right;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td>
+              <strong style="color: var(--att-text);">{{ r.date_formatted }}</strong>
+            </td>
+            <td class="time-cell">{{ r.first_start_formatted }}</td>
+            <td class="time-cell">{{ r.final_end_formatted }}</td>
+            <td class="time-cell">{{ r.gross_formatted }}</td>
+            <td class="time-cell">{{ r.break_formatted }}</td>
+            <td>
+              <span class="duration-tag">{{ r.net_work_formatted }}</span>
+            </td>
+            <td class="time-cell" style="color: var(--att-muted);">
+              {% if r.required_work_seconds > 0 %}8h 0m{% else %}—{% endif %}
+            </td>
+            <td>
+              <span class="status-pill {{ r.status_badge_class }}">
+                {{ r.status_label }}
+              </span>
+            </td>
+            <td style="max-width: 250px; font-size: 0.78rem;">
+              {% if r.exception_status %}
+              <div style="color: var(--att-accent); font-weight: 600;">ℹ️ {{ r.exception_status }}</div>
+              {% endif %}
+              {% if r.exception_notes %}
+              <div style="color: var(--att-muted); margin-top: 2px;">{{ r.exception_notes }}</div>
+              {% elif r.notes %}
+              <div style="color: var(--att-muted);">{{ r.notes }}</div>
+              {% elif not r.exception_status %}
+              <span style="color: var(--att-muted);">-</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">
+              {% if r.status_code in 'SHORT_SHIFT,MISSING_CHECKOUT,ABSENT' and not r.correction_id %}
+              <a class="button small" href="{% url 'web:attendance-correction-submit' %}?date={{ r.date|date:'Y-m-d' }}&employee={{ r.employee_id }}">
+                Request Correction
+              </a>
+              {% elif r.correction_status %}
+              <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(165,154,255,0.15); color: var(--att-accent);">
+                Correction {{ r.correction_status }}
+              </span>
+              {% else %}
+              <span style="color: var(--att-muted); font-size: 0.75rem;">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="attendance-empty">
+      <div class="attendance-empty-icon">📋</div>
+      <h3>No attendance records</h3>
+      <p>No shift records exist for this period.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

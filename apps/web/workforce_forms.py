@@ -4,7 +4,7 @@ from django.contrib.auth.forms import UserCreationForm
 from django.utils import timezone
 from apps.accounts.models import User
 from .models import (LeaveRequest, Holiday, WorkReport, Project, Expense, Payroll,
-                     Customer, Invoice, InvoiceItem, Payment, FEEDBACK, LeadQualification)
+                     Customer, Invoice, InvoiceItem, Payment, FEEDBACK, LeadQualification, AttendanceCorrectionRequest)
 
 DATE = forms.DateInput(attrs={'type': 'date'})
 
@@ -26,16 +26,20 @@ class EmployeeForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone', 'designation', 'role', 'manager', 'is_active', 'services', 'can_act_as_caller', 'can_act_as_counselor', 'can_contact_via_message']
+        fields = ['first_name', 'last_name', 'email', 'phone', 'designation', 'role', 'manager', 'is_active', 'services', 'can_act_as_caller', 'can_act_as_counselor', 'can_contact_via_message', 'shift_workflow_enabled', 'shift_geofence_enforced']
         labels = {
             'can_act_as_caller': 'Additional Capability: Caller',
             'can_act_as_counselor': 'Additional Capability: Counselor',
             'can_contact_via_message': 'Counselor: Allow Contact via Message',
+            'shift_workflow_enabled': 'Explicit Shift Workflow',
+            'shift_geofence_enforced': 'Office Geofence Enforcement',
         }
         help_texts = {
             'can_act_as_caller': 'Grants access to the caller workspace, calling, leads, and follow-ups. Daily face verification is required.',
             'can_act_as_counselor': 'Grants access to the counselor workspace, counselling workflows, and admission requests.',
             'can_contact_via_message': 'Approved by administrator to mark next-year/deferred leads as contacted via text/WhatsApp message without calling.',
+            'shift_workflow_enabled': 'Requires employees to tap Start Shift after attendance check-in. Bypasses legacy automatic session creation and enforces 8-hour net work duration before ending shift. When disabled, the employee continues using the default legacy workflow.',
+            'shift_geofence_enforced': 'Applies configured GPS/geofence rules (50m perimeter, <=25m accuracy, <=60s freshness) to Start Shift, Resume Work, and End Shift. Requires Explicit Shift Workflow to be enabled. Note: Office assignment and shift-policy activation are separate operations.',
         }
 
     def __init__(self, *args, actor, **kwargs):
@@ -50,6 +54,8 @@ class EmployeeForm(forms.ModelForm):
             self.fields.pop('can_act_as_caller', None)
             self.fields.pop('can_act_as_counselor', None)
             self.fields.pop('can_contact_via_message', None)
+            self.fields.pop('shift_workflow_enabled', None)
+            self.fields.pop('shift_geofence_enforced', None)
         self.fields['manager'].queryset = User.objects.filter(role__in=['ADMIN', 'MANAGER', 'SUPER_ADMIN'], is_active=True).exclude(pk=self.instance.pk)
 
     def clean(self):
@@ -59,6 +65,14 @@ class EmployeeForm(forms.ModelForm):
             cleaned_data['can_act_as_caller'] = False
         if 'can_act_as_counselor' in self.fields and role == 'COUNSELOR':
             cleaned_data['can_act_as_counselor'] = False
+
+        shift_wf = cleaned_data.get('shift_workflow_enabled')
+        shift_geo = cleaned_data.get('shift_geofence_enforced')
+        if shift_geo and not shift_wf:
+            self.add_error(
+                'shift_geofence_enforced',
+                'Office Geofence Enforcement requires Explicit Shift Workflow to be enabled.'
+            )
         return cleaned_data
 
     def save(self, commit=True):
@@ -212,3 +226,15 @@ class DistributionForm(forms.Form):
         if not sum(data.get(f'caller_{c.pk}', 0) or 0 for c in self.callers):
             raise forms.ValidationError('Allocate at least one lead to an active caller.')
         return data
+
+
+class AttendanceCorrectionRequestForm(forms.ModelForm):
+    class Meta:
+        model = AttendanceCorrectionRequest
+        fields = ['date', 'request_type', 'reason', 'requested_start', 'requested_end', 'requested_net_hours']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'requested_start': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'requested_end': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'reason': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Describe the reason for correction...'}),
+        }

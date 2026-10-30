@@ -384,6 +384,8 @@ class OfficeLocation(models.Model):
         editable=False,
         help_text="Permitted geofence radius strictly 50 metres.",
     )
+    address = models.TextField(blank=True, default="", help_text="Physical branch/office address.")
+    notes = models.TextField(blank=True, default="", help_text="Optional internal administration notes.")
     is_active = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -481,7 +483,9 @@ class EmployeeOfficeAssignment(models.Model):
 class PolicyException(models.Model):
     class RuleType(models.TextChoices):
         LOGIN_GEOFENCE = "LOGIN_GEOFENCE", "Login Outside Office Geofence"
+        START_SHIFT_GEOFENCE = "START_SHIFT_GEOFENCE", "Start Shift Outside Office Geofence"
         LUNCH_GEOFENCE = "LUNCH_GEOFENCE", "Resume Lunch Outside Office Geofence"
+        RESUME_GEOFENCE = "RESUME_GEOFENCE", "Resume Work Outside Office Geofence"
         END_SHIFT_GEOFENCE = "END_SHIFT_GEOFENCE", "End Shift Outside Office Geofence"
         MIN_DURATION = "MIN_DURATION", "End Shift With Under 8 Hours Net Work"
 

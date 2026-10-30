@@ -1,0 +1,427 @@
+{% extends 'web/base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} · Vaani CRM{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'web:employees' %}">Employees</a> / {{ employee.get_full_name|default:employee.username }}
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/employee-manage.css' %}?v=55">
+
+<div class="manage-employee-page">
+  <!-- Header -->
+  <div class="manage-header">
+    <div>
+      <div class="eyebrow">WORKFORCE ACCOUNT & POLICY MANAGEMENT</div>
+      <h1>Manage {{ employee.get_full_name|default:employee.username }}<span class="accent">.</span></h1>
+      <p>{{ subtitle|default:"Activate an approved employee account and assign their department role." }}</p>
+    </div>
+    <div class="actions">
+      <a class="button" href="{% url 'web:employees' %}">← Back to Employees</a>
+    </div>
+  </div>
+
+  <div class="manage-layout">
+    <!-- Main Form Column -->
+    <form method="post" id="manage-employee-form" class="manage-form">
+      {% csrf_token %}
+      {{ form.media }}
+
+      {% if form.non_field_errors %}
+      <div class="notice error">
+        {% for err in form.non_field_errors %}{{ err }}<br>{% endfor %}
+      </div>
+      {% endif %}
+
+      <!-- Section 1: Personal & Contact Information -->
+      <section class="manage-card">
+        <div class="manage-card-header">
+          <div class="header-info">
+            <div class="icon-wrap">👤</div>
+            <div>
+              <h2>Personal & Contact Information</h2>
+              <p>Basic contact details and organizational designation.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label for="{{ form.first_name.id_for_label }}">
+              <span>First Name</span>
+              {% if form.first_name.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ form.first_name }}
+            {% if form.first_name.errors %}
+            <span class="field-error">{{ form.first_name.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <div class="form-field">
+            <label for="{{ form.last_name.id_for_label }}">
+              <span>Last Name</span>
+              {% if form.last_name.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ form.last_name }}
+            {% if form.last_name.errors %}
+            <span class="field-error">{{ form.last_name.errors.0 }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top: 16px;">
+          <div class="form-field">
+            <label for="{{ form.email.id_for_label }}">
+              <span>Email Address</span>
+              {% if form.email.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ form.email }}
+            {% if form.email.errors %}
+            <span class="field-error">{{ form.email.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <div class="form-field">
+            <label for="{{ form.phone.id_for_label }}">
+              <span>Phone</span>
+              {% if form.phone.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ form.phone }}
+            {% if form.phone.errors %}
+            <span class="field-error">{{ form.phone.errors.0 }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-field" style="margin-top: 16px;">
+          <label for="{{ form.designation.id_for_label }}">
+            <span>Designation / Job Title</span>
+            {% if form.designation.field.required %}<span class="req">*</span>{% endif %}
+          </label>
+          {{ form.designation }}
+          {% if form.designation.errors %}
+          <span class="field-error">{{ form.designation.errors.0 }}</span>
+          {% endif %}
+          {% if form.designation.help_text %}
+          <span class="field-help">{{ form.designation.help_text }}</span>
+          {% endif %}
+        </div>
+      </section>
+
+      <!-- Section 2: Department Role & Status -->
+      <section class="manage-card">
+        <div class="manage-card-header">
+          <div class="header-info">
+            <div class="icon-wrap">🏢</div>
+            <div>
+              <h2>Role & Account Status</h2>
+              <p>Department role assignment, reporting line, and active state.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label for="{{ form.role.id_for_label }}">
+              <span>Department Role</span>
+              {% if form.role.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ form.role }}
+            {% if form.role.errors %}
+            <span class="field-error">{{ form.role.errors.0 }}</span>
+            {% endif %}
+          </div>
+
+          <div class="form-field">
+            <label for="{{ form.manager.id_for_label }}">
+              <span>Reporting Manager</span>
+              {% if form.manager.field.required %}<span class="req">*</span>{% endif %}
+            </label>
+            {{ form.manager }}
+            {% if form.manager.errors %}
+            <span class="field-error">{{ form.manager.errors.0 }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div style="margin-top: 18px;">
+          <label class="toggle-card" for="{{ form.is_active.id_for_label }}">
+            {{ form.is_active }}
+            <div class="toggle-content">
+              <div class="toggle-title-row">
+                <span class="toggle-title">Account Active</span>
+                <span class="toggle-badge active-badge">LOGIN PERMITTED</span>
+              </div>
+              <div class="toggle-desc">
+                {{ form.is_active.help_text|default:"Designates whether this user should be treated as active. Unselect this instead of deleting accounts." }}
+              </div>
+            </div>
+          </label>
+          {% if form.is_active.errors %}
+          <span class="field-error">{{ form.is_active.errors.0 }}</span>
+          {% endif %}
+        </div>
+      </section>
+
+      <!-- Section 3: Assigned Services -->
+      {% if 'services' in form.fields %}
+      <section class="manage-card">
+        <div class="manage-card-header">
+          <div class="header-info">
+            <div class="icon-wrap">🎓</div>
+            <div>
+              <h2>Assigned Services</h2>
+              <p>Programs and services this caller/counselor is authorized to handle.</p>
+            </div>
+          </div>
+        </div>
+
+        {% if form.fields.services.queryset.exists %}
+        <div class="services-selector">
+          {% for choice in form.services %}
+          <label class="service-pill-item" for="{{ choice.id_for_label }}">
+            {{ choice.tag }}
+            <span>{{ choice.choice_label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="muted" style="font-size: 0.85rem;">No active services configured.</p>
+        {% endif %}
+
+        {% if form.services.errors %}
+        <span class="field-error">{{ form.services.errors.0 }}</span>
+        {% endif %}
+        {% if form.services.help_text %}
+        <span class="field-help" style="display: block; margin-top: 10px;">{{ form.services.help_text }}</span>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      <!-- Section 4: Workforce Capabilities -->
+      {% if 'can_act_as_caller' in form.fields or 'can_act_as_counselor' in form.fields or 'can_contact_via_message' in form.fields %}
+      <section class="manage-card">
+        <div class="manage-card-header">
+          <div class="header-info">
+            <div class="icon-wrap">⚡</div>
+            <div>
+              <h2>Workforce Capabilities</h2>
+              <p>Additional cross-functional permissions and channel authorizations.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="toggles-stack">
+          {% if 'can_act_as_caller' in form.fields %}
+          <label class="toggle-card" for="{{ form.can_act_as_caller.id_for_label }}">
+            {{ form.can_act_as_caller }}
+            <div class="toggle-content">
+              <div class="toggle-title-row">
+                <span class="toggle-title">{{ form.can_act_as_caller.label }}</span>
+                <span class="toggle-badge">CALLING DESK</span>
+              </div>
+              <div class="toggle-desc">{{ form.can_act_as_caller.help_text }}</div>
+            </div>
+          </label>
+          {% if form.can_act_as_caller.errors %}
+          <span class="field-error">{{ form.can_act_as_caller.errors.0 }}</span>
+          {% endif %}
+          {% endif %}
+
+          {% if 'can_act_as_counselor' in form.fields %}
+          <label class="toggle-card" for="{{ form.can_act_as_counselor.id_for_label }}">
+            {{ form.can_act_as_counselor }}
+            <div class="toggle-content">
+              <div class="toggle-title-row">
+                <span class="toggle-title">{{ form.can_act_as_counselor.label }}</span>
+                <span class="toggle-badge">COUNSELING DESK</span>
+              </div>
+              <div class="toggle-desc">{{ form.can_act_as_counselor.help_text }}</div>
+            </div>
+          </label>
+          {% if form.can_act_as_counselor.errors %}
+          <span class="field-error">{{ form.can_act_as_counselor.errors.0 }}</span>
+          {% endif %}
+          {% endif %}
+
+          {% if 'can_contact_via_message' in form.fields %}
+          <label class="toggle-card" for="{{ form.can_contact_via_message.id_for_label }}">
+            {{ form.can_contact_via_message }}
+            <div class="toggle-content">
+              <div class="toggle-title-row">
+                <span class="toggle-title">{{ form.can_contact_via_message.label }}</span>
+                <span class="toggle-badge">MESSAGING / WHATSAPP</span>
+              </div>
+              <div class="toggle-desc">{{ form.can_contact_via_message.help_text }}</div>
+            </div>
+          </label>
+          {% if form.can_contact_via_message.errors %}
+          <span class="field-error">{{ form.can_contact_via_message.errors.0 }}</span>
+          {% endif %}
+          {% endif %}
+        </div>
+      </section>
+      {% endif %}
+
+      <!-- Section 5: Shift Workflow & Geofence Policy -->
+      {% if 'shift_workflow_enabled' in form.fields or 'shift_geofence_enforced' in form.fields %}
+      <section class="manage-card policy-highlight-card">
+        <div class="manage-card-header">
+          <div class="header-info">
+            <div class="icon-wrap" style="background: rgba(165, 154, 255, 0.2); color: var(--accent);">📍</div>
+            <div>
+              <h2>Explicit Shift Workflow & Location Governance</h2>
+              <p>Individual opt-in controls for mobile attendance, 8-hour shift compliance, and GPS geofence rules.</p>
+            </div>
+          </div>
+          <span class="toggle-badge">OPT-IN MOBILE WORKFLOW</span>
+        </div>
+
+        <div class="toggles-stack">
+          {% if 'shift_workflow_enabled' in form.fields %}
+          <label class="toggle-card" for="{{ form.shift_workflow_enabled.id_for_label }}">
+            {{ form.shift_workflow_enabled }}
+            <div class="toggle-content">
+              <div class="toggle-title-row">
+                <span class="toggle-title">{{ form.shift_workflow_enabled.label }}</span>
+                <span class="toggle-badge">MANDATORY START SHIFT & 8HR NET WORK</span>
+              </div>
+              <div class="toggle-desc">{{ form.shift_workflow_enabled.help_text }}</div>
+            </div>
+          </label>
+          {% if form.shift_workflow_enabled.errors %}
+          <span class="field-error">{{ form.shift_workflow_enabled.errors.0 }}</span>
+          {% endif %}
+          {% endif %}
+
+          {% if 'shift_geofence_enforced' in form.fields %}
+          <label class="toggle-card" for="{{ form.shift_geofence_enforced.id_for_label }}">
+            {{ form.shift_geofence_enforced }}
+            <div class="toggle-content">
+              <div class="toggle-title-row">
+                <span class="toggle-title">{{ form.shift_geofence_enforced.label }}</span>
+                <span class="toggle-badge">50M OFFICE PERIMETER</span>
+              </div>
+              <div class="toggle-desc">{{ form.shift_geofence_enforced.help_text }}</div>
+            </div>
+          </label>
+          {% if form.shift_geofence_enforced.errors %}
+          <span class="field-error">{{ form.shift_geofence_enforced.errors.0 }}</span>
+          {% endif %}
+          {% endif %}
+        </div>
+
+        <div class="policy-callout">
+          <span class="policy-callout-icon">ℹ️</span>
+          <div>
+            <strong>Operational Rule:</strong> Office assignment and shift-policy activation are separate operations.
+            To enforce location checks, assign the employee to an active branch office in <a href="{% url 'web:employee-branch-assign-edit' employee.pk %}" style="color: var(--accent); text-decoration: underline; font-weight: 600;">Workplace Branch Assignments</a>.
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      <!-- Action Bar -->
+      <div class="form-submit-bar">
+        <a class="button" href="{% url 'web:employees' %}">Cancel</a>
+        <button type="submit" class="button primary-save">Save Changes →</button>
+      </div>
+    </form>
+
+    <!-- Sidebar Column -->
+    <aside class="manage-sidebar">
+      <!-- Profile Card -->
+      <div class="sidebar-profile-card">
+        <div class="profile-avatar-row">
+          <div class="profile-avatar">
+            {{ employee.get_full_name|default:employee.username|first|upper }}
+          </div>
+          <div>
+            <h3 class="profile-name">{{ employee.get_full_name|default:employee.username }}</h3>
+            <div class="profile-sub">@{{ employee.username }} &middot; ID #{{ employee.pk }}</div>
+          </div>
+        </div>
+
+        <div class="profile-meta-list">
+          <div class="meta-item">
+            <span class="meta-label">Account Status</span>
+            {% if employee.is_active %}
+            <span class="badge-pill status-active">Active</span>
+            {% else %}
+            <span class="badge-pill status-inactive">Inactive</span>
+            {% endif %}
+          </div>
+
+          <div class="meta-item">
+            <span class="meta-label">Role</span>
+            <span class="meta-value">{{ employee.get_role_display }}</span>
+          </div>
+
+          <div class="meta-item">
+            <span class="meta-label">Reporting Manager</span>
+            <span class="meta-value">
+              {% if employee.manager %}
+                {{ employee.manager.get_full_name|default:employee.manager.username }}
+              {% else %}
+                None assigned
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="meta-item">
+            <span class="meta-label">Joined</span>
+            <span class="meta-value">{{ employee.date_joined|date:"M d, Y" }}</span>
+          </div>
+
+          <div class="meta-item">
+            <span class="meta-label">Last Login</span>
+            <span class="meta-value">{{ employee.last_login|date:"M d, H:i"|default:"Never" }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workplace Branch Location Card -->
+      <div class="sidebar-branch-card">
+        <h3>📍 Workplace Branch</h3>
+        {% if primary_office %}
+        <div class="branch-display-box">
+          <div class="branch-name-line">
+            <span>{{ primary_office.name }}</span>
+            <span class="branch-code-badge">{{ primary_office.code }}</span>
+          </div>
+          <div class="branch-coords">
+            {{ primary_office.latitude|floatformat:4 }}° N, {{ primary_office.longitude|floatformat:4 }}° E
+          </div>
+          {% if primary_office.address %}
+          <div class="branch-coords" style="margin-top: 4px;">{{ primary_office.address }}</div>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="branch-display-box">
+          <span class="muted" style="font-size: 0.82rem;">No primary branch assigned yet.</span>
+        </div>
+        {% endif %}
+
+        {% if additional_offices %}
+        <div style="margin-top: 8px; margin-bottom: 12px;">
+          <div style="font-size: 0.78rem; font-weight: 600; color: var(--muted); margin-bottom: 6px;">ADDITIONAL AUTHORIZED:</div>
+          {% for off in additional_offices %}
+          <div style="font-size: 0.8rem; color: var(--text); margin-bottom: 2px;">• {{ off.name }} ({{ off.code }})</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <a class="button" href="{% url 'web:employee-branch-assign-edit' employee.pk %}" style="width: 100%; text-align: center; box-sizing: border-box; font-size: 0.82rem; padding: 8px 12px; margin-top: 6px;">
+          Configure Workplace Branches →
+        </a>
+      </div>
+
+      <!-- Security Notice Card -->
+      <div class="sidebar-notice">
+        🔒 <strong>Audit Logging:</strong> All changes to employee roles, capability authorizations, and shift policies are immutably logged to the administrative security audit trail.
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

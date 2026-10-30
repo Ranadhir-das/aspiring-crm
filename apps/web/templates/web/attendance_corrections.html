@@ -1,0 +1,141 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Attendance Correction Requests · Vaani CRM{% endblock %}
+{% block breadcrumb %}<a href="{% url 'web:attendance' %}">Attendance</a> / Correction Requests{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=55">
+
+<div class="attendance-page">
+  <div class="attendance-header">
+    <div>
+      <div class="eyebrow">ATTENDANCE AUDIT &amp; EXCEPTION REVIEW</div>
+      <h1>Attendance Correction Requests<span class="accent">.</span></h1>
+      <p>Authorized administrator review of attendance discrepancy claims, short shift justifications, and checkout exceptions.</p>
+    </div>
+    <div class="actions">
+      <a class="button" href="{% url 'web:attendance' %}">← Back to Attendance Dashboard</a>
+      <a class="button primary" href="{% url 'web:attendance-correction-submit' %}">+ Submit Correction Request</a>
+    </div>
+  </div>
+
+  <!-- Filter Card -->
+  <section class="attendance-filter-card">
+    <form method="get" class="attendance-filter-form">
+      <div class="att-field">
+        <label for="id_status">Review Status</label>
+        <select id="id_status" name="status" onchange="this.form.submit()">
+          <option value="">All Requests</option>
+          <option value="PENDING" {% if selected_status == 'PENDING' %}selected{% endif %}>⚠️ Pending Review Only</option>
+          <option value="APPROVED" {% if selected_status == 'APPROVED' %}selected{% endif %}>Approved Only</option>
+          <option value="REJECTED" {% if selected_status == 'REJECTED' %}selected{% endif %}>Rejected Only</option>
+        </select>
+      </div>
+
+      <div class="attendance-filter-actions">
+        <button type="submit" class="btn-filter-apply">Filter</button>
+        {% if selected_status %}
+        <a class="btn-filter-reset" href="{% url 'web:attendance-corrections' %}">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
+  <!-- Requests Table -->
+  <section class="attendance-table-card">
+    <div class="attendance-table-header">
+      <h2>Requests ({{ requests|length }})</h2>
+    </div>
+
+    {% if requests %}
+    <div class="table-responsive">
+      <table class="attendance-table">
+        <thead>
+          <tr>
+            <th>Date Requested</th>
+            <th>Employee</th>
+            <th>Type</th>
+            <th>Claimed Reason</th>
+            <th>Requested Times / Hours</th>
+            <th>Review Status</th>
+            <th>Reviewed By &amp; Notes</th>
+            {% if can_manage %}
+            <th style="text-align: right;">Action</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for cr in requests %}
+          <tr>
+            <td>
+              <strong style="color: var(--att-text);">{{ cr.date|date:'d M Y' }}</strong>
+              <div style="font-size: 0.72rem; color: var(--att-muted);">Submitted {{ cr.created_at|date:'d M, H:i' }}</div>
+            </td>
+            <td>
+              <div style="font-weight: 600; color: var(--att-text);">{{ cr.employee.get_full_name|default:cr.employee.username }}</div>
+              <div style="font-size: 0.75rem; color: var(--att-muted);">@{{ cr.employee.username }} · {{ cr.employee.get_role_display }}</div>
+            </td>
+            <td>
+              <span style="font-size: 0.78rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(165,154,255,0.12); color: var(--att-accent);">
+                {{ cr.get_request_type_display }}
+              </span>
+            </td>
+            <td style="max-width: 260px; font-size: 0.82rem;">
+              {{ cr.reason }}
+            </td>
+            <td class="time-cell" style="font-size: 0.8rem;">
+              {% if cr.requested_start %}Start: {{ cr.requested_start|date:'H:i' }}<br>{% endif %}
+              {% if cr.requested_end %}End: {{ cr.requested_end|date:'H:i' }}<br>{% endif %}
+              {% if cr.requested_net_hours %}Req: {{ cr.requested_net_hours }}h{% endif %}
+              {% if not cr.requested_start and not cr.requested_end and not cr.requested_net_hours %}—{% endif %}
+            </td>
+            <td>
+              {% if cr.status == 'PENDING' %}
+              <span class="status-pill badge-warning">Pending Review</span>
+              {% elif cr.status == 'APPROVED' %}
+              <span class="status-pill badge-success">Approved</span>
+              {% else %}
+              <span class="status-pill badge-danger">Rejected</span>
+              {% endif %}
+            </td>
+            <td style="max-width: 220px; font-size: 0.78rem; color: var(--att-muted);">
+              {% if cr.reviewed_by %}
+              <div>By: <strong>{{ cr.reviewed_by.username }}</strong> on {{ cr.reviewed_at|date:'d M Y' }}</div>
+              {% if cr.review_notes %}<div>"{{ cr.review_notes }}"</div>{% endif %}
+              {% else %}
+              Awaiting admin review
+              {% endif %}
+            </td>
+            {% if can_manage %}
+            <td style="text-align: right; white-space: nowrap;">
+              {% if cr.status == 'PENDING' %}
+              <form method="post" action="{% url 'web:attendance-correction-action' cr.pk %}" style="display: inline-flex; gap: 6px;">
+                {% csrf_token %}
+                <input type="hidden" name="review_notes" value="Approved by {{ request.user.username }}">
+                <button type="submit" name="action" value="approve" class="button small" style="color: #4ade80; border-color: rgba(74,222,128,0.4);">
+                  ✓ Approve
+                </button>
+                <button type="submit" name="action" value="reject" class="button small" style="color: #f87171; border-color: rgba(248,113,113,0.4);">
+                  ✕ Reject
+                </button>
+              </form>
+              {% else %}
+              <span style="font-size: 0.78rem; color: var(--att-muted);">Resolved</span>
+              {% endif %}
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="attendance-empty">
+      <div class="attendance-empty-icon">✓</div>
+      <h3>No correction requests found</h3>
+      <p>There are no pending or reviewed attendance correction requests matching your filter.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

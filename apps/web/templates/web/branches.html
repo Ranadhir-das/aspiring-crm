@@ -1,0 +1,199 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Branch Management · Vaani CRM{% endblock %}
+{% block breadcrumb %}Branch Management{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/branches.css' %}?v=55">
+
+<div class="branches-page">
+  <!-- Header -->
+  <div class="branches-header">
+    <div>
+      <div class="eyebrow">OFFICE LOCATIONS &amp; GEOFENCING PERIMETERS</div>
+      <h1>Branch Management<span class="accent">.</span></h1>
+      <p>Configure company offices, geofence coordinates (strictly 50m radius), and monitor branch-level staff allocation.</p>
+    </div>
+    <div class="actions">
+      <a class="button" href="{% url 'web:employee-branch-assignments' %}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        Branch Assignments ↗
+      </a>
+      <a class="button primary" href="{% url 'web:branch-create' %}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 5px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Create Branch
+      </a>
+    </div>
+  </div>
+
+  <!-- 4 KPI Metrics Grid -->
+  <div class="branches-metrics-grid">
+    <div class="branches-metric-card">
+      <div class="branches-metric-header">
+        <span>Total Offices</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      </div>
+      <div class="branches-metric-value">{{ kpis.total_branches }}</div>
+      <div class="branches-metric-meta">{{ kpis.active_branches }} active · {{ kpis.inactive_branches }} inactive</div>
+    </div>
+
+    <div class="branches-metric-card">
+      <div class="branches-metric-header">
+        <span>Assigned Staff</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+      </div>
+      <div class="branches-metric-value">{{ kpis.assigned_employees }}</div>
+      <div class="branches-metric-meta">Assigned to active primary branches</div>
+    </div>
+
+    <div class="branches-metric-card">
+      <div class="branches-metric-header">
+        <span>Unassigned Staff</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      </div>
+      <div class="branches-metric-value" style="color: {% if kpis.unassigned_employees > 0 %}#f59e0b{% else %}var(--text){% endif %};">
+        {{ kpis.unassigned_employees }}
+      </div>
+      <div class="branches-metric-meta">Active staff awaiting branch assignment</div>
+    </div>
+
+    <div class="branches-metric-card">
+      <div class="branches-metric-header">
+        <span>Geofence Policy</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 10 10"></path></svg>
+      </div>
+      <div class="branches-metric-value">50m</div>
+      <div class="branches-metric-meta">Strict radius per branch location</div>
+    </div>
+  </div>
+
+  <!-- Filter Card -->
+  <section class="branches-filter-card">
+    <form method="get" class="branches-filter-form">
+      <div class="branches-search-field">
+        <span class="search-icon">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input type="text" name="q" placeholder="Search branch name, code, or address..." value="{{ search_query }}">
+      </div>
+
+      <div class="branches-filter-field">
+        <select name="status" onchange="this.form.submit()">
+          <option value="">All statuses</option>
+          <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active only</option>
+          <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive only</option>
+        </select>
+      </div>
+
+      <div class="branches-filter-actions">
+        {% if active_filters_count %}
+        <span class="branches-active-badge">{{ active_filters_count }} filter{{ active_filters_count|pluralize }} active</span>
+        {% endif %}
+        <button class="branches-apply-btn" type="submit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          Filter
+        </button>
+        {% if search_query or selected_status %}
+        <a class="branches-reset-btn" href="{% url 'web:branches' %}">Reset</a>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+
+  <!-- Table Section -->
+  <section class="panel">
+    <div class="panel-heading" style="display: flex; justify-content: space-between; align-items: center;">
+      <h2>Configured Branches &amp; Offices ({{ records.paginator.count }})</h2>
+      <small class="muted">Perimeter accuracy requires GPS reading &le; 25m</small>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Branch / Office</th>
+            <th>Code</th>
+            <th>Address</th>
+            <th>Coordinates</th>
+            <th>Geofence</th>
+            <th>Assigned Staff</th>
+            <th>Status</th>
+            <th style="text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in branches %}
+          <tr>
+            <td>
+              <strong>{{ b.name }}</strong>
+              {% if b.notes %}
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">{{ b.notes|truncatewords:8 }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <code style="font-size: 0.82rem; padding: 2px 6px; background: rgba(255,255,255,0.06); border-radius: 4px;">{{ b.code }}</code>
+            </td>
+            <td style="max-width: 240px; font-size: 0.85rem; color: var(--text-muted);">
+              {{ b.address|default:"—"|truncatechars:65 }}
+            </td>
+            <td>
+              <span style="font-family: monospace; font-size: 0.82rem;">
+                {{ b.latitude|floatformat:6 }}, {{ b.longitude|floatformat:6 }}
+              </span>
+            </td>
+            <td>
+              <span class="radius-badge">{{ b.radius_meters }}m</span>
+            </td>
+            <td>
+              <a href="{% url 'web:employee-branch-assignments' %}?branch={{ b.pk }}" style="text-decoration: none;">
+                <span class="badge-primary-office">
+                  {{ b.primary_emp_count }} Primary
+                </span>
+                {% if b.total_emp_count > b.primary_emp_count %}
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: 4px;">
+                  ({{ b.total_emp_count }} total)
+                </span>
+                {% endif %}
+              </a>
+            </td>
+            <td>
+              {% if b.is_active %}
+              <span class="badge-active">● Active</span>
+              {% else %}
+              <span class="badge-inactive">○ Inactive</span>
+              {% endif %}
+            </td>
+            <td style="text-align: right;">
+              <div style="display: inline-flex; align-items: center; gap: 8px;">
+                <a class="button small" href="{% url 'web:branch-edit' b.pk %}">Edit</a>
+                <form method="post" action="{% url 'web:branch-toggle-status' b.pk %}" style="display: inline;" onsubmit="return confirm('Are you sure you want to {% if b.is_active %}deactivate{% else %}activate{% endif %} {{ b.name }}?');">
+                  {% csrf_token %}
+                  <button type="submit" class="button small" style="color: {% if b.is_active %}#f87171{% else %}#4ade80{% endif %};">
+                    {% if b.is_active %}Deactivate{% else %}Activate{% endif %}
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 8px; opacity: 0.5;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              <div style="font-size: 1rem; font-weight: 600; margin-bottom: 4px;">No branch offices found</div>
+              <p style="font-size: 0.85rem; margin-bottom: 16px;">Create your primary office or adjustment branches to enforce geofenced attendance.</p>
+              <a class="button primary small" href="{% url 'web:branch-create' %}">+ Create First Branch</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if records.has_other_pages %}
+    <div style="padding: 16px 20px; border-top: 1px solid var(--border);">
+      {% include 'web/pagination.html' with page_obj=records %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
