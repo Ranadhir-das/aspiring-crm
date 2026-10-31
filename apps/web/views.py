@@ -22,6 +22,7 @@ from apps.calls.models import Call
 from apps.followups.models import FollowUp
 from apps.leads.models import Lead, LeadImportBatch
 from apps.leads.services import bulk_assign_leads, commit_import, commit_paste_import, preview_import
+from apps.leads.import_storage import save_import_preview_file, get_import_preview_file, cleanup_import_preview_file
 from .forms import ACCESS, CALLING, MANAGEMENT, FollowUpForm, ImportForm, LeadForm, LoginForm
 
 
@@ -388,12 +389,13 @@ def lead_detail(request, pk):
     from apps.leads.models import WhatsAppTemplate
     website_submissions = list(lead.website_submissions.select_related('website_source', 'service_type').order_by('-submitted_at')[:20])
     whatsapp_templates = list(WhatsAppTemplate.objects.filter(Q(owner__isnull=True) | Q(owner=request.user), is_active=True).order_by('title'))
+    from apps.leads.counselor_services import visible_counselor_notes
+    counselor_notes = list(visible_counselor_notes(request.user, lead).order_by('-created_at', '-id')[:50])
     counselor_panel = None
     if request.user.role in MANAGEMENT:
-        # Counselor notes are private: only management (and the authoring counselor via the mobile API).
         counselor_panel = {
             'assignments': lead.counselor_assignments.select_related('counselor', 'caller', 'forwarded_by')[:20],
-            'notes': lead.counselor_notes.select_related('counselor')[:50],
+            'notes': counselor_notes,
             'admission_requests': lead.admission_requests.select_related('counselor', 'reviewed_by')[:20],
         }
     return page(request, 'lead_detail', 'leads', lead=lead, form=form, follow_form=follow_form,
@@ -401,7 +403,8 @@ def lead_detail(request, pk):
                 followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20],
                 activity_log=ActivityLog.objects.filter(lead=lead).select_related('actor').order_by('-created_at')[:50],
                 website_submissions=website_submissions,
-                whatsapp_templates=whatsapp_templates, counselor_panel=counselor_panel)
+                whatsapp_templates=whatsapp_templates, counselor_panel=counselor_panel,
+                counselor_notes=counselor_notes)
 
 
 @require_POST
@@ -424,16 +427,28 @@ def lead_assign(request):
 
 @workspace(management=True)
 def lead_import(request):
-    form = ImportForm(request.POST or None, request.FILES or None)
+    post_data = None
+    import_token = None
+    if request.method == 'POST':
+        post_data = request.POST.copy()
+        import_token = (
+            post_data.get('import_token')
+            or post_data.get('import_identifier')
+            or request.session.get('lead_import_token')
+        )
+        if import_token and not post_data.get('import_token'):
+            post_data['import_token'] = import_token
+    form = ImportForm(post_data or None, request.FILES or None)
     preview = None
     paste_result = None
+
     if request.method == 'POST' and form.is_valid():
         upload = form.cleaned_data.get('file')
         pasted_text = form.cleaned_data.get('pasted_numbers')
         action = request.POST.get('action')
 
         import_method = request.POST.get('import_method') or form.cleaned_data.get('import_method')
-        is_paste_action = (action == 'import_paste') or (action == 'import' and (import_method == 'paste' or (pasted_text and not upload)))
+        is_paste_action = (action == 'import_paste') or (action == 'import' and (import_method == 'paste' or (pasted_text and not upload and not import_token)))
 
         if is_paste_action:
             if not pasted_text:
@@ -457,22 +472,41 @@ def lead_import(request):
                 else:
                     messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
         elif action in ('preview', 'import'):
+            # If importing without a new file attachment, retrieve the validated preview file
+            if action == 'import' and not upload and import_token:
+                upload = get_import_preview_file(import_token, request.user.id)
+
             if not upload:
                 form.add_error('file', 'Please choose a CSV or Excel file.')
             else:
                 try:
                     if action == 'import':
-                        result = commit_import(upload, request.user, assigned_caller=form.cleaned_data['caller'], preferred_course=form.cleaned_data['preferred_course'], preferred_course_custom=form.cleaned_data['preferred_course_custom'])
+                        result = commit_import(
+                            upload,
+                            request.user,
+                            assigned_caller=form.cleaned_data['caller'],
+                            preferred_course=form.cleaned_data['preferred_course'],
+                            preferred_course_custom=form.cleaned_data['preferred_course_custom'],
+                        )
+                        if import_token:
+                            cleanup_import_preview_file(import_token, request.user.id)
+                            request.session.pop('lead_import_token', None)
                         if form.cleaned_data['caller']:
                             messages.success(request, f"Assigned {result['created_count']} new leads to {form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username}.")
                         messages.success(request, f"Imported {result['created_count']} leads; {result['duplicate_count']} duplicates and {result['skipped_count']} invalid rows skipped.")
                         from django.urls import reverse
                         return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
+
+                    # action == 'preview'
                     preview = preview_import(upload)
+                    token = save_import_preview_file(request.user.id, upload)
+                    request.session['lead_import_token'] = token
+                    preview['import_token'] = token
+                    preview['filename'] = getattr(upload, 'name', 'leads.csv')
                     from apps.leads.courses import course_label
                     preview['course_label'] = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
-                except (ValueError, UnicodeError, BadZipFile):
-                    form.add_error('file', 'This file could not be read. Check its format and required name/phone columns.')
+                except (ValueError, UnicodeError, BadZipFile) as exc:
+                    form.add_error('file', f'This file could not be read: {exc}. Check its format and required name/phone columns.')
         elif pasted_text:
             result = commit_paste_import(
                 pasted_text,
@@ -490,13 +524,32 @@ def lead_import(request):
                                  (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else ""))
             else:
                 messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
-        elif upload:
+        elif upload or import_token:
+            if not upload and import_token:
+                upload = get_import_preview_file(import_token, request.user.id)
+            if upload:
+                try:
+                    preview = preview_import(upload)
+                    token = save_import_preview_file(request.user.id, upload)
+                    request.session['lead_import_token'] = token
+                    preview['import_token'] = token
+                    preview['filename'] = getattr(upload, 'name', 'leads.csv')
+                    from apps.leads.courses import course_label
+                    preview['course_label'] = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
+                except (ValueError, UnicodeError, BadZipFile) as exc:
+                    form.add_error('file', f'This file could not be read: {exc}. Check its format and required name/phone columns.')
+    elif request.method == 'POST' and not form.is_valid() and import_token:
+        # Preserve preview when user corrects other form fields like course selection
+        staged = get_import_preview_file(import_token, request.user.id)
+        if staged:
             try:
-                preview = preview_import(upload)
+                preview = preview_import(staged)
+                preview['import_token'] = import_token
+                preview['filename'] = getattr(staged, 'name', 'leads.csv')
                 from apps.leads.courses import course_label
-                preview['course_label'] = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
-            except (ValueError, UnicodeError, BadZipFile):
-                form.add_error('file', 'This file could not be read. Check its format and required name/phone columns.')
+                preview['course_label'] = course_label(request.POST.get('preferred_course'), request.POST.get('preferred_course_custom'))
+            except Exception:
+                pass
     return page(request, 'import', 'import', form=form, preview=preview, paste_result=paste_result,
                 batches=LeadImportBatch.objects.select_related('imported_by').annotate(remaining=Count('leads', filter=Q(leads__assigned_caller__isnull=True)), allocated=Count('leads', filter=Q(leads__assigned_caller__isnull=False))).order_by('-created_at')[:10])
 

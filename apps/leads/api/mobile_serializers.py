@@ -8,7 +8,11 @@ class MobileLeadSerializer(serializers.ModelSerializer):
     interested_details = serializers.SerializerMethodField()
 
     def get_interested_details(self, obj):
-        call = obj.calls.filter(outcome='INTERESTED').order_by('-started_at', '-pk').first()
+        if hasattr(obj, '_prefetched_objects_cache') and 'calls' in obj._prefetched_objects_cache:
+            calls = [c for c in obj.calls.all() if c.outcome == 'INTERESTED']
+            call = calls[0] if calls else None
+        else:
+            call = obj.calls.filter(outcome='INTERESTED').order_by('-started_at', '-pk').first()
         if not call:
             return None
         return {'selected_course': call.selected_course, 'selected_course_custom': call.selected_course_custom,

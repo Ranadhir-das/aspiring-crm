@@ -267,10 +267,15 @@ class CounselorWorkflowTests(TestCase):
         response = self.client.get(f'/leads/{self.lead.pk}/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'PRIVATE-COUNSELOR-NOTE')
+        # Assigned caller is now authorized to see counselor notes on their lead
         self.client.force_login(self.caller)
         response = self.client.get(f'/leads/{self.lead.pk}/')
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, 'PRIVATE-COUNSELOR-NOTE')
+        self.assertContains(response, 'PRIVATE-COUNSELOR-NOTE')
+        # Unassigned caller cannot access this lead or its notes
+        self.client.force_login(self.other_caller)
+        response = self.client.get(f'/leads/{self.lead.pk}/')
+        self.assertEqual(response.status_code, 404)
 
     # ------------------------------------------------------------------ WhatsApp
     def test_whatsapp_allowed_only_for_assigned_counselor(self):

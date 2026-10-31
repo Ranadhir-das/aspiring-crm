@@ -33,9 +33,20 @@ def mask_phone(phone: str) -> str:
 
 def find_duplicate_lead(phone: str):
     """
-    Find existing Lead by normalized phone number.
+    Find existing Lead by normalized phone number and equivalent variants
+    (supporting India and Bangladesh phone numbers).
     Uses fast direct database lookup before falling back to full scan.
     """
+    if not phone:
+        return None
+
+    from .phone_normalization import get_phone_lookup_variants
+    variants = get_phone_lookup_variants(phone)
+    if variants:
+        direct = Lead.objects.filter(phone__in=variants).first()
+        if direct:
+            return direct
+
     normalized = normalize_phone(phone)
     if not normalized:
         return None

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..services import preview_import, commit_import
+from ..import_storage import save_import_preview_file, get_import_preview_file, cleanup_import_preview_file
 
 from .permissions import CanManageLeads, CanAccessLeads
 
@@ -40,10 +41,21 @@ class LeadImportPreviewView(APIView):
 
         serializer.is_valid(raise_exception=True)
 
-        file = serializer.validated_data["file"]
+        file = serializer.validated_data.get("file")
+        token = serializer.validated_data.get("import_identifier") or serializer.validated_data.get("import_token")
+        if not file and token:
+            file = get_import_preview_file(token, request.user.id)
+            if not file:
+                return Response(
+                    {"detail": "Invalid or expired import identifier."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             result = preview_import(file)
+            staged_token = save_import_preview_file(request.user.id, file)
+            result["import_identifier"] = staged_token
+            result["import_token"] = staged_token
             result.update({k: serializer.validated_data[k] for k in ("preferred_course", "preferred_course_custom")})
 
             return Response(
@@ -69,7 +81,15 @@ class LeadImportCommitView(APIView):
 
         serializer.is_valid(raise_exception=True)
 
-        file = serializer.validated_data["file"]
+        file = serializer.validated_data.get("file")
+        token = serializer.validated_data.get("import_identifier") or serializer.validated_data.get("import_token")
+        if not file and token:
+            file = get_import_preview_file(token, request.user.id)
+            if not file:
+                return Response(
+                    {"detail": "Invalid or expired import identifier. Please preview the file again."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             result = commit_import(
@@ -78,6 +98,8 @@ class LeadImportCommitView(APIView):
                 preferred_course=serializer.validated_data["preferred_course"],
                 preferred_course_custom=serializer.validated_data["preferred_course_custom"],
             )
+            if token:
+                cleanup_import_preview_file(token, request.user.id)
 
             return Response(
                 result,

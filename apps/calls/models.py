@@ -21,6 +21,8 @@ class Call(models.Model):
 
     @property
     def outcome_points(self):
+        if hasattr(self, '_prefetched_objects_cache') and 'points_entries' in self._prefetched_objects_cache:
+            return sum(p.points for p in self.points_entries.all() if p.event in ['INTERESTED_LEAD', 'INTERESTED'])
         return sum(self.points_entries.filter(event__in=['INTERESTED_LEAD', 'INTERESTED']).values_list('points', flat=True))
 
     client_event_id = models.UUIDField(null=True, blank=True, help_text="Optional idempotency key supplied by the caller app.")

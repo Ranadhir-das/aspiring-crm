@@ -7,6 +7,18 @@ from apps.leads.courses import Course, validate_course
 class LeadImportSerializer(serializers.Serializer):
     preferred_course = serializers.ChoiceField(choices=Course.choices)
     preferred_course_custom = serializers.CharField(max_length=150, required=False, allow_blank=True, default='')
+    file = serializers.FileField(required=False)
+    import_identifier = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
+    import_token = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
+
+    def validate_file(self, value):
+        if value:
+            filename = value.name.lower()
+            if not filename.endswith((".csv", ".xlsx")):
+                raise serializers.ValidationError(
+                    "Only CSV and XLSX files are supported."
+                )
+        return value
 
     def validate(self, attrs):
         try:
@@ -14,19 +26,11 @@ class LeadImportSerializer(serializers.Serializer):
                 attrs.get('preferred_course'), attrs.get('preferred_course_custom'))
         except ValueError as exc:
             raise serializers.ValidationError({'preferred_course_custom': str(exc)})
+
+        token = attrs.get('import_identifier') or attrs.get('import_token')
+        if not attrs.get('file') and not token:
+            raise serializers.ValidationError({'file': 'Either a file or an import_identifier is required.'})
         return attrs
-
-    file = serializers.FileField()
-
-    def validate_file(self, value):
-        filename = value.name.lower()
-
-        if not filename.endswith((".csv", ".xlsx")):
-            raise serializers.ValidationError(
-                "Only CSV and XLSX files are supported."
-            )
-
-        return value
 
 from django.contrib.auth import get_user_model
 from rest_framework import serializers

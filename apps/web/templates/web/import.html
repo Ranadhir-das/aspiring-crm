@@ -41,7 +41,7 @@
       </div>
     </div>
 
-    <form method="post" enctype="multipart/form-data" class="course-import-form">
+    <form method="post" enctype="multipart/form-data" class="course-import-form" id="course-import-form">
       {% csrf_token %}
       {{ form.non_field_errors }}
 
@@ -88,6 +88,7 @@
 
         {{ form.import_method }}
         {{ form.idempotency_key }}
+        <input type="hidden" name="import_token" id="id_import_token" value="{{ preview.import_token|default:form.import_token.value|default:'' }}">
 
         <div class="import-method-tabs" role="tablist">
           <button type="button" class="method-tab active" data-method="paste" role="tab" id="tab-paste">
@@ -111,6 +112,18 @@
         </div>
 
         <div class="course-file" id="method-section-file" style="display:none;">
+          {% if preview and preview.filename and preview.import_token %}
+          <div class="file-staged-banner" id="file-staged-banner" style="margin-bottom: 12px; padding: 12px 16px; background: rgba(83, 201, 255, 0.08); border: 1px solid rgba(83, 201, 255, 0.25); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#53c9ff" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <div>
+                <strong style="color: var(--text-primary, #fff);">{{ preview.filename }}</strong>
+                <div class="muted" style="font-size: 12px;">File preview ready ({{ preview.total_rows }} rows). Ready to import.</div>
+              </div>
+            </div>
+            <span class="badge interested">Ready to import</span>
+          </div>
+          {% endif %}
           <div class="file-upload-visual">
             <div class="upload-icon-circle">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -122,6 +135,7 @@
           </div>
           {{ form.file }}
           {{ form.file.errors }}
+          <div id="file-selected-info" style="display:none; margin-top: 8px; font-size: 13px; font-weight: 600; color: #53c9ff;"></div>
         </div>
       </div>
 
@@ -318,7 +332,7 @@
     <div class="panel-heading" style="margin-top:20px;">
       <div>
         <h3>Skipped Entries ({{ paste_result.skipped_count }})</h3>
-        <p class="muted">These entries could not be converted to a valid 10-digit Indian mobile number:</p>
+        <p class="muted">These entries could not be converted to a valid Indian or Bangladesh mobile number:</p>
       </div>
     </div>
     <div class="table-scroll">
@@ -346,13 +360,21 @@
 {% endif %}
 
 {% if preview %}
-<section class="panel spaced">
+<section class="panel spaced preview-file-section" id="import-preview-section">
   <div class="panel-heading">
     <div>
       <h2>Import preview</h2>
       <span class="badge interested">Preferred course: {{ preview.course_label }}</span>
       <p>{{ preview.total_rows }} rows · {{ preview.duplicate_count|default:0 }} duplicates · {{ preview.error_count|default:0 }} invalid rows</p>
     </div>
+    {% if preview.success %}
+    <div class="actions">
+      <button type="submit" form="course-import-form" name="action" value="import" class="button primary" id="preview-import-btn" style="display: inline-flex; align-items: center; gap: 8px;">
+        <span>Import Leads Now</span>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+      </button>
+    </div>
+    {% endif %}
   </div>
   {% if not preview.success %}
     <div class="notice error">Missing required columns: {{ preview.columns.missing_columns|join:', ' }}</div>

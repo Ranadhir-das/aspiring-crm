@@ -237,11 +237,15 @@ def get_counselor_assignment_or_404(user, lead_id):
 
 
 def visible_counselor_notes(user, lead):
-    """Notes privacy: author counselor, Admin/Super Admin and Manager only."""
+    """Notes privacy: Management, assigned caller of the lead, and author counselor."""
+    if not user or not user.is_authenticated:
+        return CounselorNote.objects.none()
     notes = CounselorNote.objects.filter(lead=lead).select_related('counselor')
-    if user.role in MANAGEMENT_ROLES:
+    if getattr(user, 'role', None) in MANAGEMENT_ROLES:
         return notes
-    if user.role == User.Role.COUNSELOR:
+    if getattr(lead, 'assigned_caller_id', None) == user.pk:
+        return notes
+    if is_counselor(user):
         return notes.filter(counselor=user)
     return notes.none()
 

@@ -50,18 +50,46 @@
     });
   });
 
-  // Initialize method based on hidden input or presence of file input errors
-  const initialMethod = methodInput?.value || (fileSection?.querySelector('.errorlist') ? 'file' : 'paste');
+  // 3. File selection & staged preview state handling
+  const fileInput = form.querySelector('[name="file"]');
+  const importTokenInput = form.querySelector('[name="import_token"]');
+  const fileSelectedInfo = document.getElementById('file-selected-info');
+  const stagedBanner = document.getElementById('file-staged-banner');
+  const previewSection = document.getElementById('import-preview-section');
+
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files.length > 0) {
+        const f = fileInput.files[0];
+        const sizeKb = (f.size / 1024).toFixed(1);
+        if (fileSelectedInfo) {
+          fileSelectedInfo.textContent = `Selected: ${f.name} (${sizeKb} KB) · Click Preview or Import Leads`;
+          fileSelectedInfo.style.display = 'block';
+        }
+        // When user picks a new local file, clear previously staged server token
+        if (importTokenInput) importTokenInput.value = '';
+        if (stagedBanner) stagedBanner.style.display = 'none';
+      } else {
+        if (fileSelectedInfo) fileSelectedInfo.style.display = 'none';
+      }
+    });
+  }
+
+  // Initialize method based on staged banner, preview section, hidden input, or file errors
+  const hasFilePreview = !!stagedBanner || !!previewSection || (importTokenInput && importTokenInput.value.trim().length > 0);
+  const initialMethod = hasFilePreview ? 'file' : (methodInput?.value || (fileSection?.querySelector('.errorlist') ? 'file' : 'paste'));
   setMethod(initialMethod);
 
-  // 3. Double-click & in-flight submission prevention
+  // 4. Double-click & in-flight submission prevention
   let isSubmitting = false;
   let clickedAction = 'import';
 
-  form.querySelectorAll('button[type="submit"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      clickedAction = btn.value || 'import';
-    });
+  document.querySelectorAll('button[type="submit"]').forEach(btn => {
+    if (btn.form === form || btn.closest('.course-import-form') || btn.getAttribute('form') === form.id) {
+      btn.addEventListener('click', () => {
+        clickedAction = btn.value || 'import';
+      });
+    }
   });
 
   form.addEventListener('submit', (e) => {
@@ -72,24 +100,35 @@
 
     isSubmitting = true;
     const submitBtn = document.getElementById('submit-import-btn');
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      if (clickedAction === 'preview') {
-        submitBtn.textContent = 'Preparing preview...';
-      } else {
-        submitBtn.textContent = 'Importing leads...';
-      }
+    const previewImportBtn = document.getElementById('preview-import-btn');
+
+    if (clickedAction === 'preview') {
+      if (submitBtn) submitBtn.textContent = 'Preparing preview...';
+      if (previewBtn) previewBtn.textContent = 'Preparing preview...';
+    } else {
+      if (submitBtn) submitBtn.innerHTML = '<span>Importing leads...</span>';
+      if (previewImportBtn) previewImportBtn.innerHTML = '<span>Importing leads...</span>';
     }
+
+    if (submitBtn) submitBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
+    if (previewImportBtn) previewImportBtn.disabled = true;
 
     // Safety timeout in case the submit is blocked by browser validation or aborted
     setTimeout(() => {
       isSubmitting = false;
       if (submitBtn) {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Import Leads ↗';
+        submitBtn.innerHTML = '<span>Import Leads</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>';
       }
-      if (previewBtn) previewBtn.disabled = false;
+      if (previewBtn) {
+        previewBtn.disabled = false;
+        previewBtn.textContent = 'Preview file';
+      }
+      if (previewImportBtn) {
+        previewImportBtn.disabled = false;
+        previewImportBtn.innerHTML = '<span>Import Leads Now</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>';
+      }
     }, 15000);
   });
 })();

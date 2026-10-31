@@ -36,7 +36,24 @@ class MobileLeadListView(ListAPIView):
         from apps.accounts.capabilities import is_caller_capable
         if not is_caller_capable(user):
             return Lead.objects.none()
-        return restrict_apostille(Lead.objects.select_related("import_batch", "service_type").filter(assigned_caller=user).order_by("-created_at"), user)
+        from apps.calls.models import Call
+        from django.db.models import Prefetch
+        qs = (
+            Lead.objects
+            .select_related("import_batch", "service_type")
+            .prefetch_related(
+                Prefetch("calls", queryset=Call.objects.prefetch_related("points_entries").order_by("-started_at", "-pk")),
+            )
+            .filter(assigned_caller=user)
+            .order_by("-created_at")
+        )
+        return restrict_apostille(qs, user)
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response["Pragma"] = "no-cache"
+        return response
 
 
 class MobileLeadDetailView(RetrieveAPIView):

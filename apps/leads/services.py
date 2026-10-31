@@ -172,6 +172,7 @@ def validate_columns(headers):
 def validate_row(row, row_number):
     """
     Validate one imported lead row.
+    Supports Indian and Bangladesh mobile phone numbers.
     """
 
     errors = []
@@ -186,13 +187,14 @@ def validate_row(row, row_number):
     if not phone:
         errors.append("Phone is required.")
 
-    normalized_phone = normalize_phone(phone)
-
-    if phone and not normalized_phone:
-        errors.append("Phone number is invalid.")
-
-    if normalized_phone and len(normalized_phone) < 7:
-        errors.append("Phone number is too short.")
+    normalized_phone = ""
+    if phone:
+        from .phone_normalization import normalize_phone_number
+        norm, reason = normalize_phone_number(phone)
+        if norm is not None:
+            normalized_phone = norm
+        else:
+            errors.append(f"Phone number is invalid: {reason}")
 
     email = str(row.get("email", "")).strip()
 
@@ -243,10 +245,21 @@ def get_existing_phone_map():
         .only("id", "name", "phone")
         .iterator()
     ):
-        normalized = normalize_phone(lead.phone)
+        if not lead.phone:
+            continue
 
-        if normalized:
-            phone_map[normalized] = lead
+        raw_phone = str(lead.phone).strip()
+        phone_map[raw_phone] = lead
+        digits = normalize_phone(raw_phone)
+        if digits:
+            phone_map[digits] = lead
+
+        from .phone_normalization import get_phone_lookup_variants
+        for v in get_phone_lookup_variants(raw_phone):
+            phone_map.setdefault(v, lead)
+            v_digits = normalize_phone(v)
+            if v_digits:
+                phone_map.setdefault(v_digits, lead)
 
     return phone_map
 
@@ -256,6 +269,22 @@ def check_duplicate_from_map(phone, phone_map):
     Check for a duplicate using an in-memory phone map.
     Matches exact normalized phone as well as standard Indian (91, 0) and Bangladesh (880, 88, 0) prefixes.
     """
+
+    if not phone:
+        return None
+
+    str_phone = str(phone).strip()
+    if str_phone in phone_map:
+        return phone_map[str_phone]
+
+    from .phone_normalization import get_phone_lookup_variants
+    variants = get_phone_lookup_variants(str_phone)
+    for v in variants:
+        if v in phone_map:
+            return phone_map[v]
+        v_digits = normalize_phone(v)
+        if v_digits and v_digits in phone_map:
+            return phone_map[v_digits]
 
     normalized = normalize_phone(phone)
 
@@ -392,6 +421,15 @@ def preview_import(file):
 
             if normalized_phone:
                 seen_phones.add(normalized_phone)
+                from .phone_normalization import get_phone_lookup_variants
+                for v in get_phone_lookup_variants(normalized_phone):
+                    seen_phones.add(v)
+                    v_digits = normalize_phone(v)
+                    if v_digits:
+                        seen_phones.add(v_digits)
+                    existing_phone_map[v] = True
+                    if v_digits:
+                        existing_phone_map[v_digits] = True
 
         if duplicate:
             duplicate_count += 1
@@ -501,6 +539,15 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
                 continue
 
             seen_phones.add(normalized_phone)
+            from .phone_normalization import get_phone_lookup_variants
+            for v in get_phone_lookup_variants(normalized_phone):
+                seen_phones.add(v)
+                v_digits = normalize_phone(v)
+                if v_digits:
+                    seen_phones.add(v_digits)
+                existing_phone_map[v] = True
+                if v_digits:
+                    existing_phone_map[v_digits] = True
 
             pcb_percentage = prepare_pcb_percentage(
                 row.get("pcb_percentage")
@@ -824,6 +871,12 @@ def commit_paste_import(
         seen_in_paste.add(phone)
         leads_to_create.append(phone)
         existing_phone_map[phone] = True
+        from .phone_normalization import get_phone_lookup_variants
+        for v in get_phone_lookup_variants(phone):
+            existing_phone_map[v] = True
+            v_digits = normalize_phone(v)
+            if v_digits:
+                existing_phone_map[v_digits] = True
 
     if not leads_to_create:
         result = {

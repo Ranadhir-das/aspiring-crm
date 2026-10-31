@@ -99,6 +99,7 @@ class ImportForm(forms.Form):
         )
     import_method = forms.CharField(widget=forms.HiddenInput(), required=False, initial='paste')
     idempotency_key = forms.CharField(widget=forms.HiddenInput(), required=False)
+    import_token = forms.CharField(widget=forms.HiddenInput(), required=False)
     preferred_course = forms.ChoiceField(choices=[('', 'Select a course'), *Course.choices], widget=forms.RadioSelect)
     preferred_course_custom = forms.CharField(max_length=150, required=False, label='Enter Course Name (Others)')
 
@@ -142,13 +143,14 @@ class ImportForm(forms.Form):
 
         method = data.get('import_method') or 'paste'
         has_file = bool(data.get('file'))
+        has_token = bool(data.get('import_token'))
         has_paste = bool(str(data.get('pasted_numbers') or '').strip())
 
-        if method == 'file' and not has_file:
+        if method == 'file' and not has_file and not has_token:
             self.add_error('file', 'Please choose a CSV or Excel file.')
-        elif method == 'paste' and not has_paste and not has_file:
+        elif method == 'paste' and not has_paste and not has_file and not has_token:
             self.add_error('pasted_numbers', 'Please paste phone numbers to import.')
-        elif not has_file and not has_paste:
+        elif not has_file and not has_paste and not has_token:
             self.add_error(None, 'Please provide either a CSV/XLSX file or paste phone numbers.')
 
         return data

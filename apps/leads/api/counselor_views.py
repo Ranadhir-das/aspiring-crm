@@ -158,7 +158,7 @@ class CounselorDirectoryView(APIView):
 
 
 class LeadCounselorView(APIView):
-    """Current counselor assignment for a caller-owned lead."""
+    """Current counselor assignment and counselor notes for a caller-owned lead."""
     authentication_classes = [VerifiedSessionAuthentication]
     permission_classes = [IsAuthenticated, IsCaller]
 
@@ -167,8 +167,25 @@ class LeadCounselorView(APIView):
         if lead is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         can_forward, reason = forward_eligibility(lead, request.user)
-        return Response({'lead_id': lead.pk, 'assignment': assignment_data(active_assignment(lead)),
-                         'can_forward': can_forward, 'reason': reason})
+        notes = visible_counselor_notes(request.user, lead)
+        counselor_notes_data = [{
+            'id': note.pk,
+            'content': note.body,
+            'body': note.body,
+            'author_name': display_name(note.counselor),
+            'counselor_name': display_name(note.counselor),
+            'kind': note.kind,
+            'kind_display': note.get_kind_display(),
+            'duration_seconds': note.duration_seconds,
+            'created_at': iso(note.created_at),
+        } for note in notes]
+        return Response({
+            'lead_id': lead.pk,
+            'assignment': assignment_data(active_assignment(lead)),
+            'can_forward': can_forward,
+            'reason': reason,
+            'counselor_notes': counselor_notes_data,
+        })
 
 
 class ForwardLeadToCounselorView(APIView):
