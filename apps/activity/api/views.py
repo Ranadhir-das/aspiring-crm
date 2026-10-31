@@ -227,7 +227,7 @@ class StartActivityView(BaseActivityView):
             lat = data.get("latitude")
             lon = data.get("longitude")
             acc = data.get("accuracy")
-            rec_str = data.get("recorded_at") or data.get("timestamp")
+            rec_str = (data.get("recorded_at") or data.get("timestamp") or "").strip() or None
             is_mock = data.get("is_mocked", False)
 
             if lat is None or lon is None:
@@ -241,7 +241,7 @@ class StartActivityView(BaseActivityView):
                     latitude=lat,
                     longitude=lon,
                     accuracy=acc if acc is not None else 999.0,
-                    recorded_at=rec_str or now,
+                    recorded_at=rec_str,
                     is_mocked=is_mock,
                     now=now,
                 )
@@ -375,7 +375,7 @@ class ResumeActivityView(BaseActivityView):
             lat = data.get("latitude")
             lon = data.get("longitude")
             acc = data.get("accuracy")
-            rec_str = data.get("recorded_at") or data.get("timestamp")
+            rec_str = (data.get("recorded_at") or data.get("timestamp") or "").strip() or None
             is_mock = data.get("is_mocked", False)
 
             if lat is None or lon is None:
@@ -389,7 +389,7 @@ class ResumeActivityView(BaseActivityView):
                     latitude=lat,
                     longitude=lon,
                     accuracy=acc if acc is not None else 999.0,
-                    recorded_at=rec_str or now,
+                    recorded_at=rec_str,
                     is_mocked=is_mock,
                     now=now,
                 )
@@ -531,7 +531,7 @@ class EndActivityView(BaseActivityView):
             lat = data.get("latitude")
             lon = data.get("longitude")
             acc = data.get("accuracy")
-            rec_str = data.get("recorded_at") or data.get("timestamp")
+            rec_str = (data.get("recorded_at") or data.get("timestamp") or "").strip() or None
             is_mock = data.get("is_mocked", False)
 
             if is_employee_geofence_enforced(request.user):
@@ -546,7 +546,7 @@ class EndActivityView(BaseActivityView):
                         latitude=lat,
                         longitude=lon,
                         accuracy=acc if acc is not None else 999.0,
-                        recorded_at=rec_str or now,
+                        recorded_at=rec_str,
                         is_mocked=is_mock,
                         now=now,
                     )
