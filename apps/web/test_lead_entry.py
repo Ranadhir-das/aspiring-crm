@@ -17,15 +17,16 @@ class LeadEntryTests(TestCase):
         self.assertTrue(preview['success'])
         self.assertEqual(preview['duplicate_count'], 1)
         result = commit_import(ContentFile(data, name='calley.csv'), self.admin)
-        self.assertEqual(result['created_count'], 2)
-        self.assertEqual(Lead.objects.filter(import_batch_id=result['batch_id']).count(), 2)
-        self.assertTrue(Lead.objects.filter(phone='09876543210').exists())
+        self.assertEqual(result['created_count'], 3)
+        self.assertEqual(result['duplicate_count'], 1)
+        self.assertEqual(Lead.objects.filter(import_batch_id=result['batch_id']).count(), 3)
+        self.assertEqual(Lead.objects.filter(phone='09876543210').count(), 2)
 
     def test_quick_download_import_validation_and_access(self):
         data = {'form-TOTAL_FORMS': '1', 'form-INITIAL_FORMS': '0', 'form-0-name': 'Alice', 'form-0-phone': '09876543210', 'action': 'download'}
         response = self.client.post('/leads/quick-entry/', data)
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b'Alice,09876543210', response.content)
+        self.assertIn(b'Alice,9876543210', response.content)
         self.assertFalse(Lead.objects.exists())
         data['action'] = 'import'
         response = self.client.post('/leads/quick-entry/', data)
@@ -33,7 +34,7 @@ class LeadEntryTests(TestCase):
         self.assertIn('/leads/distribute/?batch=', response.url)
         self.assertEqual(Lead.objects.count(), 1)
         data['form-0-phone'] = 'bad'
-        self.assertContains(self.client.post('/leads/quick-entry/', data), 'valid phone number')
+        self.assertContains(self.client.post('/leads/quick-entry/', data), 'Contains invalid characters')
         self.client.force_login(self.a)
         self.assertEqual(self.client.get('/leads/quick-entry/').status_code, 403)
 

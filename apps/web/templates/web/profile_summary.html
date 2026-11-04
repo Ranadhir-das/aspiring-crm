@@ -32,13 +32,13 @@
     <span class="pill {% if latest_session.online %}mint{% else %}violet{% endif %}" style="padding:6px 14px;font-size:0.8rem;font-weight:700">
       {% if latest_session.online %}● ONLINE{% else %}○ OFFLINE{% endif %}
     </span>
-    <div class="caller-points-box">
-      <span style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Selected Window Points</span>
-      <div class="caller-points-val">{{ stats.total_points }}</div>
+    <div class="caller-points-box" title="Current lifetime balance and selected window points">
+      <span style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">Current Points Balance</span>
+      <div class="caller-points-val" style="color:var(--accent,#38bdf8);">{{ stats.lifetime_points }}</div>
       <div class="caller-points-split">
-        <span class="pos">+{{ stats.positive_points }} awarded</span>
+        <span class="pos">Window: {{ stats.total_points }}</span>
         <span>·</span>
-        <span class="neg">{{ stats.negative_points }} deducted</span>
+        <span>+{{ stats.positive_points }}/-{{ stats.negative_points }}</span>
       </div>
     </div>
   </div>
@@ -400,8 +400,46 @@
     </a>
     {% empty %}
     <div class="empty" style="grid-column: 1 / -1; padding: 28px; text-align: center; color: var(--text-muted);">
-      No leads currently assigned to this caller.
+      No leads assigned.
     </div>
     {% endfor %}
   </div>
+</section>
+
+<!-- Assigned Leads by Batch -->
+<section class="panel spaced" style="border-radius:12px;padding:20px;border:1px solid var(--border);margin-top:20px;">
+  <div class="panel-heading" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div>
+      <h2 style="font-size:1.15rem;font-weight:700;margin:0 0 4px 0;">Assigned Leads by Import Batch</h2>
+      <p style="margin:0;font-size:0.85rem;color:var(--text-muted);">Expand a batch to inspect assigned student leads and status progression.</p>
+    </div>
+    <a class="text-link" href="{% url 'web:leads' %}?owner={{ caller.pk }}" style="font-size:0.85rem;">Search assigned leads ↗</a>
+  </div>
+  {% regroup profile_leads by import_batch as batches %}
+  {% for batch in batches %}
+  <details class="chart-details" style="margin-bottom:8px;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);">
+    <summary style="font-size:13px;font-weight:600;padding:4px 0;cursor:pointer;">
+      {{ batch.grouper.filename|default:'Manual / Unbatched leads' }} {% if batch.grouper %}(#{{ batch.grouper.pk }}){% endif %} · {{ batch.list|length }} leads
+    </summary>
+    <div style="margin-top:10px;overflow-x:auto;">
+      <table class="caller-table" style="width:100%;">
+        <thead>
+          <tr><th>Lead Name</th><th>Phone</th><th>Status</th><th>Source</th></tr>
+        </thead>
+        <tbody>
+          {% for lead in batch.list %}
+          <tr>
+            <td><a class="text-link" href="{% url 'web:lead-detail' lead.pk %}">{{ lead.name|default:'—' }}</a></td>
+            <td>{{ lead.phone }}</td>
+            <td><span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span></td>
+            <td>{{ lead.source|default:'—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% empty %}
+  <div class="empty" style="padding:24px;text-align:center;color:var(--text-muted);">No leads assigned.</div>
+  {% endfor %}
 </section>

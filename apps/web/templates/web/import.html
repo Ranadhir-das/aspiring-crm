@@ -102,11 +102,21 @@
         </div>
 
         <div class="paste-numbers-section" id="method-section-paste">
+          <div class="field batch-name-field" style="margin-bottom: 14px;">
+            <div class="section-label-row">
+              <label for="{{ form.batch_name.id_for_label }}">Batch Name (Optional)</label>
+              <span class="input-tag">Custom label</span>
+            </div>
+            <p class="field-description">Enter an optional custom name for this batch. If left blank, a timestamped name is generated automatically.</p>
+            {{ form.batch_name }}
+            {{ form.batch_name.errors }}
+          </div>
+
           <div class="section-label-row">
             <label for="{{ form.pasted_numbers.id_for_label }}">Paste phone numbers</label>
             <span class="input-tag">1 number per line</span>
           </div>
-          <p class="field-description">Indian mobile numbers (+91) and Bangladesh mobile numbers (+880, 88, 01...) are automatically recognized and normalized. Duplicates within the pasted list and existing CRM leads are automatically skipped.</p>
+          <p class="field-description">Indian mobile numbers (+91) and Bangladesh mobile numbers (+880, 88, 01...) are automatically recognized and normalized. Duplicate numbers within the pasted list and existing CRM leads are imported as separate leads.</p>
           {{ form.pasted_numbers }}
           {{ form.pasted_numbers.errors }}
         </div>
@@ -174,7 +184,7 @@
         </div>
         <p class="import-safety-note">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          For pasted numbers, leads are created immediately with blank names. For files, you can preview first. Duplicates are automatically skipped.
+          For pasted numbers, leads are created immediately with blank names. For files, you can preview first. Duplicate numbers are allowed as separate leads.
         </p>
       </div>
     </form>
@@ -206,7 +216,7 @@
         </div>
         <ul class="guide-bullet-list">
           <li>Braces <code>{ ... }</code> or empty lines are ignored.</li>
-          <li>Duplicates within the list and existing CRM leads are skipped.</li>
+          <li>Duplicate phone numbers are imported as separate leads.</li>
           <li>New leads start as <strong>Pending</strong> with blank names.</li>
         </ul>
       </div>
@@ -223,12 +233,12 @@
         <div class="column-badges">
           <div class="badge-group">
             <span class="col-type-tag required">Required</span>
-            <span class="col-pill">name</span>
             <span class="col-pill">phone</span>
             <span class="col-pill">mobile</span>
           </div>
           <div class="badge-group" style="margin-top: 6px;">
             <span class="col-type-tag optional">Optional</span>
+            <span class="col-pill">name</span>
             <span class="col-pill">email</span>
             <span class="col-pill">location</span>
             <span class="col-pill">college</span>
@@ -261,9 +271,9 @@
   <div class="panel-heading">
     <div>
       <h2>Paste import result</h2>
-      {% if paste_result.success %}
+      {% if paste_result.batch_name %}
         <span class="badge interested">Batch: {{ paste_result.batch_name }}</span>
-      {% else %}
+      {% elif not paste_result.success %}
         <span class="badge failed">Import failed</span>
       {% endif %}
       <p>Course: <strong>{{ paste_result.course_label }}</strong> · {{ paste_result.submitted_count }} submitted · {{ paste_result.created_count }} created · {{ paste_result.skipped_count }} skipped</p>
@@ -277,6 +287,12 @@
   </div>
 
   <div class="paste-metrics-grid">
+    {% if paste_result.batch_name %}
+    <div class="paste-metric-card">
+      <div class="metric-label">Batch Name</div>
+      <div class="metric-value" style="font-size: 0.92rem; word-break: break-word; font-weight: 600;">{{ paste_result.batch_name }}</div>
+    </div>
+    {% endif %}
     <div class="paste-metric-card">
       <div class="metric-label">Course</div>
       <div class="metric-value">{{ paste_result.course_label }}</div>
@@ -290,7 +306,7 @@
       <div class="metric-value text-success">{{ paste_result.created_count }}</div>
     </div>
     <div class="paste-metric-card">
-      <div class="metric-label">Duplicates Skipped</div>
+      <div class="metric-label">Duplicate Leads</div>
       <div class="metric-value {% if paste_result.duplicate_count > 0 %}text-warning{% endif %}">{{ paste_result.duplicate_count|default:0 }}</div>
     </div>
     <div class="paste-metric-card">
@@ -302,8 +318,8 @@
   {% if paste_result.duplicate_entries %}
     <div class="panel-heading" style="margin-top:20px;">
       <div>
-        <h3>Duplicates Skipped ({{ paste_result.duplicate_count }})</h3>
-        <p class="muted">These phone numbers were not imported because they already exist in the CRM or appeared earlier in the pasted list:</p>
+        <h3>Duplicate Leads ({{ paste_result.duplicate_count }})</h3>
+        <p class="muted">These phone numbers were imported as separate leads and also exist in the CRM or appeared earlier in the pasted list:</p>
       </div>
     </div>
     <div class="table-scroll">

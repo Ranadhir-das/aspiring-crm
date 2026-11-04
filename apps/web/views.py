@@ -460,6 +460,7 @@ def lead_import(request):
                     assigned_caller=form.cleaned_data['caller'],
                     preferred_course=form.cleaned_data['preferred_course'],
                     preferred_course_custom=form.cleaned_data['preferred_course_custom'],
+                    batch_name=form.cleaned_data.get('batch_name'),
                 )
                 paste_result = result
                 if result['success']:
@@ -493,7 +494,9 @@ def lead_import(request):
                             request.session.pop('lead_import_token', None)
                         if form.cleaned_data['caller']:
                             messages.success(request, f"Assigned {result['created_count']} new leads to {form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username}.")
-                        messages.success(request, f"Imported {result['created_count']} leads; {result['duplicate_count']} duplicates and {result['skipped_count']} invalid rows skipped.")
+                        dup_msg = f" ({result['duplicate_count']} duplicate{'s' if result['duplicate_count'] != 1 else ''} created as separate leads)" if result.get('duplicate_count') else ""
+                        skip_msg = f"; {result['skipped_count']} invalid rows skipped." if result.get('skipped_count') else "."
+                        messages.success(request, f"Imported {result['created_count']} leads{dup_msg}{skip_msg}")
                         from django.urls import reverse
                         return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
 
@@ -514,6 +517,7 @@ def lead_import(request):
                 assigned_caller=form.cleaned_data['caller'],
                 preferred_course=form.cleaned_data['preferred_course'],
                 preferred_course_custom=form.cleaned_data['preferred_course_custom'],
+                batch_name=form.cleaned_data.get('batch_name'),
             )
             paste_result = result
             if result['success']:
@@ -903,41 +907,58 @@ def caller_detail(request, pk):
     if not can_view_employee(request.user, caller):
         raise PermissionDenied
     filters, window, valid = report_window(request.GET, days=1)
+    from apps.accounts.capabilities import is_caller_capable
+    is_target_eligible = is_caller_capable(caller) or caller.role in {User.Role.CALLER, User.Role.EMPLOYEE, User.Role.COUNSELOR}
+    can_adjust = can_manage(request.user) and is_target_eligible
     adjustment_form = AdjustmentForm(request.POST if request.POST.get('action') == 'adjust' else None, caller=caller, auto_id='adjust_%s')
     milestone_form = MilestoneForm(request.POST if request.POST.get('action') == 'milestone' else None, caller=caller, auto_id='milestone_%s')
     if request.method == 'POST':
-        if not can_manage(request.user) or caller.role != User.Role.CALLER:
-            raise PermissionDenied
-        form = adjustment_form if request.POST.get('action') == 'adjust' else milestone_form
-        if form.is_valid():
-            try:
-                data = form.cleaned_data.copy()
-                if request.POST.get('action') == 'adjust':
-                    data['key'] = data.pop('request_id')
+        action = request.POST.get('action')
+        if not can_adjust:
+            raise PermissionDenied('Only administrators can adjust points.')
+        if action == 'adjust':
+            if adjustment_form.is_valid():
+                try:
+                    data = adjustment_form.cleaned_data.copy()
+                    data['key'] = data.pop('request_id', None) or uuid.uuid4()
                     data.pop('caller', None)
-                    adjust_points(actor=request.user, caller=caller, **data)
-                elif request.POST.get('action') == 'milestone':
-                    record_milestone(actor=request.user, caller=caller, **data)
+                    result = adjust_points(actor=request.user, caller=caller, **data)
+                except ValidationError as exc:
+                    adjustment_form.add_error(None, exc)
                 else:
-                    raise ValidationError('Unknown action.')
-            except ValidationError as exc:
-                form.add_error(None, exc)
-            else:
-                messages.success(request, 'Performance entry recorded. Duplicate events are awarded only once.')
-                return redirect(request.get_full_path())
+                    caller_name = caller.get_full_name() or caller.username
+                    messages.success(request, f'Points adjustment of {result.points:+d} recorded for {caller_name}.')
+                    return redirect(request.get_full_path())
+        elif action == 'milestone':
+            if milestone_form.is_valid():
+                try:
+                    data = milestone_form.cleaned_data.copy()
+                    record_milestone(actor=request.user, caller=caller, **data)
+                except ValidationError as exc:
+                    milestone_form.add_error(None, exc)
+                else:
+                    messages.success(request, 'Performance milestone recorded.')
+                    return redirect(request.get_full_path())
+        else:
+            raise PermissionDenied('Unknown action.')
     caller.lead_count = caller.assigned_leads.count()
     caller.interested_count = caller.assigned_leads.filter(status='INTERESTED').count()
     context = profile_data(caller, window)
-    from apps.performance.models import PointsAdjustment
+    from apps.performance.models import PointsAdjustment, PointsEntry
     adjustments = PointsAdjustment.objects.filter(caller=caller).select_related('recorded_by').order_by('-created_at')
     from .performance_views import build_individual_caller_chart_data
     caller_chart_data = build_individual_caller_chart_data(caller)
     query = between(ActivityLog.objects.filter(actor=caller).select_related('lead'), 'created_at', window).order_by('-created_at')
-    ledger_page = Paginator(context.pop('ledger'), 25).get_page(request.GET.get('ledger_page'))
+    raw_ledger = context.pop('ledger')
+    if not request.GET.get('start_date'):
+        raw_ledger = PointsEntry.objects.filter(caller=caller).select_related('lead', 'recorded_by').order_by('-occurred_at', '-pk')
+    else:
+        raw_ledger = raw_ledger.order_by('-occurred_at', '-pk')
+    ledger_page = Paginator(raw_ledger, 25).get_page(request.GET.get('ledger_page'))
     return page(request, 'caller_detail', 'performance', caller=caller, records=paginate(request, query),
                 filters=filters, window=window, report_valid=valid, ledger=ledger_page,
                 adjustments=adjustments, adjustment_form=adjustment_form, milestone_form=milestone_form,
-                can_adjust=can_manage(request.user) and caller.role == User.Role.CALLER,
+                can_adjust=can_adjust,
                 caller_chart_data=caller_chart_data, **context)
 
 
@@ -966,7 +987,8 @@ def quick_leads(request):
             response['Content-Disposition'] = 'attachment; filename="quick-leads.csv"'
             return response
         result = commit_import(ContentFile(output.getvalue().encode('utf-8'), name='quick-leads.csv'), request.user)
-        messages.success(request, f"Imported {result['created_count']} leads; {result['duplicate_count']} duplicates skipped. Choose caller quantities below.")
+        dup_msg = f" ({result['duplicate_count']} duplicate{'s' if result['duplicate_count'] != 1 else ''})" if result.get('duplicate_count') else ""
+        messages.success(request, f"Imported {result['created_count']} leads{dup_msg}. Choose caller quantities below.")
         from django.urls import reverse
         return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
     return page(request, 'quick_leads', 'leads', formset=formset)

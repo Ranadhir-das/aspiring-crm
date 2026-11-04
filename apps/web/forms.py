@@ -103,6 +103,18 @@ class ImportForm(forms.Form):
     preferred_course = forms.ChoiceField(choices=[('', 'Select a course'), *Course.choices], widget=forms.RadioSelect)
     preferred_course_custom = forms.CharField(max_length=150, required=False, label='Enter Course Name (Others)')
 
+    batch_name = forms.CharField(
+        max_length=255,
+        required=False,
+        label='Batch Name (Optional)',
+        widget=forms.TextInput(attrs={
+            'placeholder': 'e.g. Hyderabad Walk-in Drive, Education Fair Batch...',
+            'class': 'batch-name-input',
+            'style': 'width: 100%; height: 42px; border-radius: 9px; border: 1.5px solid var(--border); padding: 10px 14px; font-size: 13px; background: var(--panel); color: var(--text); box-sizing: border-box;',
+        }),
+        help_text='Optional. If left blank, a batch name will be generated automatically.',
+    )
+
     pasted_numbers = forms.CharField(
         widget=forms.Textarea(attrs={
             'rows': 8,
@@ -121,6 +133,10 @@ class ImportForm(forms.Form):
         help_text='Only newly imported leads are assigned. Existing duplicates keep their current caller.',
     )
     file = forms.FileField(widget=forms.ClearableFileInput(attrs={'accept': '.csv,.xlsx'}), required=False)
+
+    def clean_batch_name(self):
+        value = (self.cleaned_data.get('batch_name') or '').strip()
+        return value
 
     def clean_file(self):
         value = self.cleaned_data.get('file')

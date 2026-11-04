@@ -23,6 +23,88 @@
   <!-- Profile Summary Component (Includes Hero, Horizon, Individual Graph & Telemetry) -->
   {% include "web/profile_summary.html" %}
 
+  <!-- Admin Points Adjustment Card -->
+  {% if can_adjust %}
+  <section class="panel spaced" style="border-radius:12px;padding:22px;border:1px solid var(--border);background:var(--bg-panel);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+      <div>
+        <h2 style="margin:0 0 4px 0;font-size:1.18rem;font-weight:700;">Admin Points Adjustment</h2>
+        <p style="margin:0;font-size:0.88rem;color:var(--text-muted);">
+          Current Points Balance: <strong style="font-size:1.1rem;color:var(--accent,#38bdf8);font-family:monospace;">{{ stats.lifetime_points }}</strong> points
+        </p>
+      </div>
+      <span class="badge" style="background:rgba(56,189,248,0.1);color:#38bdf8;border:1px solid rgba(56,189,248,0.2);padding:6px 12px;border-radius:6px;font-size:0.8rem;font-weight:600;">
+        Authorized Administrator
+      </span>
+    </div>
+
+    {% if adjustment_form.non_field_errors %}
+      <div class="notice error" style="margin-bottom:16px;">
+        {% for error in adjustment_form.non_field_errors %}<p style="margin:0;">{{ error }}</p>{% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" action="" style="display:grid;gap:16px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="adjust">
+      {{ adjustment_form.request_id }}
+      {{ adjustment_form.caller }}
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:16px;">
+        <div>
+          <label for="id_adjust_points" style="display:block;font-weight:600;font-size:0.88rem;margin-bottom:6px;">
+            Points Adjustment <span style="color:#ef4444;">*</span>
+          </label>
+          <input type="number" name="points" id="id_adjust_points" class="input" required
+                 placeholder="e.g. +50, -25"
+                 value="{{ adjustment_form.points.value|default:'' }}"
+                 style="width:100%;padding:9px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);">
+          <small style="color:var(--text-muted);font-size:0.75rem;display:block;margin-top:4px;">Enter a positive (+) or negative (-) integer.</small>
+          {% if adjustment_form.points.errors %}
+            <div style="color:#ef4444;font-size:0.8rem;margin-top:4px;">{{ adjustment_form.points.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <label for="id_adjust_reason_type" style="display:block;font-weight:600;font-size:0.88rem;margin-bottom:6px;">
+            Reason Category
+          </label>
+          <select name="reason_type" id="id_adjust_reason_type" class="select"
+                  style="width:100%;padding:9px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);">
+            {% for val, label in adjustment_form.fields.reason_type.choices %}
+              <option value="{{ val }}" {% if adjustment_form.reason_type.value == val or not adjustment_form.reason_type.value and val == 'OTHER' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% if adjustment_form.reason_type.errors %}
+            <div style="color:#ef4444;font-size:0.8rem;margin-top:4px;">{{ adjustment_form.reason_type.errors.0 }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div>
+        <label for="id_adjust_reason" style="display:block;font-weight:600;font-size:0.88rem;margin-bottom:6px;">
+          Mandatory Reason <span style="color:#ef4444;">*</span>
+        </label>
+        <textarea name="reason" id="id_adjust_reason" rows="2" class="textarea" required
+                  placeholder="Provide a mandatory reason for this adjustment (recorded in audit ledger)..."
+                  style="width:100%;padding:9px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);">{{ adjustment_form.reason.value|default:'' }}</textarea>
+        {% if adjustment_form.reason.errors %}
+          <div style="color:#ef4444;font-size:0.8rem;margin-top:4px;">{{ adjustment_form.reason.errors.0 }}</div>
+        {% endif %}
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;">
+        <button type="submit" class="button primary" style="font-weight:600;padding:10px 22px;">
+          Submit Adjustment
+        </button>
+        <span style="font-size:0.82rem;color:var(--text-muted);">
+          Updates balance and records an immutable entry in the points ledger.
+        </span>
+      </div>
+    </form>
+  </section>
+  {% endif %}
+
   <!-- Course Conversions Card -->
   <section class="panel spaced" style="border-radius:12px;padding:20px;">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
@@ -89,7 +171,7 @@
   <section class="panel spaced" style="border-radius:12px;">
     <div class="panel-heading">
       <div>
-        <h2>Activity Audit Stream</h2>
+        <h2>Activity</h2>
         <p>Real-time audit stream of calls, status adjustments, follow-up events, and authentication timestamps.</p>
       </div>
     </div>
@@ -133,13 +215,12 @@
     {% include 'web/pagination.html' %}
   </section>
 
-  <!-- Performance Ledger Table -->
-  {% if ledger %}
+  <!-- Performance Ledger & Adjustments Section -->
   <section class="caller-table-card">
     <div class="performance-card-header">
       <div>
         <h2>Points Ledger Entries</h2>
-        <p style="margin:2px 0 0 0;font-size:0.85rem;color:var(--text-muted);">Audit ledger of points transactions for this caller in the selected window.</p>
+        <p style="margin:2px 0 0 0;font-size:0.85rem;color:var(--text-muted);">Points ledger and audit history for this employee (Current Balance: <strong>{{ stats.lifetime_points }}</strong> points).</p>
       </div>
     </div>
     <div class="caller-table-scroll">
@@ -151,7 +232,7 @@
             <th>Points</th>
             <th>Lead</th>
             <th>Recorded By</th>
-            <th>Notes</th>
+            <th>Reason / Notes</th>
           </tr>
         </thead>
         <tbody>
@@ -172,11 +253,68 @@
             {% endif %}
             </td>
             <td>{% employee_link entry.recorded_by %}</td>
-            <td class="notes-cell">{{ entry.notes|default:'—' }}</td>
+            <td class="notes-cell">{{ entry.reason|default:'—' }}</td>
           </tr>
           {% empty %}
           <tr>
             <td colspan="6" class="empty" style="text-align:center;padding:36px;color:var(--text-muted);">No points entries in this window.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if ledger.has_other_pages %}
+    <div class="pagination" style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);">
+      <span style="font-size:0.85rem;color:var(--text-muted);">
+        {{ ledger.paginator.count }} entries · Page {{ ledger.number }} of {{ ledger.paginator.num_pages }}
+      </span>
+      <div style="display:flex;gap:8px;">
+        {% if ledger.has_previous %}
+          <a class="button" href="{% querystring ledger_page=ledger.previous_page_number %}">← Previous</a>
+        {% endif %}
+        {% if ledger.has_next %}
+          <a class="button" href="{% querystring ledger_page=ledger.next_page_number %}">Next →</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  {% if adjustments %}
+  <section class="caller-table-card" style="margin-top:20px;">
+    <div class="performance-card-header">
+      <div>
+        <h2>Manual Adjustments Audit History</h2>
+        <p style="margin:2px 0 0 0;font-size:0.85rem;color:var(--text-muted);">Audit log of all manual administrator points adjustments recorded for this employee.</p>
+      </div>
+    </div>
+    <div class="caller-table-scroll">
+      <table class="caller-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Administrator</th>
+            <th>Points</th>
+            <th>Category</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for adj in adjustments %}
+          <tr>
+            <td>{{ adj.created_at|date:'d M Y, H:i' }}</td>
+            <td>{% employee_link adj.recorded_by %}</td>
+            <td>
+              <strong class="{% if adj.points > 0 %}accent{% else %}busy{% endif %}">
+                {% if adj.points > 0 %}+{% endif %}{{ adj.points }}
+              </strong>
+            </td>
+            <td><span class="badge">{{ adj.get_reason_type_display }}</span></td>
+            <td class="notes-cell">{{ adj.reason }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="empty" style="text-align:center;padding:24px;color:var(--text-muted);">No manual adjustments recorded.</td>
           </tr>
           {% endfor %}
         </tbody>

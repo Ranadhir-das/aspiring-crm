@@ -15,12 +15,12 @@ from .utils import normalize_phone
 
 
 REQUIRED_COLUMNS = {
-    "name",
     "phone",
 }
 
 
 OPTIONAL_COLUMNS = {
+    "name",
     "email",
     "location",
     "college",
@@ -41,8 +41,22 @@ def normalize_column_name(column):
     if column is None:
         return ""
 
-    key = str(column).strip().lower().replace(" ", "_")
-    return {"mobile": "phone", "mobile_number": "phone", "phone_number": "phone", "full_name": "name"}.get(key, key)
+    key = str(column).strip().lower().replace(" ", "_").replace("-", "_")
+    alias_map = {
+        "mobile": "phone",
+        "mobile_number": "phone",
+        "mobile_no": "phone",
+        "phone_number": "phone",
+        "phone_no": "phone",
+        "contact": "phone",
+        "contact_no": "phone",
+        "contact_number": "phone",
+        "full_name": "name",
+        "student_name": "name",
+        "candidate_name": "name",
+        "lead_name": "name",
+    }
+    return alias_map.get(key, key)
 
 
 def read_csv_file(file):
@@ -53,7 +67,10 @@ def read_csv_file(file):
     content = file.read()
 
     if isinstance(content, bytes):
-        content = content.decode("utf-8-sig")
+        try:
+            content = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            content = content.decode("latin-1")
 
     reader = csv.DictReader(io.StringIO(content))
 
@@ -118,11 +135,13 @@ def read_xlsx_file(file):
             header = headers[index]
 
             if header:
-                normalized_row[header] = (
-                    str(value).strip()
-                    if value is not None
-                    else ""
-                )
+                if isinstance(value, float) and value.is_integer():
+                    val_str = str(int(value))
+                elif value is not None:
+                    val_str = str(value).strip()
+                else:
+                    val_str = ""
+                normalized_row[header] = val_str
 
         rows.append(normalized_row)
 
@@ -178,11 +197,10 @@ def validate_row(row, row_number):
     errors = []
     warnings = []
 
-    name = str(row.get("name", "")).strip()
-    phone = str(row.get("phone", "")).strip()
+    name = str(row.get("name", "")).strip() if row.get("name") is not None else ""
+    phone = str(row.get("phone", "")).strip() if row.get("phone") is not None else ""
 
-    if not name:
-        errors.append("Name is required.")
+    # Name is optional, blank lead names are permitted.
 
     if not phone:
         errors.append("Phone is required.")
@@ -471,7 +489,10 @@ def preview_import(file):
 
 def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=None, preferred_course_custom=""):
     """
-    Import valid, non-duplicate leads into the database.
+    Import valid leads into the database from a CSV or XLSX file.
+
+    Duplicate phone numbers (both within the file and against existing CRM leads)
+    are permitted and imported as separate leads, with duplicates tracked in summary metrics.
 
     Returns a summary of the import.
     """
@@ -523,31 +544,26 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
 
             normalized_phone = validation["normalized_phone"]
 
-            # Check existing database leads.
+            # Check existing database leads or duplicate within the uploaded file.
             duplicate = check_duplicate_from_map(
                 normalized_phone,
                 existing_phone_map,
             )
 
-            if duplicate:
+            if duplicate or (normalized_phone and normalized_phone in seen_phones):
                 duplicate_count += 1
-                continue
 
-            # Check duplicate within the uploaded file.
-            if normalized_phone in seen_phones:
-                duplicate_count += 1
-                continue
-
-            seen_phones.add(normalized_phone)
-            from .phone_normalization import get_phone_lookup_variants
-            for v in get_phone_lookup_variants(normalized_phone):
-                seen_phones.add(v)
-                v_digits = normalize_phone(v)
-                if v_digits:
-                    seen_phones.add(v_digits)
-                existing_phone_map[v] = True
-                if v_digits:
-                    existing_phone_map[v_digits] = True
+            if normalized_phone:
+                seen_phones.add(normalized_phone)
+                from .phone_normalization import get_phone_lookup_variants
+                for v in get_phone_lookup_variants(normalized_phone):
+                    seen_phones.add(v)
+                    v_digits = normalize_phone(v)
+                    if v_digits:
+                        seen_phones.add(v_digits)
+                    existing_phone_map[v] = True
+                    if v_digits:
+                        existing_phone_map[v_digits] = True
 
             pcb_percentage = prepare_pcb_percentage(
                 row.get("pcb_percentage")
@@ -557,47 +573,17 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
                 import_batch=batch,
                 preferred_course=preferred_course,
                 preferred_course_custom=preferred_course_custom,
-                name=str(
-                    row.get("name", "")
-                ).strip(),
-
-                phone=str(
-                    row.get("phone", "")
-                ).strip(),
-
-                email=str(
-                    row.get("email", "")
-                ).strip(),
-
-                location=str(
-                    row.get("location", "")
-                ).strip(),
-
-                college=str(
-                    row.get("college", "")
-                ).strip(),
-
-                neet_status=str(
-                    row.get("neet_status", "")
-                ).strip(),
-
+                name=str(row.get("name", "")).strip() if row.get("name") is not None else "",
+                phone=str(row.get("phone", "")).strip() if row.get("phone") is not None else "",
+                email=str(row.get("email", "")).strip() if row.get("email") is not None else "",
+                location=str(row.get("location", "")).strip() if row.get("location") is not None else "",
+                college=str(row.get("college", "")).strip() if row.get("college") is not None else "",
+                neet_status=str(row.get("neet_status", "")).strip() if row.get("neet_status") is not None else "",
                 pcb_percentage=pcb_percentage,
-
-                preferred_intake=str(
-                    row.get("preferred_intake", "")
-                ).strip(),
-
-                source=str(
-                    row.get("source", "")
-                ).strip(),
-
-                campaign=str(
-                    row.get("campaign", "")
-                ).strip(),
-
-                notes=str(
-                    row.get("notes", "")
-                ).strip(),
+                preferred_intake=str(row.get("preferred_intake", "")).strip() if row.get("preferred_intake") is not None else "",
+                source=str(row.get("source", "")).strip() if row.get("source") is not None else "",
+                campaign=str(row.get("campaign", "")).strip() if row.get("campaign") is not None else "",
+                notes=str(row.get("notes", "")).strip() if row.get("notes") is not None else "",
             )
             lead._changed_by = imported_by
             lead.save()
@@ -606,13 +592,13 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
             created_count += 1
 
             # Add the newly created lead to the map.
-            # This prevents duplicate creation later in the
-            # same import operation.
+            # This allows subsequent duplicate tracking in the same batch.
             existing_phone_map[normalized_phone] = lead
 
         if assigned_caller:
             User = get_user_model()
-            if not isinstance(assigned_caller, User) or assigned_caller.role != User.Role.CALLER or not assigned_caller.is_active:
+            from apps.accounts.capabilities import is_caller_capable
+            if not isinstance(assigned_caller, User) or not is_caller_capable(assigned_caller):
                 raise ValueError("Selected user is not an active caller.")
 
         if assigned_caller and created_ids:
@@ -665,8 +651,8 @@ def bulk_assign_leads(
     """
 
     User = get_user_model()
-
-    if new_caller.role != User.Role.CALLER or not new_caller.is_active:
+    from apps.accounts.capabilities import is_caller_capable
+    if not isinstance(new_caller, User) or not is_caller_capable(new_caller):
         raise ValueError(
             "Selected user is not a caller."
         )
@@ -783,16 +769,19 @@ def commit_paste_import(
     preferred_course=None,
     preferred_course_custom="",
     idempotency_key=None,
+    batch_name=None,
 ):
     """
     Import leads from multiline pasted phone numbers.
 
-    - Prevents duplicates within the pasted list and against existing CRM leads.
+    - Duplicate phone numbers (both within the pasted list and against existing CRM leads)
+      are permitted and imported as separate leads.
+    - Tracks and reports duplicate entries and invalid numbers in summary metrics.
     - Supports request-level idempotency via idempotency_key.
     - Validates assigned caller server-side.
-    - Generates batch name: <Selected Course> - YYYY-MM-DD HH:mm:ss in Asia/Kolkata timezone.
+    - Accepts an optional manual batch_name (whitespace-trimmed). If blank or omitted,
+      falls back to generate_paste_batch_name (format: <Selected Course> - YYYY-MM-DD HH:mm:ss).
     - Names are left blank (name="").
-    - Invalid numbers and duplicates are reported in the summary metrics.
     """
     from django.core.cache import cache
     from .courses import course_label, validate_course
@@ -802,10 +791,11 @@ def commit_paste_import(
     user_id = getattr(imported_by, 'pk', None) or 'anon'
     cache_key = f"paste_import:idempotency:{user_id}:{idempotency_key}" if idempotency_key else None
     payload_hash = None
+    custom_batch_name = str(batch_name).strip() if batch_name is not None else ""
 
     if idempotency_key:
         caller_id = getattr(assigned_caller, 'pk', '') if assigned_caller else ''
-        payload_signature = f"{str(pasted_text).strip()}|{preferred_course}|{preferred_course_custom}|{caller_id}"
+        payload_signature = f"{str(pasted_text).strip()}|{preferred_course}|{preferred_course_custom}|{caller_id}|{custom_batch_name}"
         payload_hash = hashlib.sha256(payload_signature.encode('utf-8')).hexdigest()
 
         cached_entry = cache.get(cache_key)
@@ -820,7 +810,8 @@ def commit_paste_import(
 
     User = get_user_model()
     if assigned_caller:
-        if not isinstance(assigned_caller, User) or assigned_caller.role != User.Role.CALLER or not assigned_caller.is_active:
+        from apps.accounts.capabilities import is_caller_capable
+        if not isinstance(assigned_caller, User) or not is_caller_capable(assigned_caller):
             raise ValueError("Selected user is not an active caller.")
 
     preferred_course, preferred_course_custom = validate_course(
@@ -858,15 +849,13 @@ def commit_paste_import(
                 "phone": phone,
                 "reason": "Duplicate within pasted list",
             })
-            continue
-
-        existing_lead = check_duplicate_from_map(phone, existing_phone_map)
-        if existing_lead:
-            duplicate_entries.append({
-                "phone": phone,
-                "reason": "Already exists in CRM",
-            })
-            continue
+        else:
+            existing_lead = check_duplicate_from_map(phone, existing_phone_map)
+            if existing_lead:
+                duplicate_entries.append({
+                    "phone": phone,
+                    "reason": "Already exists in CRM",
+                })
 
         seen_in_paste.add(phone)
         leads_to_create.append(phone)
@@ -896,11 +885,14 @@ def commit_paste_import(
             cache.set(cache_key, {'payload_hash': payload_hash, 'result': result}, timeout=86400)
         return result
 
-    batch_name = generate_paste_batch_name(preferred_course, preferred_course_custom)
+    if custom_batch_name:
+        final_batch_name = custom_batch_name
+    else:
+        final_batch_name = generate_paste_batch_name(preferred_course, preferred_course_custom)
 
     with transaction.atomic():
         batch = LeadImportBatch.objects.create(
-            filename=batch_name,
+            filename=final_batch_name,
             imported_by=imported_by,
             total_rows=len(leads_to_create),
             created_count=0,

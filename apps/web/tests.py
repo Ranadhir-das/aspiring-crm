@@ -70,7 +70,7 @@ class WorkspaceTests(TestCase):
         followup.refresh_from_db()
         self.assertEqual(followup.status, 'COMPLETED')
 
-    def test_import_preview_does_not_write_and_commit_deduplicates(self):
+    def test_import_preview_does_not_write_and_commit_allows_duplicates(self):
         self.client.force_login(self.manager)
         content = b'name,phone\nNew student,9876543299\nDuplicate,9876543210\n'
         before = Lead.objects.count()
@@ -78,7 +78,8 @@ class WorkspaceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Lead.objects.count(), before)
         self.client.post('/leads/import/', {'action': 'import', 'preferred_course': 'BTECH', 'file': SimpleUploadedFile('leads.csv', content)})
-        self.assertEqual(Lead.objects.count(), before + 1)
+        self.assertEqual(Lead.objects.count(), before + 2)
+        self.assertEqual(Lead.objects.filter(phone='9876543210').count(), 2)
 
     def test_csrf_is_required_for_writes(self):
         client = Client(enforce_csrf_checks=True)

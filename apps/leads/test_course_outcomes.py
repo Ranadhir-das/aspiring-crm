@@ -66,7 +66,7 @@ class CourseOutcomeTests(TestCase):
     def test_csv_course_applied_and_duplicate_preference_unchanged(self):
         file = ContentFile(b'name,phone\nDuplicate,9876543210\nNew,9876543211\nNew2,9876543212', name='a.csv')
         result = commit_import(file, self.admin, preferred_course='MBBS')
-        self.assertEqual(result['created_count'], 2)
+        self.assertEqual(result['created_count'], 3)
         self.assertEqual(result['duplicate_count'], 1)
         self.assertEqual(set(Lead.objects.exclude(pk=self.lead.pk).values_list('preferred_course', flat=True)), {'MBBS'})
         self.lead.refresh_from_db()

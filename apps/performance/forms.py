@@ -15,8 +15,9 @@ class AdjustmentForm(forms.Form):
     )
     reason_type = forms.ChoiceField(
         choices=[item for item in PointsAdjustment.AdjustmentReason.choices if not item[0].startswith('MORE_THAN_')],
-        label='Reason',
-        initial=PointsAdjustment.AdjustmentReason.UNPLANNED_LEAVE
+        label='Reason Category',
+        initial=PointsAdjustment.AdjustmentReason.OTHER,
+        required=False
     )
     units = forms.IntegerField(
         min_value=1,
@@ -28,13 +29,14 @@ class AdjustmentForm(forms.Form):
         min_value=-10000,
         max_value=10000,
         required=False,
-        label='Points (Other / Management bonus)'
+        label='Adjustment Points (+/-)'
     )
     reason = forms.CharField(
         max_length=2000,
-        required=False,
-        label='Notes / Custom Reason',
-        widget=forms.Textarea(attrs={'rows': 2, 'placeholder': 'Enter custom reason or additional notes...'})
+        required=True,
+        label='Reason for Adjustment',
+        error_messages={'required': 'A mandatory reason is required for points adjustment.'},
+        widget=forms.Textarea(attrs={'rows': 2, 'placeholder': 'Enter mandatory reason for this adjustment...'})
     )
 
     def __init__(self, *args, caller=None, **kwargs):
@@ -43,16 +45,26 @@ class AdjustmentForm(forms.Form):
             self.fields['caller'].initial = caller
             self.fields['caller'].widget = forms.HiddenInput()
 
+    def clean_reason(self):
+        reason = (self.cleaned_data.get('reason') or '').strip()
+        if not reason:
+            raise forms.ValidationError('A mandatory reason is required for points adjustment.')
+        return reason
+
     def clean(self):
         cleaned_data = super().clean()
-        reason_type = cleaned_data.get('reason_type')
+        reason_type = cleaned_data.get('reason_type') or PointsAdjustment.AdjustmentReason.OTHER
+        cleaned_data['reason_type'] = reason_type
         points = cleaned_data.get('points')
         reason = (cleaned_data.get('reason') or '').strip()
+        if not reason:
+            self.add_error('reason', 'A mandatory reason is required for points adjustment.')
         if reason_type == PointsAdjustment.AdjustmentReason.OTHER:
             if points is None or points == 0:
-                self.add_error('points', 'Points are required and must be nonzero for custom adjustments.')
-            if not reason:
-                self.add_error('reason', 'Custom reason is required when choosing Other.')
+                self.add_error('points', 'Points adjustment must be a non-zero number (positive or negative).')
+        elif reason_type == PointsAdjustment.AdjustmentReason.MANAGEMENT_BONUS:
+            if points is None or not (50 <= points <= 200):
+                self.add_error('points', 'Management bonus must be between +50 and +200.')
         return cleaned_data
 
 

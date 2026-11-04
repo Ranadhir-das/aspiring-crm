@@ -120,10 +120,10 @@ class FileLeadImportWorkflowTests(TestCase):
         self.assertEqual(alice.location, "Delhi")
         self.assertEqual(alice.assigned_caller, self.caller1)
 
-    def test_duplicate_leads_skipped_and_reported(self):
+    def test_duplicate_leads_allowed_as_separate_leads(self):
         """
         Verify duplicate leads (both in-file and against existing database records)
-        are reported in preview and skipped during commit.
+        are reported in preview and allowed as separate leads upon commit.
         """
         # Pre-existing lead in CRM
         Lead.objects.create(name="Existing Lead", phone="9876543210", preferred_course="MBBS")
@@ -157,9 +157,98 @@ class FileLeadImportWorkflowTests(TestCase):
         })
         self.assertEqual(import_resp.status_code, 302)
 
-        # Only 1 new lead should be created (total 2 in DB)
+        # All 3 leads from the file are created as separate leads (total 4 in DB)
+        self.assertEqual(Lead.objects.count(), 4)
+        self.assertEqual(Lead.objects.filter(phone="9876543210").count(), 2)
+        self.assertEqual(Lead.objects.filter(phone="9876543230").count(), 2)
+
+    def test_blank_lead_names_permitted_in_csv_file(self):
+        """
+        Verify CSV files with blank name cells or omitted name column are permitted.
+        """
+        csv_data = (
+            b"name,phone\n"
+            b",9876543261\n"
+            b"   ,9876543262\n"
+        )
+        upload = SimpleUploadedFile("blank_names.csv", csv_data, content_type="text/csv")
+
+        # Preview
+        preview_resp = self.client.post("/leads/import/", {
+            "action": "preview",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "file": upload,
+        })
+        preview = preview_resp.context["preview"]
+        self.assertTrue(preview["success"])
+        self.assertEqual(preview["error_count"], 0)
+        self.assertEqual(preview["valid_count"], 2)
+
+        # Commit
+        import_resp = self.client.post("/leads/import/", {
+            "action": "import",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "import_token": preview["import_token"],
+        })
+        self.assertEqual(import_resp.status_code, 302)
         self.assertEqual(Lead.objects.count(), 2)
-        self.assertTrue(Lead.objects.filter(phone="9876543230").exists())
+        for lead in Lead.objects.all():
+            self.assertEqual(lead.name, "")
+
+    def test_csv_file_without_name_column_permitted(self):
+        """
+        Verify CSV files without any 'name' column are valid.
+        """
+        csv_data = b"phone\n9876543271\n9876543272\n"
+        upload = SimpleUploadedFile("only_phones.csv", csv_data, content_type="text/csv")
+
+        preview_resp = self.client.post("/leads/import/", {
+            "action": "preview",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "file": upload,
+        })
+        preview = preview_resp.context["preview"]
+        self.assertTrue(preview["success"])
+        self.assertTrue(preview["columns"]["valid"])
+        self.assertEqual(preview["error_count"], 0)
+
+        # Commit
+        import_resp = self.client.post("/leads/import/", {
+            "action": "import",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "import_token": preview["import_token"],
+        })
+        self.assertEqual(import_resp.status_code, 302)
+        self.assertEqual(Lead.objects.count(), 2)
+        for lead in Lead.objects.all():
+            self.assertEqual(lead.name, "")
+
+    def test_dual_role_can_act_as_caller_assignment(self):
+        """
+        Verify an active user with can_act_as_caller=True can be assigned during import.
+        """
+        counselor_caller = User.objects.create_user(
+            "dual_role_counselor",
+            role=User.Role.COUNSELOR,
+            can_act_as_caller=True,
+        )
+        csv_data = b"phone\n9876543281\n"
+        upload = SimpleUploadedFile("dual_caller.csv", csv_data, content_type="text/csv")
+
+        resp = self.client.post("/leads/import/", {
+            "action": "import",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "caller": counselor_caller.pk,
+            "file": upload,
+        })
+        self.assertEqual(resp.status_code, 302)
+        lead = Lead.objects.get(phone="9876543281")
+        self.assertEqual(lead.assigned_caller, counselor_caller)
 
     def test_invalid_rows_reported_in_preview_and_skipped(self):
         """

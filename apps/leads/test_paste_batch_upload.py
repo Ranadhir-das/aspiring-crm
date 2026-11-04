@@ -216,16 +216,15 @@ class PasteBatchServiceTests(TestCase):
         result = commit_paste_import(pasted, self.admin, preferred_course="BTECH")
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["created_count"], 1)
+        self.assertEqual(result["created_count"], 3)
         self.assertEqual(result["duplicate_count"], 2)
         self.assertEqual(result["skipped_count"], 0)
 
-        # The existing lead is preserved and only ONE new lead was created
-        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 1)
+        # The existing lead is preserved and duplicate numbers are allowed as separate leads
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 3)
         self.assertEqual(Lead.objects.filter(phone="6304569634").count(), 1)
         batch_leads = Lead.objects.filter(import_batch_id=result["batch_id"])
-        self.assertEqual(batch_leads.count(), 1)
-        self.assertEqual(batch_leads.first().phone, "6304569634")
+        self.assertEqual(batch_leads.count(), 3)
 
         # Verify duplicate reasons
         dup_reasons = {d["phone"]: d["reason"] for d in result["duplicate_entries"]}
@@ -239,9 +238,11 @@ class PasteBatchServiceTests(TestCase):
         result = commit_paste_import(pasted, self.admin, preferred_course="MBBS")
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["created_count"], 0)
+        self.assertEqual(result["created_count"], 2)
         self.assertEqual(result["duplicate_count"], 2)
-        self.assertIsNone(result["batch_id"])
+        self.assertIsNotNone(result["batch_id"])
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 2)
+        self.assertEqual(Lead.objects.filter(phone="6304569634").count(), 2)
 
     def test_idempotency_key_replay_prevents_duplicate_batches(self):
         pasted = "9392130350\n6304569634"
@@ -311,10 +312,10 @@ class PasteBatchServiceTests(TestCase):
         # Retry with the same numbers (new key or expired key)
         res2 = commit_paste_import(pasted, self.admin, preferred_course="MBBS", idempotency_key=key)
         self.assertTrue(res2["success"])
-        # Business-level duplicate detection ensures 0 new leads created
-        self.assertEqual(res2["created_count"], 0)
+        # Duplicates allowed as separate leads
+        self.assertEqual(res2["created_count"], 2)
         self.assertEqual(res2["duplicate_count"], 2)
-        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 2)
 
     def test_inactive_or_invalid_caller_rejected(self):
         manager = User.objects.create_user("manager_user", role=User.Role.MANAGER)
@@ -341,6 +342,24 @@ class PasteBatchServiceTests(TestCase):
         self.assertEqual(leads.count(), 2)
         for lead in leads:
             self.assertEqual(lead.assigned_caller, self.caller)
+
+    def test_commit_paste_import_with_dual_role_caller(self):
+        counselor_caller = User.objects.create_user(
+            "dual_paste_counselor",
+            role=User.Role.COUNSELOR,
+            can_act_as_caller=True,
+        )
+        pasted = "9392130350\n"
+        result = commit_paste_import(
+            pasted,
+            self.admin,
+            assigned_caller=counselor_caller,
+            preferred_course="MBA",
+        )
+        self.assertTrue(result["success"])
+        self.assertEqual(result["created_count"], 1)
+        lead = Lead.objects.get(import_batch_id=result["batch_id"])
+        self.assertEqual(lead.assigned_caller, counselor_caller)
 
     def test_bulk_assignment_single_summary_notification(self):
         from apps.accounts.push_notifications import notify_caller_about_assigned_leads
@@ -383,9 +402,9 @@ class PasteBatchServiceTests(TestCase):
         result = commit_paste_import(pasted, self.admin, preferred_course="MBBS")
 
         self.assertTrue(result["success"])
-        self.assertEqual(result["created_count"], 1)
+        self.assertEqual(result["created_count"], 5)
         self.assertEqual(result["duplicate_count"], 4)
-        self.assertEqual(Lead.objects.filter(phone="+8801712345678").count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="+8801712345678").count(), 5)
         self.assertEqual(Lead.objects.filter(phone="+8801812345678").count(), 1)
 
     def test_commit_paste_import_creates_bangladesh_leads(self):
@@ -518,3 +537,192 @@ class PasteBatchWebViewTests(TestCase):
         self.assertEqual(resp_import.status_code, 302)
         self.assertIn("/leads/distribute/?batch=", resp_import.url)
         self.assertEqual(Lead.objects.filter(name="Student One").count(), 1)
+
+    def test_manual_batch_name_saved_for_all_leads(self):
+        pasted = "9392130350\n6304569634"
+        custom_name = "Spot Admission Drive Nov 2026"
+        result = commit_paste_import(
+            pasted,
+            self.admin,
+            preferred_course="MBBS",
+            batch_name=custom_name,
+        )
+        self.assertTrue(result["success"])
+        self.assertEqual(result["batch_name"], custom_name)
+        batch = LeadImportBatch.objects.get(pk=result["batch_id"])
+        self.assertEqual(batch.filename, custom_name)
+        leads = Lead.objects.filter(import_batch=batch)
+        self.assertEqual(leads.count(), 2)
+        for lead in leads:
+            self.assertEqual(lead.import_batch.filename, custom_name)
+
+    def test_blank_batch_name_uses_generated_fallback(self):
+        pasted = "7989773522\n8123456789"
+        result = commit_paste_import(
+            pasted,
+            self.admin,
+            preferred_course="MBBS",
+            batch_name="",
+        )
+        self.assertTrue(result["success"])
+        self.assertTrue(result["batch_name"].startswith("MBBS - "))
+        batch = LeadImportBatch.objects.get(pk=result["batch_id"])
+        self.assertEqual(batch.filename, result["batch_name"])
+        leads = Lead.objects.filter(import_batch=batch)
+        self.assertEqual(leads.count(), 2)
+        for lead in leads:
+            self.assertEqual(lead.import_batch.filename, result["batch_name"])
+
+    def test_whitespace_only_batch_name_uses_generated_fallback(self):
+        pasted = "9876543210\n9876543211"
+        result = commit_paste_import(
+            pasted,
+            self.admin,
+            preferred_course="BTECH",
+            batch_name="   \t  \n  ",
+        )
+        self.assertTrue(result["success"])
+        self.assertTrue(result["batch_name"].startswith("BTECH - "))
+        batch = LeadImportBatch.objects.get(pk=result["batch_id"])
+        self.assertEqual(batch.filename, result["batch_name"])
+        leads = Lead.objects.filter(import_batch=batch)
+        self.assertEqual(leads.count(), 2)
+        for lead in leads:
+            self.assertEqual(lead.import_batch.filename, result["batch_name"])
+
+    def test_leading_and_trailing_whitespace_trimmed_from_batch_name(self):
+        pasted = "9876543212\n9876543213"
+        result = commit_paste_import(
+            pasted,
+            self.admin,
+            preferred_course="MBBS",
+            batch_name="   Special Campaign 2026   ",
+        )
+        self.assertTrue(result["success"])
+        self.assertEqual(result["batch_name"], "Special Campaign 2026")
+        batch = LeadImportBatch.objects.get(pk=result["batch_id"])
+        self.assertEqual(batch.filename, "Special Campaign 2026")
+        leads = Lead.objects.filter(import_batch=batch)
+        self.assertEqual(leads.count(), 2)
+        for lead in leads:
+            self.assertEqual(lead.import_batch.filename, "Special Campaign 2026")
+
+    def test_web_view_post_with_manual_batch_name(self):
+        self.client.force_login(self.admin)
+        data = {
+            "pasted_numbers": "9392130350\n6304569634",
+            "batch_name": "Web Custom Batch 2026",
+            "preferred_course": "MBBS",
+            "action": "import",
+            "import_method": "paste",
+        }
+        resp = self.client.post("/leads/import/", data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("paste_result", resp.context)
+        self.assertEqual(resp.context["paste_result"]["batch_name"], "Web Custom Batch 2026")
+        self.assertContains(resp, "Created batch &quot;Web Custom Batch 2026&quot;")
+        self.assertContains(resp, "Batch: Web Custom Batch 2026")
+        batch = LeadImportBatch.objects.get(pk=resp.context["paste_result"]["batch_id"])
+        self.assertEqual(batch.filename, "Web Custom Batch 2026")
+        leads = Lead.objects.filter(import_batch=batch)
+        self.assertEqual(leads.count(), 2)
+        for lead in leads:
+            self.assertEqual(lead.import_batch.filename, "Web Custom Batch 2026")
+
+    def test_web_view_post_with_blank_or_whitespace_batch_name(self):
+        self.client.force_login(self.admin)
+        data = {
+            "pasted_numbers": "7989773522\n8123456789",
+            "batch_name": "   ",
+            "preferred_course": "MBBS",
+            "action": "import",
+            "import_method": "paste",
+        }
+        resp = self.client.post("/leads/import/", data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("paste_result", resp.context)
+        batch_name = resp.context["paste_result"]["batch_name"]
+        self.assertTrue(batch_name.startswith("MBBS - "))
+        self.assertContains(resp, f"Created batch &quot;{batch_name}&quot;")
+
+    def test_web_view_post_with_untrimmed_batch_name(self):
+        self.client.force_login(self.admin)
+        data = {
+            "pasted_numbers": "9876543214\n9876543215",
+            "batch_name": "   Untrimmed Web Name   ",
+            "preferred_course": "MBBS",
+            "action": "import",
+            "import_method": "paste",
+        }
+        resp = self.client.post("/leads/import/", data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["paste_result"]["batch_name"], "Untrimmed Web Name")
+        batch = LeadImportBatch.objects.get(pk=resp.context["paste_result"]["batch_id"])
+        self.assertEqual(batch.filename, "Untrimmed Web Name")
+
+    def test_csv_import_workflow_unchanged_with_batch_name_field(self):
+        self.client.force_login(self.admin)
+        csv_content = b"Name,Mobile\nStudent Three,9876543216\n"
+        csv_file = ContentFile(csv_content, name="custom_upload.csv")
+        data_import = {
+            "preferred_course": "MBBS",
+            "batch_name": "Should Be Ignored By File Import",
+            "file": csv_file,
+            "action": "import",
+            "import_method": "file",
+        }
+        resp_import = self.client.post("/leads/import/", data_import)
+        self.assertEqual(resp_import.status_code, 302)
+        batch = LeadImportBatch.objects.filter(filename="custom_upload.csv").first()
+        self.assertIsNotNone(batch)
+        self.assertEqual(batch.filename, "custom_upload.csv")
+
+    def test_paste_import_permissions_remain_enforced(self):
+        # Unauthenticated user redirected to login
+        data = {
+            "pasted_numbers": "9392130350",
+            "batch_name": "Perm Test",
+            "preferred_course": "MBBS",
+            "action": "import",
+            "import_method": "paste",
+        }
+        resp = self.client.post("/leads/import/", data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/login/", resp.url)
+
+        # Non-manager (caller role without management rights) gets 403
+        caller_user = User.objects.create_user(
+            username="caller_perm_test",
+            password="password123",
+            role=User.Role.CALLER,
+        )
+        self.client.force_login(caller_user)
+        resp_caller = self.client.post("/leads/import/", data)
+        self.assertEqual(resp_caller.status_code, 403)
+
+    def test_post_all_invalid_does_not_display_misleading_batch_name_or_create_batch(self):
+        self.client.force_login(self.admin)
+        batch_count_before = LeadImportBatch.objects.count()
+        data = {
+            "pasted_numbers": "123456\n+1 5550000000",
+            "batch_name": "Should Not Be Created",
+            "preferred_course": "MBBS",
+            "action": "import",
+            "import_method": "paste",
+        }
+        resp = self.client.post("/leads/import/", data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("paste_result", resp.context)
+        self.assertFalse(resp.context["paste_result"]["success"])
+        self.assertIsNone(resp.context["paste_result"]["batch_name"])
+        self.assertIsNone(resp.context["paste_result"]["batch_id"])
+
+        # No empty batch created in database
+        self.assertEqual(LeadImportBatch.objects.count(), batch_count_before)
+        self.assertFalse(LeadImportBatch.objects.filter(filename="Should Not Be Created").exists())
+
+        # Response displays failed badge and skipped list, but not misleading Batch Name card or 'Batch: None'
+        self.assertContains(resp, "Import failed")
+        self.assertNotContains(resp, "Batch: None")
+        self.assertNotContains(resp, "Batch: Should Not Be Created")
+        self.assertNotContains(resp, ">Batch Name<")

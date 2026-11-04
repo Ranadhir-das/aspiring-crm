@@ -264,8 +264,8 @@ def score_followup(followup_id, now=None):
 def validate_manager(actor, caller, reason):
     if not can_manage(actor):
         raise PermissionDenied('Only administrators can manage points.')
-    if not is_caller_capable(caller):
-        raise ValidationError('Select a caller account.')
+    if not (is_caller_capable(caller) or getattr(caller, 'role', None) in {User.Role.CALLER, User.Role.EMPLOYEE, User.Role.COUNSELOR}):
+        raise ValidationError('Select a valid employee account.')
     if not str(reason).strip():
         raise ValidationError('A reason is required.')
 
