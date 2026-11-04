@@ -203,6 +203,17 @@ class CallCreateView(APIView):
                     "updated_at",
                 ]
             )
+            if lead.assigned_caller_id:
+                try:
+                    from apps.leads.workload import evaluate_caller_workload
+                    evaluate_caller_workload(lead.assigned_caller)
+                except Exception as exc:
+                    logger.exception(
+                        "Failed to evaluate caller workload after call logging for caller_id=%s lead_id=%s: %s",
+                        lead.assigned_caller_id,
+                        lead.pk,
+                        exc,
+                    )
 
         from apps.followups.services import complete_due_followups_for_call
         completed_followup_ids = complete_due_followups_for_call(call)

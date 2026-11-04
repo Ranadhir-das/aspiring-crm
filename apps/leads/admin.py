@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 from .models import (
     Admission,
+    CallerWorkloadAlert,
     Counselling,
     Lead,
     LeadAssignmentHistory,
@@ -440,3 +441,12 @@ class AdmissionRequestAdmin(admin.ModelAdmin):
     search_fields = ("lead__name", "lead__phone", "counselor__username")
     raw_id_fields = ("lead", "counselor", "assignment", "reviewed_by")
     readonly_fields = ("created_at",)
+
+
+@admin.register(CallerWorkloadAlert)
+class CallerWorkloadAlertAdmin(admin.ModelAdmin):
+    list_display = ('caller', 'pending_count', 'target_count', 'suggested_count', 'status', 'created_at', 'resolved_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('caller__username', 'caller__first_name', 'caller__last_name')
+    raw_id_fields = ('caller',)
+    readonly_fields = ('created_at', 'updated_at')

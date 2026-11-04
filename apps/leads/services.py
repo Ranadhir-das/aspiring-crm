@@ -666,6 +666,7 @@ def bulk_assign_leads(
     skipped_count = 0
     reassigned_count = 0
     assigned_leads = []
+    reassigned_from_callers = set()
 
     with transaction.atomic():
 
@@ -714,6 +715,7 @@ def bulk_assign_leads(
 
             if previous_caller:
                 reassigned_count += 1
+                reassigned_from_callers.add(previous_caller)
             else:
                 assigned_count += 1
 
@@ -736,6 +738,12 @@ def bulk_assign_leads(
                     logger.exception("[Push Assignment] unexpected exception: %s", exc)
 
             transaction.on_commit(_on_commit_notify)
+
+        from .workload import evaluate_caller_workload
+        if assigned_leads:
+            evaluate_caller_workload(new_caller)
+        for prev_c in reassigned_from_callers:
+            evaluate_caller_workload(prev_c)
 
     return {
         "success": True,

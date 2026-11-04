@@ -621,4 +621,49 @@ class WhatsAppActivity(models.Model):
         return f"WhatsApp initiated for {self.lead.name if self.lead_id else 'External call'} by {self.user.username} ({self.source})"
 
 
+class CallerWorkloadAlert(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        RESOLVED = "RESOLVED", "Resolved"
+
+    caller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="workload_alerts",
+    )
+    pending_count = models.PositiveIntegerField(
+        help_text="Number of pending leads at the time of check",
+    )
+    target_count = models.PositiveIntegerField(
+        default=30,
+        help_text="Target pending leads inventory (default 30)",
+    )
+    suggested_count = models.PositiveIntegerField(
+        help_text="Recommended additional leads to assign: max(0, target - pending)",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["caller"],
+                condition=models.Q(status="OPEN"),
+                name="unique_open_workload_alert_per_caller",
+            ),
+        ]
+
+    def __str__(self):
+        caller_name = self.caller.get_full_name() or self.caller.username
+        return f"WorkloadAlert({caller_name}, pending={self.pending_count}, status={self.status})"
+
+
 

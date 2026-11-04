@@ -62,6 +62,22 @@ def notifications(request):
                 'created_at': account.date_joined,
             })
 
+    # Open Caller Workload Alerts (for all MANAGEMENT roles)
+    from apps.leads.models import CallerWorkloadAlert
+    from apps.accounts.capabilities import eligible_callers_qs
+    for alert in (CallerWorkloadAlert.objects.filter(
+                      status=CallerWorkloadAlert.Status.OPEN,
+                      caller__in=eligible_callers_qs(),
+                  ).select_related('caller').order_by('pending_count', '-created_at')[:20]):
+        c = alert.caller
+        items.append({
+            'icon': '⚠️',
+            'title': f'{employee_name(c)} has only {alert.pending_count} pending lead{"s" if alert.pending_count != 1 else ""}',
+            'detail': f'Target: {alert.target_count} · Consider assigning {alert.suggested_count} more',
+            'url': reverse('web:caller-detail', args=[c.pk]),
+            'created_at': alert.created_at,
+        })
+
     items.sort(key=lambda item: item['created_at'], reverse=True)
 
     return {

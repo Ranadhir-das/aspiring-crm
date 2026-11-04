@@ -302,3 +302,7 @@ CORS_ALLOW_HEADERS = (*default_headers, "x-api-key")
 # Expo push credentials stay on the server.
 WEBSITE_LEAD_PUSH_ENABLED = env.bool("WEBSITE_LEAD_PUSH_ENABLED", default=True)
 EXPO_PUSH_ACCESS_TOKEN = env("EXPO_PUSH_ACCESS_TOKEN", default="")
+
+# Smart Caller Workload Monitoring
+CALLER_WORKLOAD_LOW_THRESHOLD = env.int("CALLER_WORKLOAD_LOW_THRESHOLD", default=10)
+CALLER_WORKLOAD_TARGET_PENDING = env.int("CALLER_WORKLOAD_TARGET_PENDING", default=30)

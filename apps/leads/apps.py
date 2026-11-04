@@ -6,6 +6,8 @@ class LeadsConfig(AppConfig):
     name = "apps.leads"
 
     def ready(self):
+        import apps.leads.signals  # noqa
+
         try:
             from corsheaders.signals import check_request_enabled
 

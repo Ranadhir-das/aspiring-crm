@@ -36,6 +36,11 @@ def dashboard_view(request):
     trend = [{'date': x.get('label', ''), 'count': x.get('count', 0)} for x in analytics_data.get('call_trend', {}).get('items', [])]
     chart_data = {'trend': trend, 'pipeline': analytics_data.get('lead_pipeline', [])}
 
+    workload_summary = None
+    if request.user.role in MANAGEMENT:
+        from apps.leads.workload import get_workload_summary
+        workload_summary = get_workload_summary()
+
     return page(
         request,
         'dashboard',
@@ -47,6 +52,7 @@ def dashboard_view(request):
         today_calls=today_calls,
         interest_rate=interest_rate,
         chart_data=chart_data,
+        workload_summary=workload_summary,
     )
 
 
