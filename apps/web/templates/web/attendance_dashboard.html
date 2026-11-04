@@ -341,5 +341,121 @@
     </div>
     {% endif %}
   </section>
+
+  <!-- Employee Attendance Performance Leaderboard -->
+  {% if attendance_leaderboard and attendance_leaderboard.all_entries %}
+  <section class="attendance-leaderboard-section" id="attendance-leaderboard" style="margin-top: 32px;" aria-label="Employee Attendance Leaderboard">
+    <div class="attendance-table-card" style="padding: 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.4rem;">🏆</span>
+            <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--att-text, #1e293b);">Employee Attendance Leaderboard</h2>
+            <span class="badge" style="background: rgba(99, 102, 241, 0.1); color: #6366f1; border: 1px solid rgba(99, 102, 241, 0.25); padding: 3px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;">
+              {{ attendance_leaderboard.period_label }}
+            </span>
+          </div>
+          <p style="margin: 6px 0 0 0; font-size: 0.85rem; color: var(--att-muted, #64748b);">
+            Fair, explainable performance scoring (0–100): 70% attendance consistency across eligible working days + 30% punctuality compliance against shift start (10:00 AM).
+          </p>
+        </div>
+
+        <!-- Period Filter Pills -->
+        <div class="attendance-view-toggle" style="display: flex; gap: 6px; background: var(--att-card-bg, #fff); padding: 4px; border: 1px solid var(--att-card-border, #e2e8f0); border-radius: 8px;">
+          <a class="button small {% if leaderboard_period == 'this_month' or not leaderboard_period %}active{% endif %}" href="?{{ filter_params }}&leaderboard_period=this_month#attendance-leaderboard" style="text-decoration: none; padding: 6px 12px; font-size: 0.8rem;">This Month</a>
+          <a class="button small {% if leaderboard_period == 'prev_month' %}active{% endif %}" href="?{{ filter_params }}&leaderboard_period=prev_month#attendance-leaderboard" style="text-decoration: none; padding: 6px 12px; font-size: 0.8rem;">Previous Month</a>
+          <a class="button small {% if leaderboard_period == 'this_week' %}active{% endif %}" href="?{{ filter_params }}&leaderboard_period=this_week#attendance-leaderboard" style="text-decoration: none; padding: 6px 12px; font-size: 0.8rem;">This Week</a>
+        </div>
+      </div>
+
+      <!-- Leaderboard Table -->
+      <div style="overflow-x: auto;">
+        <table class="attendance-table" style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--att-card-border, #e2e8f0); text-align: left; color: var(--att-muted, #64748b); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;">
+              <th style="padding: 12px 14px; text-align: center; width: 60px;">Rank</th>
+              <th style="padding: 12px 14px;">Employee</th>
+              <th style="padding: 12px 14px;">Branch / Role</th>
+              <th style="padding: 12px 14px; text-align: center;">Score</th>
+              <th style="padding: 12px 14px; text-align: center;">Present / Eligible</th>
+              <th style="padding: 12px 14px; text-align: center;">Attendance %</th>
+              <th style="padding: 12px 14px; text-align: center;">On-Time %</th>
+              <th style="padding: 12px 14px; text-align: center;">Late Count</th>
+              <th style="padding: 12px 14px; text-align: right;">Net Hours</th>
+              <th style="padding: 12px 14px; text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in attendance_leaderboard.all_entries %}
+            <tr style="border-bottom: 1px solid var(--att-card-border, #e2e8f0); {% if entry.medal == 'gold' %}background: rgba(245, 158, 11, 0.04);{% elif entry.medal == 'silver' %}background: rgba(148, 163, 184, 0.04);{% elif entry.medal == 'bronze' %}background: rgba(249, 115, 22, 0.04);{% endif %}">
+              <td style="padding: 12px 14px; text-align: center;">
+                {% if entry.medal == 'gold' %}
+                  <span title="Rank 1 (Gold Medal)" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-weight: 700; font-size: 0.85rem;">🥇 1</span>
+                {% elif entry.medal == 'silver' %}
+                  <span title="Rank 2 (Silver Medal)" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem;">🥈 2</span>
+                {% elif entry.medal == 'bronze' %}
+                  <span title="Rank 3 (Bronze Medal)" style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; font-weight: 700; font-size: 0.85rem;">🥉 3</span>
+                {% else %}
+                  <span style="display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; background: rgba(100, 116, 139, 0.08); color: var(--att-muted, #64748b); font-weight: 600; font-size: 0.8rem;">#{{ entry.rank }}</span>
+                {% endif %}
+              </td>
+              <td style="padding: 12px 14px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(99, 102, 241, 0.12); color: #6366f1; font-weight: 700; font-size: 0.85rem; display: grid; place-items: center; flex-shrink: 0;">
+                    {{ entry.employee_name|slice:":1"|upper }}
+                  </div>
+                  <div>
+                    <a href="{{ entry.profile_url }}" style="font-weight: 600; color: var(--att-text, #1e293b); text-decoration: none;">
+                      {{ entry.employee_name }}
+                    </a>
+                    <div style="font-size: 0.75rem; color: var(--att-muted, #64748b);">@{{ entry.username }}</div>
+                  </div>
+                </div>
+              </td>
+              <td style="padding: 12px 14px;">
+                <div style="font-size: 0.82rem; font-weight: 500; color: var(--att-text, #1e293b);">{{ entry.designation }}</div>
+                <div style="font-size: 0.75rem; color: var(--att-muted, #64748b);">{{ entry.primary_branch_name }}</div>
+              </td>
+              <td style="padding: 12px 14px; text-align: center;">
+                <span class="badge" style="{% if entry.attendance_score >= 90 %}background: rgba(34, 197, 94, 0.12); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.3);{% elif entry.attendance_score >= 75 %}background: rgba(59, 130, 246, 0.12); color: #2563eb; border: 1px solid rgba(59, 130, 246, 0.3);{% else %}background: rgba(245, 158, 11, 0.12); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3);{% endif %} padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.85rem;">
+                  {{ entry.attendance_score }} / 100
+                </span>
+              </td>
+              <td style="padding: 12px 14px; text-align: center; font-weight: 600;">
+                {{ entry.present_days }} / {{ entry.eligible_working_days }}
+              </td>
+              <td style="padding: 12px 14px; text-align: center;">
+                <span style="font-weight: 600; {% if entry.attendance_pct >= 95 %}color: #16a34a;{% elif entry.attendance_pct >= 80 %}color: #2563eb;{% else %}color: #d97706;{% endif %}">
+                  {{ entry.attendance_pct }}%
+                </span>
+              </td>
+              <td style="padding: 12px 14px; text-align: center;">
+                <span style="font-weight: 600; {% if entry.on_time_pct >= 90 %}color: #16a34a;{% elif entry.on_time_pct >= 75 %}color: #2563eb;{% else %}color: #dc2626;{% endif %}">
+                  {{ entry.on_time_pct }}%
+                </span>
+              </td>
+              <td style="padding: 12px 14px; text-align: center;">
+                {% if entry.late_count > 0 %}
+                <span style="color: #dc2626; font-weight: 600;">{{ entry.late_count }}</span>
+                {% else %}
+                <span style="color: #16a34a; font-weight: 600;">0</span>
+                {% endif %}
+              </td>
+              <td style="padding: 12px 14px; text-align: right; font-weight: 600; color: var(--att-text, #1e293b);">
+                {{ entry.total_net_hours }}h
+              </td>
+              <td style="padding: 12px 14px; text-align: right;">
+                <a class="button small" href="{% url 'web:employee-attendance-history' entry.employee_id %}" style="text-decoration: none; font-size: 0.75rem;">
+                  History ↗
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

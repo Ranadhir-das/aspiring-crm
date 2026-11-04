@@ -432,6 +432,29 @@ def attendance(request):
     else:
         monthly_totals = get_monthly_totals_from_records(records)
 
+    # 8b. Employee Attendance Leaderboard
+    from .attendance_services import get_attendance_leaderboard
+    leaderboard_period = request.GET.get('leaderboard_period', 'this_month').strip().lower()
+    lb_date_from_str = request.GET.get('lb_date_from', '').strip()
+    lb_date_to_str = request.GET.get('lb_date_to', '').strip()
+    lb_date_from = None
+    lb_date_to = None
+    if lb_date_from_str and lb_date_to_str:
+        try:
+            lb_date_from = datetime.strptime(lb_date_from_str, '%Y-%m-%d').date()
+            lb_date_to = datetime.strptime(lb_date_to_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    attendance_leaderboard = get_attendance_leaderboard(
+        user=request.user,
+        period=leaderboard_period,
+        date_from=lb_date_from,
+        date_to=lb_date_to,
+        branch_id=branch_id if branch_id != "00000000-0000-0000-0000-000000000000" else None,
+        top_n=50,
+    )
+
     # 9. Accessible employees and branches for filter dropdowns
     if request.user.role in MANAGEMENT or getattr(request.user, "is_superuser", False):
         if request.user.role == User.Role.MANAGER:
@@ -455,6 +478,7 @@ def attendance(request):
     filter_params_dict = request.GET.copy()
     filter_params_dict.pop('page', None)
     filter_params_dict.pop('export', None)
+    filter_params_dict.pop('leaderboard_period', None)
     filter_params_dict['view'] = view_mode
     if view_mode == 'daily':
         filter_params_dict['date'] = start_date.strftime('%Y-%m-%d')
@@ -502,6 +526,8 @@ def attendance(request):
         export_query_string=export_query_string,
         search_q=search_q,
         pending_corrections_count=pending_corrections_count,
+        attendance_leaderboard=attendance_leaderboard,
+        leaderboard_period=leaderboard_period,
     )
 
 
@@ -566,6 +592,9 @@ def employee_attendance_history(request, user_id):
         history_params['status'] = status_filter
     export_query_string = history_params.urlencode()
 
+    is_admin_or_manager = (request.user.role in MANAGEMENT or getattr(request.user, 'is_superuser', False))
+    is_own_history = (request.user.pk == target_employee.pk)
+
     return page(
         request,
         'employee_attendance_history',
@@ -581,6 +610,8 @@ def employee_attendance_history(request, user_id):
         selected_status=status_filter,
         status_choices=ATTENDANCE_STATUS_CHOICES,
         export_query_string=export_query_string,
+        is_admin_or_manager=is_admin_or_manager,
+        is_own_history=is_own_history,
     )
 
 
@@ -693,6 +724,29 @@ def attendance_correction_action(request, pk):
                 else:
                     att.login_remark = approval_note[:500]
                 att.save(update_fields=['login_remark'])
+        elif correction.request_type == AttendanceCorrectionRequest.RequestType.MISSING_CHECKOUT:
+            from apps.activity.models import WorkSession
+            sess = correction.session or WorkSession.objects.filter(
+                user=correction.employee, date=correction.date
+            ).order_by('-started_at').first()
+            if sess and correction.requested_end:
+                sess.ended_at = correction.requested_end
+                sess.status = WorkSession.Status.COMPLETED
+                sess.closure_reason = WorkSession.ClosureReason.ADMIN_OVERRIDE
+                sess.closed_by = request.user
+                sess.admin_closure_note = f"Approved missing checkout #{correction.pk} by {request.user.username}: {notes or correction.reason}"
+                sess.save(update_fields=['ended_at', 'status', 'closure_reason', 'closed_by', 'admin_closure_note'])
+            att = correction.attendance or Attendance.objects.filter(
+                employee=correction.employee, date=correction.date
+            ).first()
+            if att and correction.requested_end:
+                if not att.checked_out or att.checked_out > correction.requested_end:
+                    att.checked_out = correction.requested_end
+                    remark = f"Missing Checkout Approved by {request.user.get_role_display()} {request.user.username}"
+                    if notes:
+                        remark += f": {notes}"
+                    att.login_remark = f"{att.login_remark} | {remark}".strip(' |')[:500]
+                    att.save(update_fields=['checked_out', 'login_remark'])
 
     reviewer_role = request.user.get_role_display()
     verb = "approved" if action == "APPROVE" else "rejected"
@@ -704,14 +758,36 @@ def attendance_correction_action(request, pk):
 @workspace(employee=True)
 def attendance_correction_submit(request):
     from .workforce_forms import AttendanceCorrectionRequestForm
-    form = AttendanceCorrectionRequestForm(request.POST or None)
+    from apps.activity.models import WorkSession
+
+    initial = {}
+    if request.method == 'GET':
+        if request.GET.get('date'):
+            initial['date'] = request.GET.get('date')
+        if request.GET.get('type'):
+            initial['request_type'] = request.GET.get('type')
+        elif request.GET.get('request_type'):
+            initial['request_type'] = request.GET.get('request_type')
+
+    form = AttendanceCorrectionRequestForm(request.POST or None, initial=initial, user=request.user)
     if request.method == 'POST' and form.is_valid():
         correction = form.save(commit=False)
         correction.employee = request.user
         correction.status = AttendanceCorrectionRequest.Status.PENDING
+
+        # Associate matching session / attendance on requested date
+        target_d = correction.date
+        sess = WorkSession.objects.filter(user=request.user, date=target_d, status=WorkSession.Status.ACTIVE).first()
+        if not sess:
+            sess = WorkSession.objects.filter(user=request.user, date=target_d).order_by('-started_at').first()
+        correction.session = sess
+
+        att = Attendance.objects.filter(employee=request.user, date=target_d).first()
+        correction.attendance = att
+
         correction.save()
-        audit(request, 'POLICY', f'Employee {request.user.username} submitted attendance correction for {correction.date} ({correction.request_type})')
-        messages.success(request, 'Attendance correction request submitted successfully.')
+        audit(request, 'POLICY', f'Employee {request.user.username} submitted attendance correction #{correction.pk} for {correction.date} ({correction.request_type})')
+        messages.success(request, f'Attendance correction request #{correction.pk} submitted successfully.')
         return redirect('web:attendance-corrections' if request.user.role in MANAGEMENT else 'web:attendance')
 
     return page(
@@ -719,6 +795,97 @@ def attendance_correction_submit(request):
         'attendance_correction_form',
         'attendance',
         form=form,
+        is_admin_mode=False,
+    )
+
+
+@workspace(management=True)
+@transaction.atomic
+def attendance_correction_admin_create(request):
+    from .workforce_forms import AdminAttendanceCorrectionForm
+    from apps.activity.models import PolicyException, WorkSession
+    from datetime import datetime, time
+
+    initial = {}
+    if request.method == 'GET':
+        if request.GET.get('employee'):
+            initial['employee'] = request.GET.get('employee')
+        if request.GET.get('date'):
+            initial['date'] = request.GET.get('date')
+        if request.GET.get('type'):
+            initial['request_type'] = request.GET.get('type')
+        elif request.GET.get('request_type'):
+            initial['request_type'] = request.GET.get('request_type')
+
+    form = AdminAttendanceCorrectionForm(request.POST or None, initial=initial, actor=request.user)
+    if request.method == 'POST' and form.is_valid():
+        correction = form.save(commit=False)
+        target_emp = correction.employee
+        target_d = correction.date
+
+        # Scope check: Managers can only adjust their direct reports
+        is_admin = request.user.role in ADMINS or getattr(request.user, 'is_superuser', False)
+        if not is_admin and request.user.role == 'MANAGER':
+            if target_emp.manager_id != request.user.id and target_emp.id != request.user.id:
+                messages.error(request, 'You do not have permission to adjust attendance for employees outside your team.')
+                return redirect('web:attendance-corrections')
+
+        sess = WorkSession.objects.filter(user=target_emp, date=target_d, status=WorkSession.Status.ACTIVE).first()
+        if not sess:
+            sess = WorkSession.objects.filter(user=target_emp, date=target_d).order_by('-started_at').first()
+        correction.session = sess
+
+        att = Attendance.objects.filter(employee=target_emp, date=target_d).first()
+        correction.attendance = att
+
+        correction.reviewed_by = request.user
+        correction.reviewed_at = timezone.now()
+        if not correction.review_notes:
+            correction.review_notes = f"Direct administrative adjustment by {request.user.get_role_display()} {request.user.username}"
+
+        correction.save()
+
+        if correction.status == AttendanceCorrectionRequest.Status.APPROVED:
+            if correction.request_type == AttendanceCorrectionRequest.RequestType.EARLY_SHIFT_END:
+                start_of_day = timezone.make_aware(datetime.combine(correction.date, time.min))
+                end_of_day = timezone.make_aware(datetime.combine(correction.date, time.max))
+                valid_from = correction.requested_end or start_of_day
+                PolicyException.objects.create(
+                    user=target_emp,
+                    rule_type=PolicyException.RuleType.MIN_DURATION,
+                    reason=f"Admin Adjustment #{correction.pk} by {request.user.username}: {correction.reason}",
+                    requested_by=request.user,
+                    approved_by=request.user,
+                    is_approved=True,
+                    approved_at=timezone.now(),
+                    valid_from=valid_from,
+                    valid_until=end_of_day,
+                    is_active=True,
+                )
+            elif correction.request_type == AttendanceCorrectionRequest.RequestType.MISSING_CHECKOUT:
+                if sess and correction.requested_end:
+                    sess.ended_at = correction.requested_end
+                    sess.status = WorkSession.Status.COMPLETED
+                    sess.closure_reason = WorkSession.ClosureReason.ADMIN_OVERRIDE
+                    sess.closed_by = request.user
+                    sess.admin_closure_note = f"Admin adjustment #{correction.pk}: {correction.reason}"
+                    sess.save(update_fields=['ended_at', 'status', 'closure_reason', 'closed_by', 'admin_closure_note'])
+                if att and correction.requested_end:
+                    att.checked_out = correction.requested_end
+                    remark = f"Checkout adjusted by {request.user.get_role_display()} {request.user.username}: {correction.reason}"
+                    att.login_remark = f"{att.login_remark} | {remark}".strip(' |')[:500]
+                    att.save(update_fields=['checked_out', 'login_remark'])
+
+        audit(request, 'POLICY', f'{request.user.get_role_display()} {request.user.username} created attendance adjustment #{correction.pk} for {target_emp.username} on {target_d} ({correction.status})')
+        messages.success(request, f'Attendance adjustment #{correction.pk} for {target_emp.username} on {target_d} saved successfully.')
+        return redirect('web:attendance-corrections')
+
+    return page(
+        request,
+        'attendance_correction_form',
+        'attendance',
+        form=form,
+        is_admin_mode=True,
     )
 
 
@@ -743,11 +910,17 @@ def attendance_action(request):
             Attendance.objects.create(employee=request.user, date=today, status=mode, checked_in=timezone.now() if mode != 'WEEK_OFF' else None, login_remark=login_remark)
             audit(request, 'ATTENDANCE', f'Marked {mode} for {today}')
     elif action == 'out':
-        record = Attendance.objects.filter(employee=request.user, checked_in__isnull=False, checked_out__isnull=True).order_by('-date').first()
+        record = Attendance.objects.filter(employee=request.user, date=today, checked_in__isnull=False, checked_out__isnull=True).first()
         if record:
             record.checked_out = timezone.now()
             record.save(update_fields=['checked_out'])
             audit(request, 'ATTENDANCE', f'Checked out for {record.date}')
+        else:
+            past_unclosed = Attendance.objects.filter(employee=request.user, checked_in__isnull=False, checked_out__isnull=True).order_by('-date').first()
+            if past_unclosed:
+                messages.error(request, f'Cannot check out past attendance for {past_unclosed.date} using current time. Please submit an attendance correction request.')
+            else:
+                messages.error(request, 'No active attendance check-in found for today.')
     return redirect('web:attendance')
 
 

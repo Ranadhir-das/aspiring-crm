@@ -37,9 +37,13 @@ def dashboard_view(request):
     chart_data = {'trend': trend, 'pipeline': analytics_data.get('lead_pipeline', [])}
 
     workload_summary = None
+    attendance_leaderboard = None
     if request.user.role in MANAGEMENT:
         from apps.leads.workload import get_workload_summary
         workload_summary = get_workload_summary()
+
+        from apps.web.attendance_services import get_attendance_leaderboard
+        attendance_leaderboard = get_attendance_leaderboard(user=request.user, period="this_month", top_n=5)
 
     return page(
         request,
@@ -53,6 +57,7 @@ def dashboard_view(request):
         interest_rate=interest_rate,
         chart_data=chart_data,
         workload_summary=workload_summary,
+        attendance_leaderboard=attendance_leaderboard,
     )
 
 

@@ -730,6 +730,101 @@
   </section>
   {% endif %}
 
+  <!-- 7b. Attendance Leaderboard (Management Only, Top 5) -->
+  {% if can_manage and attendance_leaderboard and attendance_leaderboard.top_entries %}
+  <section class="an-leaderboard-section" style="margin-bottom: 24px;" aria-label="Top Attendance Performers">
+    <div class="an-panel" style="padding: 20px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-panel);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.25rem;">🏆</span>
+            <h3 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: var(--text);">Top Attendance Performers</h3>
+            <span class="badge" style="background: rgba(99, 102, 241, 0.12); color: #6366f1; border: 1px solid rgba(99, 102, 241, 0.25); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;">
+              {{ attendance_leaderboard.period_label }}
+            </span>
+          </div>
+          <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: var(--text-muted);">
+            Top performers by verified shift consistency (70%) and punctuality against shift start (30%).
+          </p>
+        </div>
+        <div>
+          <a href="{% url 'web:attendance' %}#attendance-leaderboard" class="an-btn an-btn-ghost" style="text-decoration: none; font-size: 0.82rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+            View Full Leaderboard ↗
+          </a>
+        </div>
+      </div>
+
+      <div class="an-table-scroll" style="overflow-x: auto;">
+        <table class="an-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border); text-align: left; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
+              <th style="padding: 10px 14px; text-align: center; width: 50px;">Rank</th>
+              <th style="padding: 10px 14px;">Employee</th>
+              <th style="padding: 10px 14px;">Branch / Designation</th>
+              <th style="padding: 10px 14px; text-align: center;">Score</th>
+              <th style="padding: 10px 14px; text-align: center;">Present Days</th>
+              <th style="padding: 10px 14px; text-align: center;">Attendance %</th>
+              <th style="padding: 10px 14px; text-align: center;">On-Time %</th>
+              <th style="padding: 10px 14px; text-align: right;">Net Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in attendance_leaderboard.top_entries %}
+            <tr style="border-bottom: 1px solid var(--border); {% if entry.medal == 'gold' %}background: rgba(245, 158, 11, 0.03);{% elif entry.medal == 'silver' %}background: rgba(148, 163, 184, 0.03);{% elif entry.medal == 'bronze' %}background: rgba(249, 115, 22, 0.03);{% endif %}">
+              <td style="padding: 10px 14px; text-align: center;">
+                {% if entry.medal == 'gold' %}
+                  <span class="an-rank-badge rank-1" title="Gold">🥇 1</span>
+                {% elif entry.medal == 'silver' %}
+                  <span class="an-rank-badge rank-2" title="Silver">🥈 2</span>
+                {% elif entry.medal == 'bronze' %}
+                  <span class="an-rank-badge rank-3" title="Bronze">🥉 3</span>
+                {% else %}
+                  <span class="an-rank-badge">#{{ entry.rank }}</span>
+                {% endif %}
+              </td>
+              <td style="padding: 10px 14px;">
+                <div class="an-emp-cell">
+                  <div class="an-emp-avatar">{{ entry.employee_name|slice:":1"|upper }}</div>
+                  <div>
+                    <a href="{{ entry.profile_url }}" class="an-emp-name" style="text-decoration: none;">{{ entry.employee_name }}</a>
+                    <span class="an-emp-user">@{{ entry.username }}</span>
+                  </div>
+                </div>
+              </td>
+              <td style="padding: 10px 14px;">
+                <div style="font-weight: 500; color: var(--text);">{{ entry.designation }}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">{{ entry.primary_branch_name }}</div>
+              </td>
+              <td style="padding: 10px 14px; text-align: center;">
+                <span class="badge" style="{% if entry.attendance_score >= 90 %}background: rgba(34, 197, 94, 0.12); color: #16a34a; border: 1px solid rgba(34, 197, 94, 0.25);{% elif entry.attendance_score >= 75 %}background: rgba(59, 130, 246, 0.12); color: #2563eb; border: 1px solid rgba(59, 130, 246, 0.25);{% else %}background: rgba(245, 158, 11, 0.12); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.25);{% endif %} padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 0.8rem;">
+                  {{ entry.attendance_score }} / 100
+                </span>
+              </td>
+              <td style="padding: 10px 14px; text-align: center; font-weight: 600;">
+                {{ entry.present_days }} / {{ entry.eligible_working_days }}
+              </td>
+              <td style="padding: 10px 14px; text-align: center;">
+                <span style="font-weight: 600; {% if entry.attendance_pct >= 95 %}color: #16a34a;{% elif entry.attendance_pct >= 80 %}color: #2563eb;{% else %}color: #d97706;{% endif %}">
+                  {{ entry.attendance_pct }}%
+                </span>
+              </td>
+              <td style="padding: 10px 14px; text-align: center;">
+                <span style="font-weight: 600; {% if entry.on_time_pct >= 90 %}color: #16a34a;{% elif entry.on_time_pct >= 75 %}color: #2563eb;{% else %}color: #dc2626;{% endif %}">
+                  {{ entry.on_time_pct }}%
+                </span>
+              </td>
+              <td style="padding: 10px 14px; text-align: right; font-weight: 600; color: var(--text);">
+                {{ entry.total_net_hours }}h
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
   <!-- 8. Bottom Section: Employee Table & Live Feed -->
   <section class="an-bottom-grid" aria-label="Performance and Activity">
     <!-- Left: Employee Table -->
