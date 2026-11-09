@@ -346,6 +346,18 @@ if (chatThread) {
     avatar.textContent = message.sender_name.charAt(0).toUpperCase();
     const bodyWrap = document.createElement('div');
     bodyWrap.className = 'chat-msg-body';
+
+    const actions = document.createElement('div');
+    actions.className = 'chat-msg-actions';
+    const replyBtn = document.createElement('button');
+    replyBtn.type = 'button';
+    replyBtn.className = 'chat-action-btn';
+    replyBtn.textContent = '↩ Reply';
+    replyBtn.title = 'Reply';
+    replyBtn.onclick = () => window.replyToMessage && window.replyToMessage(message.sender_name, (message.text || '').substring(0, 120));
+    actions.append(replyBtn);
+    bodyWrap.append(actions);
+
     if (!mine) {
       const allowed = chatThread.dataset.canViewEmployees === 'true';
       const name = document.createElement(allowed ? 'a' : 'strong');
@@ -370,9 +382,8 @@ if (chatThread) {
         const downloadUrl = `/chat/attachments/${att.id}/download/`;
         if (att.mime_type && att.mime_type.includes('image')) {
           const imgLink = document.createElement('a');
-          imgLink.href = downloadUrl;
-          imgLink.target = '_blank';
-          imgLink.rel = 'noopener noreferrer';
+          imgLink.href = 'javascript:void(0)';
+          imgLink.onclick = () => window.openImageLightbox && window.openImageLightbox(downloadUrl, att.original_name);
           const img = document.createElement('img');
           img.src = downloadUrl;
           img.alt = att.original_name;
@@ -381,6 +392,7 @@ if (chatThread) {
           img.style.borderRadius = '8px';
           img.style.objectFit = 'cover';
           img.style.display = 'block';
+          img.style.cursor = 'pointer';
           imgLink.append(img);
           attachWrap.append(imgLink);
         } else if (att.mime_type && att.mime_type.includes('video')) {

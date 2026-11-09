@@ -66,3 +66,201 @@
 .project-report-meta dt { color: var(--muted); font-size: .8rem; }
 .project-report-meta dd { margin: 3px 0 0; }
 .project-report-notes { margin: 12px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ==========================================================================
+   Semantic Badges (Dark Mode Defaults)
+   ========================================================================== */
+.badge.rose, .badge.danger { background: #3a212b; color: #f87171; border: 1px solid rgba(248, 113, 113, 0.35); }
+.badge.amber, .badge.warning { background: #3a3023; color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.35); }
+.badge.orange { background: #3d271d; color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.35); }
+.badge.purple, .badge.violet { background: #2e1e4a; color: #c084fc; border: 1px solid rgba(192, 132, 252, 0.35); }
+.badge.blue, .badge.info { background: #1e2c45; color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.35); }
+.badge.mint, .badge.completed, .badge.success { background: #13332b; color: #34d399; border: 1px solid rgba(52, 211, 153, 0.35); }
+.badge.slate, .badge.department { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; }
+
+/* ==========================================================================
+   Semantic Badges (Light Mode Overrides)
+   ========================================================================== */
+[data-theme=light] .badge.rose, [data-theme=light] .badge.danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+[data-theme=light] .badge.amber, [data-theme=light] .badge.warning { background: #fef3c7; color: #b45309; border: 1px solid #fcd34d; }
+[data-theme=light] .badge.orange { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
+[data-theme=light] .badge.purple, [data-theme=light] .badge.violet { background: #f3e8ff; color: #6b21a8; border: 1px solid #d8b4fe; }
+[data-theme=light] .badge.blue, [data-theme=light] .badge.info { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+[data-theme=light] .badge.mint, [data-theme=light] .badge.completed, [data-theme=light] .badge.success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+[data-theme=light] .badge.slate, [data-theme=light] .badge.department { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+/* ==========================================================================
+   Transparency / Workstation Notices (Dark & Light)
+   ========================================================================== */
+.notice-transparency {
+  background: #141a29;
+  border-left: 4px solid #3b82f6;
+  color: #cbd5e1;
+  padding: 14px 18px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.notice-transparency strong {
+  color: #f8fafc;
+  display: block;
+  margin-bottom: 2px;
+}
+[data-theme=light] .notice-transparency {
+  background: #eff6ff;
+  border-left: 4px solid #2563eb;
+  color: #1e3a8a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+[data-theme=light] .notice-transparency strong {
+  color: #1e3a8a;
+}
+
+/* ==========================================================================
+   Lifecycle & Status Notices (Dark & Light)
+   ========================================================================== */
+.notice.notice-danger {
+  border-left: 4px solid #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+  padding: 14px 18px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.notice.notice-danger strong { color: #fecaca; }
+[data-theme=light] .notice.notice-danger {
+  border-left: 4px solid #dc2626;
+  background: #fee2e2;
+  color: #991b1b;
+}
+[data-theme=light] .notice.notice-danger strong { color: #7f1d1d; }
+
+.notice.notice-warning {
+  border-left: 4px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  color: #fcd34d;
+  padding: 14px 18px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.notice.notice-warning strong { color: #fde68a; }
+[data-theme=light] .notice.notice-warning {
+  border-left: 4px solid #d97706;
+  background: #fef3c7;
+  color: #92400e;
+}
+[data-theme=light] .notice.notice-warning strong { color: #78350f; }
+
+.notice.notice-success {
+  border-left: 4px solid #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
+  padding: 14px 18px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.notice.notice-success strong { color: #a7f3d0; }
+[data-theme=light] .notice.notice-success {
+  border-left: 4px solid #16a34a;
+  background: #dcfce7;
+  color: #166534;
+}
+[data-theme=light] .notice.notice-success strong { color: #14532d; }
+
+/* Table rows pending review */
+tr.row-pending-review { background: rgba(245, 158, 11, 0.06); }
+[data-theme=light] tr.row-pending-review { background: #fffbeb; }
+
+/* PC tracking timelines & progress bars */
+.timeline-distribution-track {
+  display: flex;
+  height: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #1e2230;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+}
+[data-theme=light] .timeline-distribution-track {
+  background: #e2e8f0;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.app-progress-track {
+  height: 6px;
+  background: #1e293b;
+  border-radius: 3px;
+  overflow: hidden;
+}
+[data-theme=light] .app-progress-track {
+  background: #e2e8f0;
+}
+
+.workstation-card {
+  background: #1e2230;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 14px;
+}
+[data-theme=light] .workstation-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+[data-theme=light] .workstation-card strong {
+  color: #1e293b;
+}
+
+/* Modals */
+.revoke-modal-panel {
+  background: #14171f;
+  border: 1px solid #262b39;
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+}
+[data-theme=light] .revoke-modal-panel {
+  background: #ffffff;
+  border-color: #dce1ec;
+  color: #20283b;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* Decision radio cards for review completion modal */
+.decision-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.decision-card.approve {
+  background: rgba(16, 185, 129, 0.06);
+}
+.decision-card.needs-changes {
+  background: rgba(220, 38, 38, 0.06);
+}
+.decision-card.reject {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+[data-theme=light] .decision-card.approve {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+[data-theme=light] .decision-card.needs-changes {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+[data-theme=light] .decision-card.reject {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}

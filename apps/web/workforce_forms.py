@@ -1,3 +1,4 @@
+from datetime import timedelta
 from django import forms
 from .work_links import WorkLinksField
 from django.contrib.auth.forms import UserCreationForm
@@ -148,7 +149,7 @@ class HolidayForm(forms.ModelForm):
 class ProjectForm(forms.ModelForm):
     class Meta:
         model = Project
-        fields = ['title', 'description', 'employee', 'due_date']
+        fields = ['title', 'description', 'employee', 'due_date', 'priority']
         widgets = {'description': forms.Textarea(attrs={'rows': 3}), 'due_date': DATE}
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -238,3 +239,159 @@ class AttendanceCorrectionRequestForm(forms.ModelForm):
             'requested_end': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
             'reason': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Describe the reason for correction...'}),
         }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean_reason(self):
+        reason = (self.cleaned_data.get('reason') or '').strip()
+        if len(reason) < 10:
+            raise forms.ValidationError("Reason must be at least 10 characters long.")
+        if len(reason) > 2000:
+            raise forms.ValidationError("Reason cannot exceed 2000 characters.")
+        return reason
+
+    def clean_date(self):
+        target_date = self.cleaned_data.get('date')
+        if not target_date:
+            raise forms.ValidationError("Date is required.")
+        today = timezone.localdate()
+        if target_date < today - timedelta(days=30):
+            raise forms.ValidationError("Requests cannot be submitted for dates older than 30 days.")
+        if target_date > today + timedelta(days=7):
+            raise forms.ValidationError("Requests cannot be submitted more than 7 days in advance.")
+        return target_date
+
+    def clean(self):
+        data = super().clean()
+        target_date = data.get('date')
+        req_type = data.get('request_type')
+        today = timezone.localdate()
+
+        if req_type == AttendanceCorrectionRequest.RequestType.MISSING_CHECKOUT and target_date and target_date > today:
+            self.add_error('date', 'Missing checkout corrections cannot be submitted for future dates.')
+
+        req_start = data.get('requested_start')
+        req_end = data.get('requested_end')
+        if req_start and req_end and req_end < req_start:
+            self.add_error('requested_end', 'Requested end time cannot precede requested start time.')
+
+        if req_start and target_date:
+            start_d = timezone.localtime(req_start).date() if timezone.is_aware(req_start) else req_start.date()
+            if start_d != target_date:
+                self.add_error('requested_start', 'Requested start timestamp must fall on the target date.')
+
+        if req_end and target_date:
+            end_d = timezone.localtime(req_end).date() if timezone.is_aware(req_end) else req_end.date()
+            if end_d not in (target_date, target_date + timedelta(days=1)):
+                self.add_error('requested_end', 'Requested end timestamp must fall on the target date.')
+
+        req_hours = data.get('requested_net_hours')
+        if req_hours is not None:
+            if req_hours < 0 or req_hours > 24:
+                self.add_error('requested_net_hours', 'Requested net hours must be between 0 and 24.')
+
+        # Prevent duplicate pending requests for same employee, date, and request type
+        if self.user and target_date and req_type:
+            qs = AttendanceCorrectionRequest.objects.filter(
+                employee=self.user,
+                date=target_date,
+                request_type=req_type,
+                status=AttendanceCorrectionRequest.Status.PENDING,
+            )
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                req_name = dict(AttendanceCorrectionRequest.RequestType.choices).get(req_type, req_type)
+                raise forms.ValidationError(f"A pending {req_name} already exists for {target_date.isoformat()}.")
+
+        return data
+
+
+class AdminAttendanceCorrectionForm(forms.ModelForm):
+    status = forms.ChoiceField(
+        choices=[
+            (AttendanceCorrectionRequest.Status.APPROVED, "Approved (Apply Immediately)"),
+            (AttendanceCorrectionRequest.Status.PENDING, "Pending Review"),
+        ],
+        initial=AttendanceCorrectionRequest.Status.APPROVED,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    class Meta:
+        model = AttendanceCorrectionRequest
+        fields = [
+            'employee',
+            'date',
+            'request_type',
+            'reason',
+            'requested_start',
+            'requested_end',
+            'requested_net_hours',
+            'status',
+            'review_notes',
+        ]
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'requested_start': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'requested_end': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'reason': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Administrative reason and justification for adjustment...'}),
+            'review_notes': forms.TextInput(attrs={'placeholder': 'Administrative review note / audit note...'}),
+        }
+
+    def __init__(self, *args, actor=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.actor = actor
+        if actor:
+            from apps.accounts.models import User
+            is_admin = actor.role in ['SUPER_ADMIN', 'ADMIN'] or getattr(actor, 'is_superuser', False)
+            if not is_admin and actor.role == 'MANAGER':
+                self.fields['employee'].queryset = User.objects.filter(manager=actor, is_active=True).order_by('username')
+            else:
+                self.fields['employee'].queryset = User.objects.filter(is_active=True).order_by('username')
+
+    def clean_reason(self):
+        reason = (self.cleaned_data.get('reason') or '').strip()
+        if len(reason) < 10:
+            raise forms.ValidationError("Administrative reason must be at least 10 characters long.")
+        if len(reason) > 2000:
+            raise forms.ValidationError("Reason cannot exceed 2000 characters.")
+        return reason
+
+    def clean_date(self):
+        target_date = self.cleaned_data.get('date')
+        if not target_date:
+            raise forms.ValidationError("Date is required.")
+        today = timezone.localdate()
+        if target_date < today - timedelta(days=90):
+            raise forms.ValidationError("Adjustments cannot be applied for dates older than 90 days.")
+        if target_date > today + timedelta(days=14):
+            raise forms.ValidationError("Adjustments cannot be scheduled more than 14 days in advance.")
+        return target_date
+
+    def clean(self):
+        data = super().clean()
+        target_date = data.get('date')
+        req_start = data.get('requested_start')
+        req_end = data.get('requested_end')
+
+        if req_start and req_end and req_end < req_start:
+            self.add_error('requested_end', 'Requested end time cannot precede requested start time.')
+
+        if req_start and target_date:
+            start_d = timezone.localtime(req_start).date() if timezone.is_aware(req_start) else req_start.date()
+            if start_d != target_date:
+                self.add_error('requested_start', 'Requested start timestamp must fall on the target date.')
+
+        if req_end and target_date:
+            end_d = timezone.localtime(req_end).date() if timezone.is_aware(req_end) else req_end.date()
+            if end_d not in (target_date, target_date + timedelta(days=1)):
+                self.add_error('requested_end', 'Requested end timestamp must fall on the target date.')
+
+        req_hours = data.get('requested_net_hours')
+        if req_hours is not None:
+            if req_hours < 0 or req_hours > 24:
+                self.add_error('requested_net_hours', 'Requested net hours must be between 0 and 24.')
+
+        return data

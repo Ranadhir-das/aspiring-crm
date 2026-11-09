@@ -1,1 +1,212 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}Projects{% endblock %}{% block breadcrumb %}Projects{% endblock %}{% block content %}<div class="page-heading"><div><h1>Projects<span class="accent">.</span></h1><p>Assigned work across all departments.</p></div>{% if can_manage %}<a class="button primary" href="{% url 'web:project-new' %}">＋ Assign project</a>{% endif %}</div><section class="panel"><div class="table-scroll"><table><thead><tr><th>Project</th><th>Description</th><th>Assigned to</th><th>Due date</th><th>Status</th><th>Update</th></tr></thead><tbody>{% for project in records %}<tr><td>{{ project.title }}</td><td class="notes-cell">{{ project.description }}</td><td>{% employee_link project.employee %}</td><td>{{ project.due_date|default:'—' }}</td><td>{{ project.get_status_display }}</td><td><form method="post" action="{% url 'web:project-update' project.pk %}">{% csrf_token %}<select name="status" aria-label="Project status"><option value="ASSIGNED" {% if project.status == 'ASSIGNED' %}selected{% endif %}>Assigned</option><option value="STARTED" {% if project.status == 'STARTED' %}selected{% endif %}>Started</option><option value="IN_PROGRESS" {% if project.status == 'IN_PROGRESS' %}selected{% endif %}>In progress</option><option value="COMPLETED" {% if project.status == 'COMPLETED' %}selected{% endif %}>Completed</option></select><button class="button">Save</button></form></td></tr>{% empty %}<tr><td colspan="6" class="empty">No projects assigned.</td></tr>{% endfor %}</tbody></table></div>{% include 'web/pagination.html' %}</section>{% endblock %}
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Projects{% endblock %}
+{% block breadcrumb %}Projects{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>Projects<span class="accent">.</span></h1>
+    <p>Departmental projects, assignment tracking, and completion review queue.</p>
+  </div>
+  {% if can_manage %}
+    <a class="button primary" href="{% url 'web:project-new' %}">＋ Assign project</a>
+  {% endif %}
+</div>
+
+<!-- Overview Metrics -->
+{% if metrics %}
+<section class="metrics" style="margin-bottom: 20px;">
+  <div class="metric">
+    <div class="metric-top">Total Projects</div>
+    <strong>{{ metrics.total }}</strong>
+  </div>
+  <div class="metric">
+    <div class="metric-top">Pending Review</div>
+    <strong style="color: var(--warning, #d97706);">{{ metrics.pending_review }}</strong>
+    <span class="muted" style="font-size: 11px; display: block; margin-top: 4px;">Awaiting management</span>
+  </div>
+  <div class="metric">
+    <div class="metric-top">Needs Changes</div>
+    <strong style="color: var(--danger, #dc2626);">{{ metrics.needs_changes }}</strong>
+    <span class="muted" style="font-size: 11px; display: block; margin-top: 4px;">Revision requested</span>
+  </div>
+  <div class="metric">
+    <div class="metric-top">In Progress</div>
+    <strong style="color: var(--accent, #3b82f6);">{{ metrics.in_progress }}</strong>
+    <span class="muted" style="font-size: 11px; display: block; margin-top: 4px;">Active tasks</span>
+  </div>
+  <div class="metric">
+    <div class="metric-top">Completed</div>
+    <strong style="color: #10b981;">{{ metrics.completed }}</strong>
+    <span class="muted" style="font-size: 11px; display: block; margin-top: 4px;">Successfully delivered</span>
+  </div>
+  <div class="metric">
+    <div class="metric-top">Total Logged Time</div>
+    <strong>{{ metrics.total_duration_display }}</strong>
+    <span class="muted" style="font-size: 11px; display: block; margin-top: 4px;">{{ metrics.total_hours }}h across projects</span>
+  </div>
+</section>
+{% endif %}
+
+<!-- Filter Panel -->
+<section class="panel spaced" style="padding: 14px 18px; margin-bottom: 20px;">
+  <form method="get" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
+    <div style="flex: 1; min-width: 200px;">
+      <label for="id_q" style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px;">Search Projects</label>
+      <input type="text" id="id_q" name="q" value="{{ q }}" placeholder="Search title or description..." style="width: 100%;">
+    </div>
+    <div style="min-width: 160px;">
+      <label for="id_status" style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px;">Status Filter</label>
+      <select id="id_status" name="status" onchange="this.form.submit()" style="width: 100%;">
+        <option value="">All Statuses</option>
+        <option value="PENDING_REVIEW" {% if status_filter == 'PENDING_REVIEW' %}selected{% endif %}>⚠️ Pending Review ({{ metrics.pending_review }})</option>
+        <option value="NEEDS_CHANGES" {% if status_filter == 'NEEDS_CHANGES' %}selected{% endif %}>Needs Changes</option>
+        <option value="IN_PROGRESS" {% if status_filter == 'IN_PROGRESS' %}selected{% endif %}>In Progress</option>
+        <option value="STARTED" {% if status_filter == 'STARTED' %}selected{% endif %}>Started</option>
+        <option value="ASSIGNED" {% if status_filter == 'ASSIGNED' %}selected{% endif %}>Assigned</option>
+        <option value="COMPLETED" {% if status_filter == 'COMPLETED' %}selected{% endif %}>Completed (Approve)</option>
+        <option value="ON_HOLD" {% if status_filter == 'ON_HOLD' %}selected{% endif %}>On Hold</option>
+        <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>Cancelled</option>
+      </select>
+    </div>
+    {% if can_manage and assignable_employees %}
+    <div style="min-width: 160px;">
+      <label for="id_employee" style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px;">Assigned Employee</label>
+      <select id="id_employee" name="employee" onchange="this.form.submit()" style="width: 100%;">
+        <option value="">All Employees</option>
+        {% for emp in assignable_employees %}
+          <option value="{{ emp.pk }}" {% if emp_filter == emp.pk|stringformat:'s' %}selected{% endif %}>{{ emp.get_full_name|default:emp.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <div style="display: flex; gap: 8px;">
+      <button type="submit" class="button primary">Filter</button>
+      {% if q or status_filter or emp_filter or priority_filter %}
+        <a class="button" href="{% url 'web:projects' %}">Reset</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+<!-- Projects Table -->
+<section class="panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Description</th>
+          <th>Assigned to</th>
+          <th>Due date</th>
+          <th>Logged duration</th>
+          <th>Status</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for project in records %}
+        <tr {% if project.status == 'PENDING_REVIEW' %}class="row-pending-review"{% endif %}>
+          <td>
+            <a href="{% url 'web:project-detail' project.pk %}" style="color: inherit; text-decoration: none;">
+              <strong style="color: var(--accent, #3b82f6);">{{ project.title }}</strong>
+            </a>
+            {% if project.priority == 'HIGH' or project.priority == 'URGENT' %}
+              <span class="badge rose" style="font-size: 0.7rem; margin-left: 4px;">{{ project.priority }}</span>
+            {% endif %}
+            {% if project.self_created %}
+              <span class="badge amber" style="font-size: 0.7rem; margin-left: 4px;">Self-created</span>
+            {% endif %}
+          </td>
+          <td class="notes-cell">
+            {{ project.description|truncatewords:15 }}
+            {% if project.status == 'NEEDS_CHANGES' and project.review_comments %}
+              <div style="margin-top: 4px; font-size: 0.8rem; color: var(--danger, #dc2626);">
+                <strong>Feedback:</strong> {{ project.review_comments }}
+              </div>
+            {% endif %}
+          </td>
+          <td>{% employee_link project.employee %}</td>
+          <td>
+            {{ project.due_date|default:'—' }}
+            {% if project.is_overdue %}
+              <span class="badge rose" style="font-size: 0.7rem; display: block; width: fit-content;">Overdue</span>
+            {% endif %}
+          </td>
+          <td style="white-space: nowrap; font-variant-numeric: tabular-nums;">
+            {{ project.total_duration_minutes|minutes_to_duration }}
+          </td>
+          <td>
+            <span class="badge {% if project.status == 'COMPLETED' %}completed{% elif project.status == 'PENDING_REVIEW' %}amber{% elif project.status == 'NEEDS_CHANGES' %}rose{% elif project.status == 'IN_PROGRESS' %}blue{% endif %}">
+              {{ project.get_status_display }}
+            </span>
+          </td>
+          <td style="text-align: right; white-space: nowrap;">
+            {% if can_manage %}
+              {% if project.status == 'PENDING_REVIEW' %}
+                <a class="button small primary" href="{% url 'web:project-detail' project.pk %}#review" style="background: var(--warning, #d97706); border-color: var(--warning, #d97706); color: #fff;">
+                  ⚡ Review
+                </a>
+              {% elif project.status == 'COMPLETED' %}
+                <a class="button small" href="{% url 'web:project-detail' project.pk %}#reopen">
+                  ↺ Reopen
+                </a>
+              {% else %}
+                <a class="button small" href="{% url 'web:project-detail' project.pk %}">
+                  Details ↗
+                </a>
+              {% endif %}
+            {% else %}
+              {% if project.status == 'COMPLETED' %}
+                <span class="field-hint" style="color: var(--muted, #64748b);">Terminal (Completed)</span>
+              {% elif project.status == 'CANCELLED' %}
+                <span class="field-hint" style="color: var(--muted, #64748b);">Terminal (Cancelled)</span>
+              {% elif project.status == 'PENDING_REVIEW' %}
+                <span class="field-hint" style="color: var(--warning, #d97706);">Under review</span>
+              {% else %}
+                <form method="post" action="{% url 'web:project-update' project.pk %}" style="display: flex; gap: 6px; align-items: center; justify-content: flex-end;">
+                  {% csrf_token %}
+                  <select name="status" aria-label="Project status" style="font-size: 0.8rem; padding: 4px 6px;">
+                    {% if project.status == 'ASSIGNED' %}
+                      <option value="ASSIGNED" selected>Assigned</option>
+                      <option value="STARTED">Started</option>
+                      <option value="IN_PROGRESS">In progress</option>
+                    {% elif project.status == 'STARTED' %}
+                      <option value="STARTED" selected>Started</option>
+                      <option value="IN_PROGRESS">In progress</option>
+                      <option value="PENDING_REVIEW">Request completion review</option>
+                    {% elif project.status == 'IN_PROGRESS' %}
+                      <option value="IN_PROGRESS" selected>In progress</option>
+                      <option value="PENDING_REVIEW">Request completion review</option>
+                    {% elif project.status == 'NEEDS_CHANGES' %}
+                      <option value="NEEDS_CHANGES" selected>Needs changes</option>
+                      <option value="IN_PROGRESS">In progress (fixing)</option>
+                      <option value="PENDING_REVIEW">Request completion review</option>
+                    {% elif project.status == 'ON_HOLD' %}
+                      <option value="ON_HOLD" selected>On hold</option>
+                    {% endif %}
+                  </select>
+                  <button class="button small">Save</button>
+                </form>
+              {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="empty" style="text-align: center; padding: 40px 20px;">
+            No projects found matching your criteria.
+            {% if q or status_filter or emp_filter %}
+              <div style="margin-top: 10px;">
+                <a class="button small" href="{% url 'web:projects' %}">Clear Filters</a>
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include 'web/pagination.html' %}
+</section>
+{% endblock %}

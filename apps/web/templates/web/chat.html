@@ -5,21 +5,162 @@
   <nav class="chat-channels" aria-label="Channels"><div class="chat-channels-label">Channels</div>{% for c in channels %}<a href="{% url 'web:chat-channel' c.pk %}" class="chat-channel-link{% if channel and c.pk == channel.pk %} active{% endif %}"><span class="chat-channel-hash">{% if c.kind == 'GENERAL' %}#{% else %}◆{% endif %}</span> {{ c.name }}</a>{% empty %}<p class="empty">No channels yet.</p>{% endfor %}</nav>
   <div class="chat-thread-wrap">
     {% if channel %}
-    <div class="chat-thread" id="chat-thread" data-channel="{{ channel.pk }}" data-user="{{ request.user.pk }}" data-profile-template="{% url 'web:caller-detail' 0 %}" data-can-view-employees="{{ can_manage|yesno:'true,false' }}">{% for m in thread %}<div class="chat-msg{% if m.sender_id == request.user.pk %} mine{% endif %}" data-message-id="{{ m.pk }}"><span class="chat-avatar">{{ m.sender|user_name|first|upper }}</span><div class="chat-msg-body">{% if m.sender_id != request.user.pk %}<strong>{% employee_link m.sender %}</strong>{% endif %}{% if m.text %}<p>{{ m.text|linebreaksbr }}</p>{% endif %}{% if m.attachments.all %}<div class="chat-msg-attachments" style="margin-top:6px;display:flex;flex-direction:column;gap:6px;">{% for att in m.attachments.all %}{% if 'image' in att.mime_type %}<a href="{% url 'web:chat-attachment-download' att.pk %}" target="_blank" rel="noopener noreferrer"><img src="{% url 'web:chat-attachment-download' att.pk %}" alt="{{ att.original_name }}" style="max-width:240px;max-height:200px;border-radius:8px;object-fit:cover;display:block;" /></a>{% elif 'video' in att.mime_type %}<video controls style="max-width:280px;max-height:200px;border-radius:8px;display:block;" preload="metadata"><source src="{% url 'web:chat-attachment-download' att.pk %}" type="{{ att.mime_type }}"></video>{% else %}<a href="{% url 'web:chat-attachment-download' att.pk %}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.06);padding:6px 10px;border-radius:6px;color:inherit;text-decoration:none;font-size:12px;border:1px solid rgba(255,255,255,0.1);"><span>📄</span><span>{{ att.original_name }}</span><small style="opacity:0.7">({{ att.file_size|filesizeformat }})</small></a>{% endif %}{% endfor %}</div>{% endif %}<time>{{ m.created_at|date:'d M, H:i' }}</time></div></div>{% empty %}<p class="empty">No messages yet. Say hello.</p>{% endfor %}</div>
-    <div id="chat-file-preview" style="display:none;padding:6px 12px;font-size:12px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+    <div class="chat-thread" id="chat-thread" data-channel="{{ channel.pk }}" data-user="{{ request.user.pk }}" data-profile-template="{% url 'web:caller-detail' 0 %}" data-can-view-employees="{{ can_manage|yesno:'true,false' }}">
+      {% for m in thread %}
+      <div class="chat-msg{% if m.sender_id == request.user.pk %} mine{% endif %}" data-message-id="{{ m.pk }}" data-sender="{{ m.sender|user_name }}" data-text="{{ m.text|default:''|escape }}">
+        <span class="chat-avatar">{{ m.sender|user_name|first|upper }}</span>
+        <div class="chat-msg-body">
+          <div class="chat-msg-actions">
+            <button type="button" class="chat-action-btn" onclick="window.replyToMessage('{{ m.sender|user_name|escapejs }}', '{{ m.text|default:''|truncatechars:120|escapejs }}')" title="Reply">↩ Reply</button>
+          </div>
+          {% if m.sender_id != request.user.pk %}<strong>{% employee_link m.sender %}</strong>{% endif %}
+          {% if m.text %}<p>{{ m.text|linebreaksbr }}</p>{% endif %}
+          {% if m.attachments.all %}
+          <div class="chat-msg-attachments" style="margin-top:6px;display:flex;flex-direction:column;gap:6px;">
+            {% for att in m.attachments.all %}
+            {% if 'image' in att.mime_type %}
+            <a href="javascript:void(0)" onclick="window.openImageLightbox('{% url 'web:chat-attachment-download' att.pk %}', '{{ att.original_name|escapejs }}')">
+              <img src="{% url 'web:chat-attachment-download' att.pk %}" alt="{{ att.original_name }}" style="max-width:240px;max-height:200px;border-radius:8px;object-fit:cover;display:block;cursor:pointer;" />
+            </a>
+            {% elif 'video' in att.mime_type %}
+            <video controls style="max-width:280px;max-height:200px;border-radius:8px;display:block;" preload="metadata"><source src="{% url 'web:chat-attachment-download' att.pk %}" type="{{ att.mime_type }}"></video>
+            {% else %}
+            <a href="{% url 'web:chat-attachment-download' att.pk %}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,93,242,0.06);padding:6px 10px;border-radius:6px;color:inherit;text-decoration:none;font-size:12px;border:1px solid var(--border);"><span>📄</span><span>{{ att.original_name }}</span><small style="opacity:0.7">({{ att.file_size|filesizeformat }})</small></a>
+            {% endif %}
+            {% endfor %}
+          </div>
+          {% endif %}
+          <time>{{ m.created_at|date:'d M, H:i' }}</time>
+        </div>
+      </div>
+      {% empty %}
+      <p class="empty">No messages yet. Say hello.</p>
+      {% endfor %}
+    </div>
+
+    <!-- Reply Banner -->
+    <div id="chat-reply-banner" class="chat-reply-banner">
+      <div class="chat-reply-info">
+        Replying to <strong id="chat-reply-sender"></strong>: <span id="chat-reply-preview"></span>
+      </div>
+      <button type="button" class="chat-reply-close" onclick="window.cancelReply()" title="Cancel reply">✕</button>
+    </div>
+
+    <!-- File Attachment Preview -->
+    <div id="chat-file-preview" style="display:none;padding:6px 14px;font-size:12px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
       <span id="chat-file-name" style="color:var(--text);font-weight:500;"></span>
       <button type="button" style="background:none;border:none;color:var(--danger, #ff4d4f);cursor:pointer;font-size:14px;padding:2px 6px;" onclick="window.clearChatFile()">✕</button>
     </div>
-    <form class="chat-compose" id="chat-compose" method="post" action="{% url 'web:chat-send' channel.pk %}" enctype="multipart/form-data">{% csrf_token %}
-      <label for="chat-file-input" class="button subtle" style="padding:6px 10px;cursor:pointer;margin:0;display:flex;align-items:center;" title="Attach image, video or PDF">📎</label>
+
+    <!-- Emoji Popover Tray -->
+    <div id="chat-emoji-tray" class="chat-emoji-tray">
+      <div class="chat-emoji-grid">
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('👍')">👍</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('❤️')">❤️</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('😂')">😂</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('😮')">😮</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('😢')">😢</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('🙏')">🙏</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('🔥')">🔥</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('👏')">👏</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('🎉')">🎉</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('🚀')">🚀</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('💯')">💯</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('✨')">✨</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('🤝')">🤝</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('👋')">👋</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('😊')">😊</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('😍')">😍</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('🤔')">🤔</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('🥳')">🥳</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('💼')">💼</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('📌')">📌</button>
+        <button type="button" class="chat-emoji-item" onclick="window.insertEmoji('✅')">✅</button>
+      </div>
+    </div>
+
+    <!-- Compose Bar -->
+    <form class="chat-compose" id="chat-compose" method="post" action="{% url 'web:chat-send' channel.pk %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <button type="button" class="chat-icon-btn" onclick="window.toggleEmojiTray()" title="Insert emoji">😊</button>
+      <label for="chat-file-input" class="chat-icon-btn" style="cursor:pointer;margin:0;" title="Attach image, video or PDF">📎</label>
       <input type="file" id="chat-file-input" name="file" style="display:none;" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.pdf" onchange="window.onChatFileSelected(this)">
       <input name="text" id="chat-input" placeholder="Message #{{ channel.name }}" autocomplete="off" maxlength="4000">
       <button class="button primary" id="chat-send-btn">Send ↗</button>
     </form>
-    {% else %}<p class="empty">You are not a member of any channel yet.</p>{% endif %}
+    {% else %}
+    <p class="empty">You are not a member of any channel yet.</p>
+    {% endif %}
   </div>
 </section>
+
+<!-- Image Lightbox Modal -->
+<div id="chat-lightbox" class="chat-lightbox" onclick="if(event.target===this) window.closeImageLightbox()">
+  <button type="button" class="chat-lightbox-close" onclick="window.closeImageLightbox()">✕</button>
+  <img id="chat-lightbox-img" src="" alt="Full preview" />
+  <div style="margin-top:12px;">
+    <a id="chat-lightbox-download" href="" target="_blank" download class="button primary" style="font-size:12px;padding:6px 14px;">Download ↗</a>
+  </div>
+</div>
+
 <script>
+window.replyData = null;
+
+window.replyToMessage = function(sender, text) {
+  window.replyData = { sender: sender, text: text };
+  const banner = document.getElementById('chat-reply-banner');
+  const senderEl = document.getElementById('chat-reply-sender');
+  const previewEl = document.getElementById('chat-reply-preview');
+  const input = document.getElementById('chat-input');
+  if (banner && senderEl && previewEl) {
+    senderEl.textContent = sender;
+    previewEl.textContent = text || '(attachment)';
+    banner.style.display = 'flex';
+  }
+  if (input) input.focus();
+};
+
+window.cancelReply = function() {
+  window.replyData = null;
+  const banner = document.getElementById('chat-reply-banner');
+  if (banner) banner.style.display = 'none';
+};
+
+window.toggleEmojiTray = function() {
+  const tray = document.getElementById('chat-emoji-tray');
+  if (!tray) return;
+  tray.style.display = tray.style.display === 'block' ? 'none' : 'block';
+};
+
+window.insertEmoji = function(emoji) {
+  const input = document.getElementById('chat-input');
+  if (input) {
+    input.value = (input.value || '') + emoji;
+    input.focus();
+  }
+  const tray = document.getElementById('chat-emoji-tray');
+  if (tray) tray.style.display = 'none';
+};
+
+window.openImageLightbox = function(url, name) {
+  const modal = document.getElementById('chat-lightbox');
+  const img = document.getElementById('chat-lightbox-img');
+  const dl = document.getElementById('chat-lightbox-download');
+  if (modal && img) {
+    img.src = url;
+    if (dl) {
+      dl.href = url + '?download=1';
+      dl.download = name || 'image.jpg';
+    }
+    modal.style.display = 'flex';
+  }
+};
+
+window.closeImageLightbox = function() {
+  const modal = document.getElementById('chat-lightbox');
+  if (modal) modal.style.display = 'none';
+};
+
 window.onChatFileSelected = function(input) {
   const preview = document.getElementById('chat-file-preview');
   const nameSpan = document.getElementById('chat-file-name');
@@ -30,11 +171,27 @@ window.onChatFileSelected = function(input) {
     preview.style.display = 'none';
   }
 };
+
 window.clearChatFile = function() {
   const input = document.getElementById('chat-file-input');
   if (input) input.value = '';
   const preview = document.getElementById('chat-file-preview');
   if (preview) preview.style.display = 'none';
 };
+
+// Handle reply embedding on submit
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('chat-compose');
+  if (form) {
+    form.addEventListener('submit', function() {
+      const input = document.getElementById('chat-input');
+      if (window.replyData && input && input.value.trim()) {
+        const quote = '> @' + window.replyData.sender + ': ' + window.replyData.text + '\n\n';
+        input.value = quote + input.value.trim();
+        window.cancelReply();
+      }
+    });
+  }
+});
 </script>
 {% endblock %}

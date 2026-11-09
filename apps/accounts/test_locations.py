@@ -421,10 +421,14 @@ class LocationMigrationTests(TransactionTestCase):
             point=state.get_model('accounts','EmployeeLocationPoint').objects.create(employee_id=employee.pk,
                 session_id=session.pk,latitude=22.57,longitude=88.36,accuracy=12,recorded_at=captured)
             before=(point.latitude,point.longitude,point.recorded_at,point.received_at,point.session_id)
-        finally:
             MigrationExecutor(connection).migrate([new])
-        point=EmployeeLocationPoint.objects.get(pk=point.pk)
-        self.assertEqual((point.latitude,point.longitude,point.recorded_at,point.received_at,point.session_id),before)
-        self.assertIsNone(point.mocked)
-        self.assertEqual(point.platform,'')
-        self.assertEqual(CallerSession.objects.get(pk=session.pk).location_state,'ACTIVE')
+            point=EmployeeLocationPoint.objects.get(pk=point.pk)
+            self.assertEqual((point.latitude,point.longitude,point.recorded_at,point.received_at,point.session_id),before)
+            self.assertIsNone(point.mocked)
+            self.assertEqual(point.platform,'')
+            self.assertEqual(CallerSession.objects.get(pk=session.pk).location_state,'ACTIVE')
+        finally:
+            restore_executor = MigrationExecutor(connection)
+            restore_executor.loader.build_graph()
+            restore_targets = [n for n in restore_executor.loader.graph.leaf_nodes() if n[0] == 'accounts']
+            restore_executor.migrate(restore_targets)

@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=55">
+<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=56">
 
 <div class="attendance-page">
   <div class="attendance-header">
@@ -157,16 +157,32 @@
               {% endif %}
             </td>
             <td style="text-align: right;">
-              {% if r.status_code in 'SHORT_SHIFT,MISSING_CHECKOUT,ABSENT' and not r.correction_id %}
-              <a class="button small" href="{% url 'web:attendance-correction-submit' %}?date={{ r.date|date:'Y-m-d' }}&employee={{ r.employee_id }}">
-                Request Correction
-              </a>
-              {% elif r.correction_status %}
-              <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(165,154,255,0.15); color: var(--att-accent);">
-                Correction {{ r.correction_status }}
-              </span>
+              {% if is_admin_or_manager and not is_own_history %}
+                {% if r.correction_status %}
+                  <a class="button small" href="{% url 'web:attendance-corrections' %}">
+                    Review Correction ({{ r.correction_status }})
+                  </a>
+                {% else %}
+                  <a class="button small secondary" href="{% url 'web:attendance-correction-admin-create' %}?employee={{ target_employee.pk }}&date={{ r.date|date:'Y-m-d' }}">
+                    Adjust Attendance
+                  </a>
+                {% endif %}
               {% else %}
-              <span style="color: var(--att-muted); font-size: 0.75rem;">—</span>
+                {% if r.correction_status %}
+                  <span style="font-size: 0.72rem; padding: 2px 6px; border-radius: 4px; background: rgba(165,154,255,0.15); color: var(--att-accent);">
+                    Correction {{ r.correction_status }}
+                  </span>
+                {% elif r.status_code in 'SHORT_SHIFT,MISSING_CHECKOUT,ABSENT' and not r.correction_id %}
+                  <a class="button small" href="{% url 'web:attendance-correction-submit' %}?date={{ r.date|date:'Y-m-d' }}&type=MISSING_CHECKOUT">
+                    Request Correction
+                  </a>
+                {% elif r.status_code in 'SCHEDULED,NOT_STARTED' and not r.correction_id %}
+                  <a class="button small" style="opacity: 0.9;" href="{% url 'web:attendance-correction-submit' %}?date={{ r.date|date:'Y-m-d' }}&type=EARLY_SHIFT_END">
+                    Request Early End
+                  </a>
+                {% else %}
+                  <span style="color: var(--att-muted); font-size: 0.75rem;">—</span>
+                {% endif %}
               {% endif %}
             </td>
           </tr>

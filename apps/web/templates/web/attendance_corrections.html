@@ -4,7 +4,7 @@
 {% block breadcrumb %}<a href="{% url 'web:attendance' %}">Attendance</a> / Correction Requests{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=55">
+<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=56">
 
 <div class="attendance-page">
   <div class="attendance-header">
@@ -15,6 +15,9 @@
     </div>
     <div class="actions">
       <a class="button" href="{% url 'web:attendance' %}">← Back to Attendance Dashboard</a>
+      {% if can_manage %}
+      <a class="button secondary" href="{% url 'web:attendance-correction-admin-create' %}">+ Admin Adjustment</a>
+      {% endif %}
       <a class="button primary" href="{% url 'web:attendance-correction-submit' %}">+ Submit Correction Request</a>
     </div>
   </div>
@@ -77,15 +80,15 @@
             </td>
             <td>
               {% if cr.request_type == 'LATE_ARRIVAL' %}
-              <span style="font-size: 0.78rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">
+              <span class="req-type-pill late-arrival">
                 ⏰ {{ cr.get_request_type_display }}
               </span>
               {% elif cr.request_type == 'EARLY_SHIFT_END' %}
-              <span style="font-size: 0.78rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">
+              <span class="req-type-pill early-shift-end">
                 🚪 {{ cr.get_request_type_display }}
               </span>
               {% else %}
-              <span style="font-size: 0.78rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(165,154,255,0.12); color: var(--att-accent);">
+              <span class="req-type-pill default">
                 {{ cr.get_request_type_display }}
               </span>
               {% endif %}
@@ -94,10 +97,19 @@
               {{ cr.reason }}
             </td>
             <td class="time-cell" style="font-size: 0.8rem;">
+              {% if cr.session %}
+              <div style="color: var(--att-muted); margin-bottom: 2px;">
+                Orig: {{ cr.session.started_at|date:'H:i' }} - {{ cr.session.ended_at|date:'H:i'|default:'(none)' }}
+              </div>
+              {% elif cr.attendance %}
+              <div style="color: var(--att-muted); margin-bottom: 2px;">
+                Orig: {{ cr.attendance.checked_in|date:'H:i' }} - {{ cr.attendance.checked_out|date:'H:i'|default:'(none)' }}
+              </div>
+              {% endif %}
               {% if cr.requested_start %}Start: {{ cr.requested_start|date:'H:i' }}<br>{% endif %}
               {% if cr.requested_end %}End: {{ cr.requested_end|date:'H:i' }}<br>{% endif %}
               {% if cr.requested_net_hours %}Req: {{ cr.requested_net_hours }}h{% endif %}
-              {% if not cr.requested_start and not cr.requested_end and not cr.requested_net_hours %}—{% endif %}
+              {% if not cr.requested_start and not cr.requested_end and not cr.requested_net_hours and not cr.session and not cr.attendance %}—{% endif %}
             </td>
             <td>
               {% if cr.status == 'PENDING' %}
@@ -127,10 +139,10 @@
                 <form method="post" action="{% url 'web:attendance-correction-action' cr.pk %}" style="display: inline-flex; gap: 6px;">
                   {% csrf_token %}
                   <input type="hidden" name="review_notes" value="Approved by {{ request.user.username }}">
-                  <button type="submit" name="action" value="approve" class="button small" style="color: #4ade80; border-color: rgba(74,222,128,0.4);">
+                  <button type="submit" name="action" value="approve" class="button small btn-correction-approve">
                     ✓ Approve
                   </button>
-                  <button type="submit" name="action" value="reject" class="button small" style="color: #f87171; border-color: rgba(248,113,113,0.4);">
+                  <button type="submit" name="action" value="reject" class="button small btn-correction-reject">
                     ✕ Reject
                   </button>
                 </form>

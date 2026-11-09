@@ -134,15 +134,218 @@ class WorkReport(models.Model):
     def feedback_total(self):
         return sum(v for v in self.feedback.values() if isinstance(v, int))
 
+    @property
+    def total_project_duration_minutes(self):
+        from django.db.models import Sum
+        rel_sum = self.project_entries.aggregate(total=Sum('duration_minutes'))['total']
+        if rel_sum is not None:
+            return rel_sum
+        return 0
+
 
 class Project(models.Model):
+    class Status(models.TextChoices):
+        ASSIGNED = 'ASSIGNED', 'Assigned'
+        STARTED = 'STARTED', 'Started'
+        IN_PROGRESS = 'IN_PROGRESS', 'In progress'
+        PENDING_REVIEW = 'PENDING_REVIEW', 'Pending review'
+        NEEDS_CHANGES = 'NEEDS_CHANGES', 'Needs changes'
+        COMPLETED = 'COMPLETED', 'Completed'
+        ON_HOLD = 'ON_HOLD', 'On hold'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+
+    class Priority(models.TextChoices):
+        LOW = 'LOW', 'Low'
+        MEDIUM = 'MEDIUM', 'Medium'
+        HIGH = 'HIGH', 'High'
+        URGENT = 'URGENT', 'Urgent'
+
     title = models.CharField(max_length=180)
     description = models.TextField(blank=True)
     employee = models.ForeignKey(USER, on_delete=models.PROTECT, related_name='projects')
-    assigned_by = models.ForeignKey(USER, null=True, on_delete=models.SET_NULL, related_name='assigned_projects')
+    created_by = models.ForeignKey(USER, null=True, blank=True, on_delete=models.SET_NULL, related_name='created_projects')
+    assigned_by = models.ForeignKey(USER, null=True, blank=True, on_delete=models.SET_NULL, related_name='assigned_projects')
     due_date = models.DateField(null=True, blank=True)
-    status = models.CharField(max_length=16, choices=[('ASSIGNED', 'Assigned'), ('STARTED', 'Started'), ('IN_PROGRESS', 'In progress'), ('COMPLETED', 'Completed')], default='ASSIGNED')
+    priority = models.CharField(max_length=16, choices=Priority.choices, default=Priority.MEDIUM)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ASSIGNED)
+    self_created = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completion_requested_at = models.DateTimeField(null=True, blank=True)
+    completion_reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(USER, null=True, blank=True, on_delete=models.SET_NULL, related_name='reviewed_projects')
+    review_comments = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['employee', 'status']),
+            models.Index(fields=['status', 'due_date']),
+            models.Index(fields=['created_by', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.get_status_display()})"
+
+    @property
+    def is_overdue(self):
+        if self.due_date and self.status not in {self.Status.COMPLETED, self.Status.CANCELLED}:
+            return self.due_date < timezone.localdate()
+        return False
+
+    @property
+    def can_request_completion(self):
+        return self.status in {self.Status.STARTED, self.Status.IN_PROGRESS, self.Status.NEEDS_CHANGES}
+
+    @property
+    def total_duration_minutes(self):
+        """Returns total duration in minutes aggregated exclusively from ProjectWorkReport."""
+        if hasattr(self, '_total_duration_minutes'):
+            return self._total_duration_minutes
+        from django.db.models import Sum, Value
+        from django.db.models.functions import Coalesce
+        return self.work_reports.aggregate(total=Coalesce(Sum('duration_minutes'), Value(0)))['total']
+
+    @total_duration_minutes.setter
+    def total_duration_minutes(self, value):
+        self._total_duration_minutes = value
+
+    @property
+    def total_duration_formatted(self):
+        from apps.web.project_services import format_minutes_to_duration
+        return format_minutes_to_duration(self.total_duration_minutes)
+
+    def request_completion(self, user):
+        """Allows assigned employee or creator to request project completion review."""
+        if user != self.employee and user != self.created_by:
+            if getattr(user, 'role', None) not in {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}:
+                raise PermissionError("Only assigned employee, project creator, or management can request completion.")
+        if not self.can_request_completion:
+            raise ValueError(f"Cannot request completion for project in status '{self.status}'.")
+        self.status = self.Status.PENDING_REVIEW
+        self.completion_requested_at = timezone.now()
+        self.save(update_fields=['status', 'completion_requested_at', 'updated_at'])
+
+    def review_completion(self, reviewer, action, comments=''):
+        """Management review: action in ['APPROVE', 'NEEDS_CHANGES', 'REJECT']."""
+        role = getattr(reviewer, 'role', None)
+        if role not in {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}:
+            raise PermissionError("Only management can review completion requests.")
+        if reviewer.pk == self.employee_id and role != 'SUPER_ADMIN':
+            raise PermissionError("Employees cannot review their own project completion.")
+        if self.status != self.Status.PENDING_REVIEW:
+            raise ValueError(f"Project is not pending review (current: '{self.status}').")
+
+        action = action.upper()
+        if action == 'APPROVE':
+            self.status = self.Status.COMPLETED
+        elif action == 'NEEDS_CHANGES':
+            self.status = self.Status.NEEDS_CHANGES
+        elif action == 'REJECT':
+            self.status = self.Status.IN_PROGRESS
+        else:
+            raise ValueError(f"Invalid review action: '{action}'.")
+
+        self.reviewed_by = reviewer
+        self.completion_reviewed_at = timezone.now()
+        self.review_comments = comments
+        self.save(update_fields=['status', 'reviewed_by', 'completion_reviewed_at', 'review_comments', 'updated_at'])
+
+    def reopen(self, user, reason=''):
+        """Allows management to reopen a completed project."""
+        role = getattr(user, 'role', None)
+        if role not in {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}:
+            raise PermissionError("Only management can reopen completed projects.")
+        if self.status != self.Status.COMPLETED:
+            raise ValueError(f"Only completed projects can be reopened (current: '{self.status}').")
+        self.status = self.Status.IN_PROGRESS
+        self.completion_reviewed_at = None
+        reopen_note = f"[Reopened by {user.username} on {timezone.now().strftime('%Y-%m-%d %H:%M')}]"
+        if reason:
+            reopen_note += f": {reason}"
+        self.review_comments = f"{self.review_comments}\n{reopen_note}".strip()
+        self.save(update_fields=['status', 'completion_reviewed_at', 'review_comments', 'updated_at'])
+
+
+class ProjectWorkReport(models.Model):
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', 'Draft'
+        SUBMITTED = 'SUBMITTED', 'Submitted'
+        APPROVED = 'APPROVED', 'Approved'
+        NEEDS_CORRECTION = 'NEEDS_CORRECTION', 'Needs correction'
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='work_reports')
+    employee = models.ForeignKey(USER, on_delete=models.PROTECT, related_name='project_work_reports')
+    daily_report = models.ForeignKey(WorkReport, on_delete=models.SET_NULL, null=True, blank=True, related_name='project_entries')
+    client_entry_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Client-provided UUID or deterministic hash for idempotent submission."
+    )
+    work_date = models.DateField(default=timezone.localdate, db_index=True)
+    duration_minutes = models.PositiveIntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(1440)],
+        help_text="Duration of work in minutes (1 to 1440)"
+    )
+    description = models.TextField(help_text="Detailed progress description")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.SUBMITTED)
+    reference_link = models.URLField(blank=True, max_length=2000)
+    photo = models.BinaryField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    submitted_at = models.DateTimeField(default=timezone.now)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(USER, null=True, blank=True, on_delete=models.SET_NULL, related_name='reviewed_work_reports')
+    review_comments = models.TextField(blank=True)
+    legacy_raw_entry = models.JSONField(null=True, blank=True, help_text="Raw payload snapshot if mapped from legacy submission")
+
+    class Meta:
+        ordering = ['-work_date', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee', 'client_entry_id'],
+                condition=models.Q(client_entry_id__isnull=False),
+                name='unique_employee_client_entry_id'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['project', 'work_date']),
+            models.Index(fields=['employee', 'work_date']),
+            models.Index(fields=['status', 'work_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.project.title} - {self.employee.username} ({self.work_date}: {self.duration_minutes}m)"
+
+    @property
+    def duration_hours(self):
+        return round(self.duration_minutes / 60.0, 2)
+
+    @property
+    def duration_formatted(self):
+        h = self.duration_minutes // 60
+        m = self.duration_minutes % 60
+        if h > 0 and m > 0:
+            return f"{h}h {m}m"
+        elif h > 0:
+            return f"{h}h"
+        return f"{m}m"
+
+    def clean(self):
+        super().clean()
+        if self.status == self.Status.SUBMITTED and (self.duration_minutes is None or self.duration_minutes <= 0):
+            from django.core.exceptions import ValidationError
+            raise ValidationError({'duration_minutes': "Duration must be greater than zero for submitted entries."})
+        if self.duration_minutes and self.duration_minutes > 1440:
+            from django.core.exceptions import ValidationError
+            raise ValidationError({'duration_minutes': "Duration cannot exceed 1440 minutes (24 hours)."})
+        if self.project_id:
+            if self.project.employee_id != self.employee_id and getattr(self.project, 'created_by_id', None) != self.employee_id:
+                role = getattr(self.employee, 'role', None)
+                if role not in {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}:
+                    from django.core.exceptions import ValidationError
+                    raise ValidationError({'project': "You cannot submit work entries against a project assigned to another employee."})
 
 
 class Expense(models.Model):

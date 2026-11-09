@@ -1,20 +1,20 @@
 {% extends 'web/base.html' %}
 {% load static web_tags %}
 
-{% block title %}Submit Attendance Correction · Vaani CRM{% endblock %}
+{% block title %}{% if is_admin_mode %}Admin Attendance Adjustment{% else %}Submit Attendance Correction{% endif %} · Vaani CRM{% endblock %}
 {% block breadcrumb %}
-<a href="{% url 'web:attendance' %}">Attendance</a> / <a href="{% url 'web:attendance-corrections' %}">Corrections</a> / Submit Request
+<a href="{% url 'web:attendance' %}">Attendance</a> / <a href="{% url 'web:attendance-corrections' %}">Corrections</a> / {% if is_admin_mode %}Admin Adjustment{% else %}Submit Request{% endif %}
 {% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=55">
+<link rel="stylesheet" href="{% static 'web/attendance.css' %}?v=56">
 
 <div class="attendance-page" style="max-width: 800px; margin: 0 auto;">
   <div class="attendance-header">
     <div>
-      <div class="eyebrow">ATTENDANCE DISCREPANCY JUSTIFICATION</div>
-      <h1>Submit Attendance Correction<span class="accent">.</span></h1>
-      <p>Submit a formal correction request for missing checkout, incomplete shifts, or technical discrepancies for administrative review.</p>
+      <div class="eyebrow">{% if is_admin_mode %}ADMINISTRATIVE ATTENDANCE OVERRIDE{% else %}ATTENDANCE DISCREPANCY JUSTIFICATION{% endif %}</div>
+      <h1>{% if is_admin_mode %}Admin Attendance Adjustment{% else %}Submit Attendance Correction{% endif %}<span class="accent">.</span></h1>
+      <p>{% if is_admin_mode %}Directly adjust or record employee attendance records with an authoritative audit trail and administrative justification.{% else %}Submit a formal correction request for missing checkout, incomplete shifts, or technical discrepancies for administrative review.{% endif %}</p>
     </div>
     <div class="actions">
       <a class="button" href="{% url 'web:attendance-corrections' %}">← Back to Requests</a>
@@ -32,6 +32,14 @@
       {% endif %}
 
       <div style="display: flex; flex-direction: column; gap: 18px;">
+        {% if form.employee %}
+        <div class="form-field">
+          <label for="{{ form.employee.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Target Employee *</label>
+          {{ form.employee }}
+          {% if form.employee.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.employee.errors.0 }}</span>{% endif %}
+        </div>
+        {% endif %}
+
         <div class="form-field">
           <label for="{{ form.date.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Target Date *</label>
           {{ form.date }}
@@ -39,40 +47,56 @@
         </div>
 
         <div class="form-field">
-          <label for="{{ form.request_type.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Correction Type *</label>
+          <label for="{{ form.request_type.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Adjustment / Correction Type *</label>
           {{ form.request_type }}
           {% if form.request_type.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.request_type.errors.0 }}</span>{% endif %}
         </div>
 
+        {% if form.status %}
+        <div class="form-field">
+          <label for="{{ form.status.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Adjustment Status *</label>
+          {{ form.status }}
+          {% if form.status.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.status.errors.0 }}</span>{% endif %}
+        </div>
+        {% endif %}
+
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
           <div class="form-field">
-            <label for="{{ form.requested_start.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Actual Start Time (Optional)</label>
+            <label for="{{ form.requested_start.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Adjusted Start Time (Optional)</label>
             {{ form.requested_start }}
             {% if form.requested_start.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.requested_start.errors.0 }}</span>{% endif %}
           </div>
 
           <div class="form-field">
-            <label for="{{ form.requested_end.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Actual End Time (Optional)</label>
+            <label for="{{ form.requested_end.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Adjusted End / Checkout Time (Optional)</label>
             {{ form.requested_end }}
             {% if form.requested_end.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.requested_end.errors.0 }}</span>{% endif %}
           </div>
         </div>
 
         <div class="form-field">
-          <label for="{{ form.requested_net_hours.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Claimed Net Hours (Optional)</label>
+          <label for="{{ form.requested_net_hours.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Claimed / Adjusted Net Hours (Optional)</label>
           {{ form.requested_net_hours }}
           {% if form.requested_net_hours.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.requested_net_hours.errors.0 }}</span>{% endif %}
           <small class="muted" style="font-size: 0.78rem; margin-top: 4px; display: block;">e.g. 8.00</small>
         </div>
 
         <div class="form-field">
-          <label for="{{ form.reason.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Reason &amp; Justification *</label>
+          <label for="{{ form.reason.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">{% if is_admin_mode %}Administrative Justification *{% else %}Reason &amp; Justification *{% endif %}</label>
           {{ form.reason }}
           {% if form.reason.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.reason.errors.0 }}</span>{% endif %}
         </div>
 
+        {% if form.review_notes %}
+        <div class="form-field">
+          <label for="{{ form.review_notes.id_for_label }}" style="font-weight: 600; font-size: 0.88rem; margin-bottom: 6px; display: block;">Audit / Review Notes (Optional)</label>
+          {{ form.review_notes }}
+          {% if form.review_notes.errors %}<span class="field-error" style="color: #f87171; font-size: 0.8rem; margin-top: 4px; display: block;">{{ form.review_notes.errors.0 }}</span>{% endif %}
+        </div>
+        {% endif %}
+
         <div style="display: flex; gap: 12px; align-items: center; margin-top: 10px;">
-          <button type="submit" class="button primary">Submit Correction Request</button>
+          <button type="submit" class="button primary">{% if is_admin_mode %}Save Attendance Adjustment{% else %}Submit Correction Request{% endif %}</button>
           <a class="button" href="{% url 'web:attendance-corrections' %}">Cancel</a>
         </div>
       </div>

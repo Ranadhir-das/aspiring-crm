@@ -26,13 +26,13 @@
     <div class="metric-top">Session Status</div>
     <div style="margin-top:6px;">
       {% if session.status == 'ACTIVE' %}
-        <span class="badge" style="background:#064e3b;color:#34d399;font-size:13px;padding:4px 10px;">Active (Working)</span>
+        <span class="badge badge-status-active" style="font-size:13px;padding:4px 10px;">Active (Working)</span>
       {% elif session.status == 'PAUSED' %}
-        <span class="badge" style="background:#78350f;color:#fbbf24;font-size:13px;padding:4px 10px;">Paused (On Break)</span>
+        <span class="badge badge-status-paused" style="font-size:13px;padding:4px 10px;">Paused (On Break)</span>
       {% elif session.status == 'COMPLETED' %}
-        <span class="badge" style="background:#1e3a5f;color:#60a5fa;font-size:13px;padding:4px 10px;">Completed</span>
+        <span class="badge badge-status-completed" style="font-size:13px;padding:4px 10px;">Completed</span>
       {% elif session.status == 'AUTO_CLOSED' %}
-        <span class="badge" style="background:#374151;color:#9ca3af;font-size:13px;padding:4px 10px;">Auto Closed</span>
+        <span class="badge badge-status-closed" style="font-size:13px;padding:4px 10px;">Auto Closed</span>
       {% endif %}
     </div>
     {% if session.closure_reason %}
@@ -70,7 +70,7 @@
   <div class="panel-heading" style="padding:0 0 12px;">
     <h2>Session Timeline Distribution</h2>
   </div>
-  <div style="display:flex;height:24px;border-radius:6px;overflow:hidden;background:#1e2230;box-shadow:inset 0 1px 3px rgba(0,0,0,0.5);">
+  <div class="activity-distribution-track">
     {% for block in visual_blocks %}
     <div style="width:{{ block.percentage }}%;background-color:{{ block.color }};height:100%;transition:width 0.3s ease;"
          title="{{ block.title }}: {{ block.formatted_duration }} ({{ block.percentage }}%)">
@@ -88,7 +88,7 @@
 </section>
 {% endif %}
 
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-top:20px;">
+<div class="activity-detail-layout">
   <!-- Chronological Timeline -->
   <section class="panel">
     <div class="panel-heading" style="padding:18px 20px;border-bottom:1px solid var(--border);">
@@ -108,12 +108,12 @@
             <div>
               <strong style="font-size:13px;color:var(--text);">{{ item.title }}</strong>
               {% if item.type == 'break' %}
-                <span class="badge" style="background:#78350f;color:#fbbf24;font-size:10px;margin-left:6px;">Break</span>
+                <span class="badge badge-status-paused" style="font-size:10px;margin-left:6px;">Break</span>
                 {% if item.warning_triggered %}
-                  <span class="badge" style="background:#7f1d1d;color:#fca5a5;font-size:10px;margin-left:4px;">⚠️ Exceeded Threshold</span>
+                  <span class="badge badge-status-closed" style="font-size:10px;margin-left:4px;">⚠️ Exceeded Threshold</span>
                 {% endif %}
               {% else %}
-                <span class="badge" style="background:#1e3a5f;color:#93c5fd;font-size:10px;margin-left:6px;">Work</span>
+                <span class="badge badge-status-active" style="font-size:10px;margin-left:6px;">Work</span>
               {% endif %}
             </div>
             <div style="text-align:right;">
@@ -199,9 +199,9 @@
 
     <!-- Administrative Close Panel -->
     {% if can_admin_close %}
-    <section class="panel" style="border:1px solid #78350f;background:rgba(120,53,15,0.05);">
-      <div class="panel-heading" style="padding:18px 20px;border-bottom:1px solid #78350f;">
-        <h2 style="color:#fbbf24;">Administrative Closure</h2>
+    <section class="panel panel-admin-warning">
+      <div class="panel-heading" style="padding:18px 20px;border-bottom:1px solid var(--border);">
+        <h2 style="color:var(--warning, #f59e0b);">Administrative Closure</h2>
       </div>
       <div style="padding:16px 20px;">
         <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
@@ -217,7 +217,7 @@
             {{ close_form.admin_note }}
             {{ close_form.admin_note.errors }}
           </div>
-          <button type="submit" class="button" style="background:#78350f;color:#fef3c7;border:1px solid #b45309;width:100%;"
+          <button type="submit" class="button button-danger" style="width:100%;background:rgba(239, 68, 68, 0.15);color:#ef4444;border:1px solid rgba(239, 68, 68, 0.3);"
                   onclick="return confirm('Are you sure you want to administratively terminate this session?');">
             Force Close Session (Admin Override)
           </button>

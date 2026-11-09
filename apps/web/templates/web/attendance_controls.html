@@ -1,1 +1,167 @@
-<section class="panel form-panel spaced"><h2>Today's attendance</h2><div class="actions spaced"><form method="post" action="{% url 'web:attendance-action' %}" class="actions">{% csrf_token %}<select name="status" aria-label="Attendance mode"><option value="PRESENT">Present in office</option><option value="WFH">Work from home</option><option value="WEEK_OFF">Week off</option></select><input type="text" name="login_remark" placeholder="Attendance Remark (Optional)" maxlength="500" style="min-width: 220px;"><button name="action" value="in" class="button primary">Check in / mark day</button><button name="action" value="out" class="button">Check out</button></form></div></section>
+{% load web_tags %}
+<!-- Vaani Employee Shift & Attendance Controls Card -->
+<section class="shift-card-container">
+  <div class="shift-hero-panel shift-controls-scope">
+    <div class="shift-hero-header">
+      <div class="shift-hero-title-group">
+        <h2>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+          </svg>
+          Today's Shift & Attendance
+        </h2>
+        <p>{{ current_time|date:"l, d F Y" }} · Live workspace tracking</p>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="shift-badge {% if user_active_shift.status == 'ACTIVE' %}active{% elif user_active_shift.status == 'PAUSED' %}paused{% elif user_completed_shift %}completed{% else %}inactive{% endif %}">
+          {% if user_active_shift.status == 'ACTIVE' %}Shift Active
+          {% elif user_active_shift.status == 'PAUSED' %}On Break
+          {% elif user_completed_shift %}Shift Completed
+          {% else %}Not Started
+          {% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- Live Shift Metrics Grid -->
+    <div class="shift-metrics-grid">
+      <div class="shift-metric-tile primary-tile">
+        <span class="tile-label">Net Work Time</span>
+        <span class="tile-value" data-shift-timer="net">
+          {% if user_active_shift %}--:--:--{% elif user_completed_shift %}--:--:--{% else %}00:00:00{% endif %}
+        </span>
+      </div>
+      <div class="shift-metric-tile">
+        <span class="tile-label">Total Break Time</span>
+        <span class="tile-value" data-shift-timer="break">
+          {% if user_active_shift %}--:--:--{% elif user_completed_shift %}--:--:--{% else %}00:00:00{% endif %}
+        </span>
+      </div>
+      <div class="shift-metric-tile">
+        <span class="tile-label">Gross Elapsed</span>
+        <span class="tile-value" data-shift-timer="gross">
+          {% if user_active_shift %}--:--:--{% elif user_completed_shift %}--:--:--{% else %}00:00:00{% endif %}
+        </span>
+      </div>
+      <div class="shift-metric-tile">
+        <span class="tile-label">Shift Started</span>
+        <span class="tile-value" data-shift-start-time>
+          {% if user_active_shift %}{{ user_active_shift.started_at|date:"h:i A" }}{% elif user_completed_shift %}{{ user_completed_shift.started_at|date:"h:i A" }}{% else %}—{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- 8-Hour Goal Progress Bar -->
+    <div class="shift-progress-wrap">
+      <div class="shift-progress-header">
+        <span>Daily Net Work Target (8 Hours): <strong data-shift-progress-pct>0%</strong></span>
+        <span data-shift-remaining>8h 00m remaining</span>
+      </div>
+      <div class="shift-progress-track">
+        <div class="shift-progress-fill" style="width: 0%;"></div>
+      </div>
+    </div>
+
+    <!-- Interactive Actions Area -->
+    <!-- 1. Not Started View -->
+    <div data-shift-view="not-started" style="{% if user_active_shift %}display:none;{% endif %}">
+      <form method="post" action="{% url 'web:shift-start' %}" class="shift-actions-row">
+        {% csrf_token %}
+        <select name="category_id" class="shift-input-field" aria-label="Activity Category">
+          <option value="">Select Work Category (or Default)...</option>
+        </select>
+        <input type="text" name="start_note" class="shift-input-field" placeholder="Shift note / Task goal (Optional)" maxlength="255">
+        <button type="button" class="shift-btn shift-btn-start" data-shift-action="start">
+          <span class="shift-spinner"></span>
+          <span>▶ Start Shift</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- 2. Active View -->
+    <div data-shift-view="active" style="{% if not user_active_shift or user_active_shift.status != 'ACTIVE' %}display:none;{% endif %}">
+      <form method="post" action="{% url 'web:shift-pause' %}" class="shift-actions-row">
+        {% csrf_token %}
+        <select name="break_reason_id" class="shift-input-field" aria-label="Break Reason">
+          <option value="">Select Break Reason...</option>
+        </select>
+        <input type="text" name="break_note" class="shift-input-field" placeholder="Break reason note (if required)" maxlength="255">
+        <button type="button" class="shift-btn shift-btn-break" data-shift-action="pause">
+          <span class="shift-spinner"></span>
+          <span>⏸ Take Break</span>
+        </button>
+        <button type="button" class="shift-btn shift-btn-end" data-shift-action="end">
+          <span class="shift-spinner"></span>
+          <span>⏹ End Shift</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- 3. Paused View -->
+    <div data-shift-view="paused" style="{% if not user_active_shift or user_active_shift.status != 'PAUSED' %}display:none;{% endif %}">
+      <div style="font-size: 14px; color: #fbbf24; margin-bottom: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+        <span class="shift-status-dot paused"></span>
+        <span>Shift is currently paused on break: <strong data-current-break-name>Break</strong></span>
+      </div>
+      <form method="post" action="{% url 'web:shift-resume' %}" class="shift-actions-row">
+        {% csrf_token %}
+        <button type="button" class="shift-btn shift-btn-resume" data-shift-action="resume">
+          <span class="shift-spinner"></span>
+          <span>▶ Resume Work</span>
+        </button>
+        <button type="button" class="shift-btn shift-btn-end" data-shift-action="end">
+          <span class="shift-spinner"></span>
+          <span>⏹ End Shift</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- 4. Completed View -->
+    <div data-shift-view="completed" style="{% if not user_completed_shift or user_active_shift %}display:none;{% endif %}">
+      <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 10px; padding: 14px 18px; color: #bae6fd;">
+        <strong style="display: block; font-size: 15px; margin-bottom: 4px;">✓ Shift Completed for Today</strong>
+        <p style="margin: 0; font-size: 13px;">Your work session has been finalized. Daily attendance records have been synchronized.</p>
+      </div>
+    </div>
+
+    <!-- Alert / Validation Feedback Banner -->
+    <div class="shift-alert"></div>
+
+    <!-- Manual Mode / WFH / Week Off Option -->
+    <details style="margin-top: 16px; font-size: 13px; color: var(--muted, #94a3b8);">
+      <summary style="cursor: pointer; padding: 4px 0; user-select: none;">Need to record Work From Home (WFH) or Week Off?</summary>
+      <div style="margin-top: 10px; padding: 12px; background: var(--bg-hover, rgba(255, 255, 255, 0.04)); border: 1px solid var(--border, rgba(255, 255, 255, 0.08)); border-radius: 8px;">
+        <form method="post" action="{% url 'web:attendance-action' %}" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+          {% csrf_token %}
+          <select name="status" class="shift-input-field" style="width: auto;" aria-label="Attendance mode">
+            <option value="WFH">Work from home (WFH)</option>
+            <option value="WEEK_OFF">Week off</option>
+            <option value="PRESENT">Present in office (Simple)</option>
+          </select>
+          <input type="text" name="login_remark" class="shift-input-field" placeholder="Remark (Optional)" maxlength="500" style="flex: 1; min-width: 180px;">
+          <button type="submit" name="action" value="in" class="button primary" style="font-size: 13px; padding: 6px 14px;">Mark day</button>
+          {% if user_today_attendance and not user_today_attendance.checked_out %}
+            <button type="submit" name="action" value="out" class="button" style="font-size: 13px; padding: 6px 14px;">Check out</button>
+          {% endif %}
+        </form>
+      </div>
+    </details>
+
+    <!-- Geofence & Pilot Status Banner -->
+    <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08)); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+      <div style="font-size: 12px; color: var(--muted, #94a3b8);">
+        {% if user_geofence_enforced %}
+          <span style="color: #10b981; font-weight: 600;">● Office Geofence: Enforced</span> (Strict 50m satellite radius required)
+        {% else %}
+          <span style="color: #60a5fa; font-weight: 600;">● Web Shift Management: Active</span>
+        {% endif %}
+      </div>
+      <div style="display: flex; gap: 14px; font-size: 12px;">
+        <a href="{% url 'web:attendance' %}" style="color: var(--muted, #94a3b8); text-decoration: underline;">View Attendance History</a>
+        <a href="{% url 'web:attendance-correction-submit' %}?date={{ current_time|date:'Y-m-d' }}&type=EARLY_SHIFT_END" style="color: #38bdf8; text-decoration: underline;">Request Early Departure Approval ↗</a>
+      </div>
+    </div>
+  </div>
+</section>

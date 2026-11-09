@@ -1,20 +1,25 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 import os
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.core.validators import URLValidator
 from django.db import transaction
-from django.db.models import BooleanField, Case, Value, When
+from django.db.models import BooleanField, Case, Value, When, Q
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers
 from apps.accounts.api.authentication import VerifiedSessionAuthentication
+from apps.accounts.api.photo_tickets import generate_photo_ticket, resolve_photo_ticket_user, DEFAULT_TICKET_TTL
+from django.core.signing import BadSignature, SignatureExpired
+from apps.web.forms import MANAGEMENT
 from apps.accounts.api.face_detection import validate_generic_photo as validate_photo
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from apps.accounts.models import User
-from apps.web.models import Attendance, AttendanceCorrectionRequest, LeaveRequest, Project, WorkReport, Holiday, AuditEvent
+from apps.web.project_services import format_minutes_to_duration, merge_project_reports_json, parse_duration_to_minutes, sync_project_work_report
+from apps.web.models import Attendance, AttendanceCorrectionRequest, LeaveRequest, Project, ProjectWorkReport, WorkReport, Holiday, AuditEvent
 from apps.web.workforce_forms import LeaveForm
 from apps.web.models import AttendancePhotoChallenge, AttendancePhotoRequest, Notice, NoticeAttachment
 
@@ -62,7 +67,7 @@ class EmployeeHomeView(EmployeeView):
                 .order_by('-created_at')[:20]
             ],
             'leaves': list(LeaveRequest.objects.filter(employee=user).order_by('-created_at').values('id', 'start_date', 'end_date', 'reason', 'status', 'review_note')[:50]),
-            'projects': list(Project.objects.filter(employee=user).order_by('status', 'due_date').values('id', 'title', 'description', 'due_date', 'status')[:100]),
+            'projects': list(Project.objects.filter(Q(employee=user) | Q(created_by=user)).distinct().order_by('status', 'due_date').values('id', 'title', 'description', 'due_date', 'status', 'priority', 'self_created')[:100]),
             'reports': list(WorkReport.objects.filter(employee=user).order_by('-date')
                              .annotate(has_photo=Case(When(photo__isnull=False, then=Value(True)), default=Value(False), output_field=BooleanField()))
                              .values('id', 'date', 'notes', 'work_link', 'work_links', 'project_reports', 'has_photo')[:30]),
@@ -94,30 +99,278 @@ class EmployeeLeaveView(EmployeeView):
         return Response(status=204)
 
 
-class EmployeeProjectView(EmployeeView):
-    def patch(self, request, pk):
+class EmployeeProjectListView(EmployeeView):
+    def get(self, request):
+        query = Project.objects.filter(Q(employee=request.user) | Q(created_by=request.user)).distinct()
+        status_param = request.GET.get('status')
+        if status_param and status_param in dict(Project.Status.choices):
+            query = query.filter(status=status_param)
+        projects_data = []
+        for p in query.order_by('-created_at')[:100]:
+            projects_data.append({
+                'id': p.id,
+                'title': p.title,
+                'description': p.description,
+                'status': p.status,
+                'status_display': p.get_status_display(),
+                'priority': p.priority,
+                'priority_display': p.get_priority_display(),
+                'due_date': p.due_date.isoformat() if p.due_date else None,
+                'self_created': p.self_created,
+                'created_at': p.created_at.isoformat(),
+                'can_request_completion': p.can_request_completion,
+                'is_overdue': p.is_overdue,
+                'review_comments': p.review_comments,
+                'completion_requested_at': p.completion_requested_at.isoformat() if p.completion_requested_at else None,
+            })
+        return Response({'projects': projects_data})
+
+    @transaction.atomic
+    def post(self, request):
         class Input(serializers.Serializer):
-            status = serializers.ChoiceField(choices=['STARTED', 'IN_PROGRESS', 'COMPLETED'])
+            title = serializers.CharField(max_length=180)
+            description = serializers.CharField(required=False, allow_blank=True, default='')
+            due_date = serializers.DateField(required=False, allow_null=True)
+            priority = serializers.ChoiceField(choices=Project.Priority.choices, default=Project.Priority.MEDIUM)
+
         data = Input(data=request.data)
         data.is_valid(raise_exception=True)
-        project = get_object_or_404(Project, pk=pk, employee=request.user)
-        project.status = data.validated_data['status']
-        project.save(update_fields=['status'])
+        v = data.validated_data
+
+        project = Project.objects.create(
+            title=v['title'],
+            description=v.get('description', ''),
+            employee=request.user,
+            created_by=request.user,
+            assigned_by=request.user,
+            due_date=v.get('due_date'),
+            priority=v.get('priority', Project.Priority.MEDIUM),
+            status=Project.Status.STARTED,
+            self_created=True,
+        )
+        AuditEvent.objects.create(
+            actor=request.user,
+            category='PROJECT',
+            description=f'Self-created project #{project.pk} ("{project.title}") by {request.user.username}'
+        )
+        return Response({
+            'id': project.id,
+            'title': project.title,
+            'description': project.description,
+            'status': project.status,
+            'status_display': project.get_status_display(),
+            'priority': project.priority,
+            'due_date': project.due_date.isoformat() if project.due_date else None,
+            'self_created': project.self_created,
+            'created_at': project.created_at.isoformat(),
+            'can_request_completion': project.can_request_completion,
+            'is_overdue': project.is_overdue,
+            'review_comments': project.review_comments,
+            'completion_requested_at': project.completion_requested_at.isoformat() if project.completion_requested_at else None,
+        }, status=201)
+
+
+class EmployeeProjectView(EmployeeView):
+    def get(self, request, pk):
+        is_management = request.user.role in {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}
+        base_query = Project.objects.all() if is_management else Project.objects.filter(Q(employee=request.user) | Q(created_by=request.user))
+        project = get_object_or_404(
+            base_query.select_related('employee', 'created_by', 'assigned_by'),
+            pk=pk
+        )
+        recent_work = list(
+            project.work_reports.select_related('employee')
+            .order_by('-work_date', '-created_at')[:20]
+            .values('id', 'client_entry_id', 'work_date', 'duration_minutes', 'description', 'status', 'reference_link', 'employee__username')
+        )
+        for w in recent_work:
+            w['duration_formatted'] = format_minutes_to_duration(w['duration_minutes'])
+
+        return Response({
+            'id': project.id,
+            'title': project.title,
+            'description': project.description,
+            'status': project.status,
+            'status_display': project.get_status_display(),
+            'priority': project.priority,
+            'priority_display': project.get_priority_display(),
+            'due_date': project.due_date.isoformat() if project.due_date else None,
+            'self_created': project.self_created,
+            'created_at': project.created_at.isoformat(),
+            'can_request_completion': project.can_request_completion,
+            'is_overdue': project.is_overdue,
+            'review_comments': project.review_comments,
+            'completion_requested_at': project.completion_requested_at.isoformat() if project.completion_requested_at else None,
+            'work_reports': recent_work,
+        })
+
+    @transaction.atomic
+    def patch(self, request, pk):
+        class Input(serializers.Serializer):
+            status = serializers.ChoiceField(choices=[
+                'STARTED', 'IN_PROGRESS', 'COMPLETED', 'PENDING_REVIEW', 'NEEDS_CHANGES', 'ON_HOLD', 'CANCELLED'
+            ])
+            reopen_reason = serializers.CharField(required=False, allow_blank=True, default='')
+
+        data = Input(data=request.data)
+        data.is_valid(raise_exception=True)
+        is_management = request.user.role in {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}
+        base_query = (
+            Project.objects.select_for_update()
+            if is_management
+            else Project.objects.select_for_update().filter(Q(employee=request.user) | Q(created_by=request.user))
+        )
+        project = get_object_or_404(
+            base_query,
+            pk=pk
+        )
+        target_status = data.validated_data['status']
+        is_management = request.user.role in {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}
+
+        # Terminal check: completed or cancelled projects cannot be modified by employees
+        if project.status in {Project.Status.COMPLETED, Project.Status.CANCELLED} and not is_management:
+            return Response({'detail': f'Cannot modify a project in {project.get_status_display()} status.'}, status=400)
+
+        # Reopening a completed project: management only
+        if project.status == Project.Status.COMPLETED and target_status in {'STARTED', 'IN_PROGRESS'}:
+            if not is_management:
+                return Response({'detail': 'Only management can reopen completed projects.'}, status=403)
+
+            reason = data.validated_data.get('reopen_reason', '').strip()
+            audit_prefix = f'Management {request.user.username} reopened project #{project.pk}: '
+            max_audit_desc_len = AuditEvent._meta.get_field('description').max_length or 500
+            max_reason_len = max_audit_desc_len - len(audit_prefix)
+
+            if reason and len(reason) > max_reason_len:
+                return Response({
+                    'detail': f'Reopening reason cannot exceed {max_reason_len} characters (currently {len(reason)}).'
+                }, status=400)
+
+            project.reopen(request.user, reason=reason)
+            if reason:
+                desc = f'{audit_prefix}{reason}'
+            else:
+                desc = f'Management {request.user.username} reopened project #{project.pk}'
+            AuditEvent.objects.create(
+                actor=request.user,
+                category='PROJECT',
+                description=desc
+            )
+            return Response({'status': project.status, 'detail': 'Project successfully reopened.'})
+
+        # Employee completion request
+        if target_status == 'COMPLETED':
+            if not is_management:
+                if project.status == Project.Status.PENDING_REVIEW:
+                    return Response({'status': project.status, 'detail': 'Project completion has already been requested and is pending review.'})
+                try:
+                    project.request_completion(request.user)
+                    return Response({'status': project.status, 'detail': 'Project completion requested and pending management approval.'})
+                except (ValueError, PermissionError) as e:
+                    return Response({'detail': str(e)}, status=400)
+            else:
+                return Response(
+                    {'detail': 'Management must use the dedicated review-completion endpoint to approve or review project completion.'},
+                    status=400
+                )
+
+        if target_status == 'PENDING_REVIEW':
+            if not is_management:
+                if project.status == Project.Status.PENDING_REVIEW:
+                    return Response({'status': project.status, 'detail': 'Project completion has already been requested.'})
+                try:
+                    project.request_completion(request.user)
+                    return Response({'status': project.status, 'detail': 'Project completion requested.'})
+                except (ValueError, PermissionError) as e:
+                    return Response({'detail': str(e)}, status=400)
+
+        # If project is in PENDING_REVIEW, employee cannot cancel/change it without manager review
+        if not is_management and project.status == Project.Status.PENDING_REVIEW and target_status != Project.Status.PENDING_REVIEW:
+            return Response({'detail': 'Project is pending review and cannot be modified until reviewed by management.'}, status=400)
+
+        # Management-only statuses: ON_HOLD, CANCELLED, NEEDS_CHANGES
+        if target_status in {'ON_HOLD', 'CANCELLED', 'NEEDS_CHANGES'} and not is_management:
+            return Response({'detail': f'Setting status to {target_status} requires management authorization.'}, status=403)
+
+        project.status = target_status
+        project.save(update_fields=['status', 'updated_at'])
         return Response({'status': project.status})
+
+
+class EmployeeProjectRequestCompletionView(EmployeeView):
+    @transaction.atomic
+    def post(self, request, pk):
+        project = get_object_or_404(
+            Project.objects.select_for_update(),
+            Q(employee=request.user) | Q(created_by=request.user),
+            pk=pk
+        )
+        try:
+            project.request_completion(request.user)
+            AuditEvent.objects.create(
+                actor=request.user,
+                category='PROJECT',
+                description=f'Employee {request.user.username} requested completion review for project #{project.pk}'
+            )
+            return Response({'id': project.pk, 'status': project.status, 'detail': 'Completion requested successfully.'})
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=400)
+        except PermissionError as e:
+            return Response({'detail': str(e)}, status=403)
+
+
+class EmployeeProjectReviewCompletionView(EmployeeView):
+    @transaction.atomic
+    def post(self, request, pk):
+        if request.user.role not in {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}:
+            return Response({'detail': 'Only management can review project completion.'}, status=403)
+        project = get_object_or_404(Project.objects.select_for_update(), pk=pk)
+
+        class Input(serializers.Serializer):
+            action = serializers.ChoiceField(choices=['APPROVE', 'NEEDS_CHANGES', 'REJECT'])
+            comments = serializers.CharField(required=False, allow_blank=True, default='')
+
+        data = Input(data=request.data)
+        data.is_valid(raise_exception=True)
+
+        try:
+            project.review_completion(request.user, data.validated_data['action'], data.validated_data.get('comments', ''))
+            AuditEvent.objects.create(
+                actor=request.user,
+                category='PROJECT',
+                description=f'Management {request.user.username} reviewed project #{project.pk} with action {data.validated_data["action"]}'
+            )
+            return Response({'id': project.pk, 'status': project.status, 'detail': f'Project review completed with status {project.status}.'})
+        except PermissionError as e:
+            return Response({'detail': str(e)}, status=403)
+        except ValueError as e:
+            return Response({'detail': str(e)}, status=400)
 
 
 class EmployeeReportView(EmployeeView):
     @transaction.atomic
     def post(self, request):
         class ProjectReportItemSerializer(serializers.Serializer):
+            entry_id = serializers.CharField(max_length=64, required=False, allow_blank=True, default='')
+            client_entry_id = serializers.CharField(max_length=64, required=False, allow_blank=True, default='')
+            project_id = serializers.IntegerField(required=False, allow_null=True)
             project_name = serializers.CharField(max_length=200)
-            duration = serializers.CharField(max_length=100)
-            status = serializers.ChoiceField(choices=['Completed', 'In Progress', 'Pending'])
+            duration = serializers.CharField(max_length=100, required=False, allow_blank=True)
+            duration_minutes = serializers.IntegerField(required=False, allow_null=True)
+            duration_hours = serializers.FloatField(required=False, allow_null=True)
+            status = serializers.ChoiceField(choices=[
+                'Completed', 'In Progress', 'Pending',
+                'COMPLETED', 'IN_PROGRESS', 'STARTED', 'ASSIGNED',
+                'PENDING_REVIEW', 'NEEDS_CHANGES', 'Approved'
+            ])
             expected_completion_date = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
             notes = serializers.CharField(max_length=10000, required=False, allow_blank=True, default='')
+            reference_link = serializers.URLField(max_length=2000, required=False, allow_blank=True, default='')
+            photo = serializers.CharField(max_length=4_000_000, required=False, allow_blank=True)
 
             def validate(self, attrs):
-                if attrs['status'] == 'Completed':
+                raw_st = attrs['status'].strip().lower()
+                if raw_st in {'completed', 'approved'}:
                     attrs['expected_completion_date'] = ''
                 else:
                     value = attrs.get('expected_completion_date')
@@ -128,6 +381,41 @@ class EmployeeReportView(EmployeeView):
                         attrs['expected_completion_date'] = field.run_validation(value).isoformat()
                     except serializers.ValidationError as exc:
                         raise serializers.ValidationError({'expected_completion_date': exc.detail})
+
+                # Validate and normalize duration
+                dm = attrs.get('duration_minutes')
+                dh = attrs.get('duration_hours')
+                dur = attrs.get('duration')
+
+                if dm is not None:
+                    if not isinstance(dm, int) or dm <= 0:
+                        raise serializers.ValidationError({'duration_minutes': 'Duration must be an integer greater than zero.'})
+                    if dm > 1440:
+                        raise serializers.ValidationError({'duration_minutes': 'Duration cannot exceed 1440 minutes (24 hours).'})
+                    attrs['duration_minutes'] = dm
+                    attrs['duration'] = format_minutes_to_duration(dm)
+                elif dh is not None:
+                    try:
+                        val = float(dh)
+                        if val <= 0:
+                            raise serializers.ValidationError({'duration_hours': 'Duration must be greater than zero.'})
+                        mins = int(round(val * 60.0))
+                        if mins > 1440:
+                            raise serializers.ValidationError({'duration_hours': 'Duration cannot exceed 24 hours.'})
+                        attrs['duration_minutes'] = mins
+                        attrs['duration'] = format_minutes_to_duration(mins)
+                    except (ValueError, TypeError):
+                        raise serializers.ValidationError({'duration_hours': 'Invalid duration hours.'})
+                elif dur:
+                    try:
+                        mins = parse_duration_to_minutes(dur)
+                        attrs['duration_minutes'] = mins
+                    except ValidationError as e:
+                        msg = e.message_dict if hasattr(e, 'message_dict') else (e.messages if hasattr(e, 'messages') else str(e))
+                        raise serializers.ValidationError({'duration': msg})
+                else:
+                    raise serializers.ValidationError({'duration': 'Duration is required.'})
+
                 return attrs
 
         class Input(serializers.Serializer):
@@ -152,28 +440,176 @@ class EmployeeReportView(EmployeeView):
         User.objects.select_for_update().get(pk=request.user.pk)
         values = data.validated_data.copy()
         date = values.pop('date')
+
+        # Check for existing report on the same day to prevent destructive overwrite
+        existing = WorkReport.objects.filter(employee=request.user, date=date).first()
+
+        # Handle work links
         if 'work_links' in values:
+            if existing and existing.work_links:
+                existing_links = list(existing.work_links)
+                for lk in values['work_links']:
+                    if lk not in existing_links:
+                        existing_links.append(lk)
+                values['work_links'] = existing_links
             values['work_link'] = next(iter(values['work_links']), '')
         elif 'work_link' in values:
-            existing = WorkReport.objects.filter(employee=request.user, date=date).first()
             extras = existing.all_work_links[1:] if existing else []
             values['work_links'] = ([values['work_link']] if values['work_link'] else []) + extras
+
+        # Handle photo: if not provided on update, retain existing photo
+        photo_b64 = values.pop('photo', '')
+        if photo_b64:
+            values['photo'] = validate_photo(photo_b64)
+        elif existing and existing.photo:
+            values['photo'] = existing.photo
+
+        # Handle project reports merge
+        incoming_project_reports = values.get('project_reports', [])
+        if existing and existing.project_reports and incoming_project_reports:
+            try:
+                merged_reports = merge_project_reports_json(existing.project_reports, incoming_project_reports)
+                values['project_reports'] = merged_reports
+            except ValidationError as e:
+                transaction.set_rollback(True)
+                msg = e.message_dict if hasattr(e, 'message_dict') else (e.messages if hasattr(e, 'messages') else str(e))
+                status_code = 409 if 'Idempotency conflict' in str(msg) else 400
+                return Response({'detail': msg}, status=status_code)
+        elif incoming_project_reports:
+            values['project_reports'] = incoming_project_reports
+        elif existing and existing.project_reports:
+            values['project_reports'] = existing.project_reports
+
         if values.get('project_reports') and not values.get('notes'):
             values['notes'] = "; ".join(f"{p['project_name']} [{p.get('status', '')}] ({p.get('duration', '')})" for p in values['project_reports'])
-        photo = values.pop('photo', '')
-        if photo:
-            values['photo'] = validate_photo(photo)
+
         report, _ = WorkReport.objects.update_or_create(employee=request.user, date=date, defaults={**values, 'submitted_by': request.user})
+
+        # Synchronize individual relational entries with ProjectWorkReport
+        for p_entry in incoming_project_reports:
+            try:
+                sync_project_work_report(request.user, date, p_entry, daily_report=report)
+            except ValidationError as e:
+                transaction.set_rollback(True)
+                msg = e.message_dict if hasattr(e, 'message_dict') else (e.messages if hasattr(e, 'messages') else str(e))
+                status_code = 409 if 'Idempotency conflict' in str(msg) else 400
+                return Response({'detail': msg}, status=status_code)
+            except PermissionError as e:
+                transaction.set_rollback(True)
+                return Response({'detail': str(e)}, status=400)
+
         AuditEvent.objects.create(actor=request.user, category='REPORT', description=f'Mobile work report #{report.pk}')
         return Response({'id': report.pk})
 
 
-class EmployeeReportPhotoView(EmployeeView):
+class EmployeeReportPhotoView(APIView):
+    """
+    Returns the photo for a daily WorkReport.
+    Supports:
+    1. Authenticated requests with standard Authorization header (Token)
+    2. Short-lived, photo-specific signed tickets via ?ticket=<sig>
+    3. Ticket issuing via ?ticket=get (requires header auth)
+    """
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = []
+
     def get(self, request, pk):
-        report = get_object_or_404(WorkReport, pk=pk, employee=request.user)
+        ticket_action = request.query_params.get('ticket')
+
+        # 1. Ticket Generation Request (requires header authentication)
+        if ticket_action == 'get':
+            if not request.user or not request.user.is_authenticated:
+                return Response({'detail': 'Authentication credentials were not provided.'}, status=401)
+            report = get_object_or_404(WorkReport, pk=pk)
+            if request.user.role not in MANAGEMENT and report.employee_id != request.user.id:
+                return Response({'detail': 'You do not have permission to view this report photo.'}, status=403)
+            ticket = generate_photo_ticket(request.user, 'work_report', pk)
+            return Response({
+                'ticket': ticket,
+                'expires_in': DEFAULT_TICKET_TTL,
+                'photo_url': f"{request.build_absolute_uri(request.path)}?ticket={ticket}",
+            })
+
+        # 2. Authenticate: either via signed ticket or session/token header
+        user = None
+        if ticket_action:
+            try:
+                user = resolve_photo_ticket_user(ticket_action, expected_photo_type='work_report', expected_photo_id=pk)
+            except SignatureExpired:
+                return HttpResponse("Forbidden: Photo ticket has expired.", status=403, content_type="text/plain")
+            except (BadSignature, PermissionDenied) as e:
+                return HttpResponse(f"Forbidden: {str(e)}", status=403, content_type="text/plain")
+        elif request.user and request.user.is_authenticated:
+            user = request.user
+        else:
+            return HttpResponse("Unauthorized", status=401, content_type="text/plain")
+
+        # 3. Object-level authorization
+        if user.role in MANAGEMENT:
+            report = get_object_or_404(WorkReport, pk=pk)
+        else:
+            report = get_object_or_404(WorkReport, pk=pk, employee=user)
+
         if not report.photo:
-            raise Http404
+            raise Http404("Photo not found")
+
         response = HttpResponse(bytes(report.photo), content_type='image/jpeg')
+        response['Cache-Control'] = 'no-store, private'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+
+
+class EmployeeProjectWorkReportPhotoView(APIView):
+    """
+    Returns the photo for a ProjectWorkReport entry.
+    Supports:
+    1. Authenticated requests with standard Authorization header (Token)
+    2. Short-lived, photo-specific signed tickets via ?ticket=<sig>
+    3. Ticket issuing via ?ticket=get (requires header auth)
+    """
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = []
+
+    def get(self, request, pk):
+        ticket_action = request.query_params.get('ticket')
+
+        # 1. Ticket Generation Request (requires header authentication)
+        if ticket_action == 'get':
+            if not request.user or not request.user.is_authenticated:
+                return Response({'detail': 'Authentication credentials were not provided.'}, status=401)
+            pwr = get_object_or_404(ProjectWorkReport.objects.select_related('project'), pk=pk)
+            if request.user.role not in MANAGEMENT and pwr.employee_id != request.user.id and pwr.project.employee_id != request.user.id:
+                return Response({'detail': 'You do not have permission to view this project photo.'}, status=403)
+            ticket = generate_photo_ticket(request.user, 'project_work_report', pk)
+            return Response({
+                'ticket': ticket,
+                'expires_in': DEFAULT_TICKET_TTL,
+                'photo_url': f"{request.build_absolute_uri(request.path)}?ticket={ticket}",
+            })
+
+        # 2. Authenticate: either via signed ticket or session/token header
+        user = None
+        if ticket_action:
+            try:
+                user = resolve_photo_ticket_user(ticket_action, expected_photo_type='project_work_report', expected_photo_id=pk)
+            except SignatureExpired:
+                return HttpResponse("Forbidden: Photo ticket has expired.", status=403, content_type="text/plain")
+            except (BadSignature, PermissionDenied) as e:
+                return HttpResponse(f"Forbidden: {str(e)}", status=403, content_type="text/plain")
+        elif request.user and request.user.is_authenticated:
+            user = request.user
+        else:
+            return HttpResponse("Unauthorized", status=401, content_type="text/plain")
+
+        # 3. Object-level authorization
+        pwr = get_object_or_404(ProjectWorkReport.objects.select_related('project'), pk=pk)
+        if user.role not in MANAGEMENT and pwr.employee_id != user.id and pwr.project.employee_id != user.id:
+            return HttpResponse("Forbidden: You do not have permission to view this photo.", status=403, content_type="text/plain")
+
+        if not pwr.photo:
+            raise Http404("Photo not found")
+
+        response = HttpResponse(bytes(pwr.photo), content_type='image/jpeg')
         response['Cache-Control'] = 'no-store, private'
         response['X-Content-Type-Options'] = 'nosniff'
         return response
@@ -401,11 +837,13 @@ class EmployeeAttendanceRequestView(EmployeeView):
         session_id = data.get('session_id')
         if session_id:
             try:
-                session = WorkSession.objects.get(id=session_id, user=user)
-                sess_date = getattr(session, 'date', None) or (
-                    timezone.localtime(session.started_at).date() if session.started_at else None
+                cand_session = WorkSession.objects.get(id=session_id, user=user)
+                sess_date = getattr(cand_session, 'date', None) or (
+                    timezone.localtime(cand_session.started_at).date() if cand_session.started_at else None
                 )
-                if sess_date and sess_date != target_date:
+                if sess_date and sess_date == target_date:
+                    session = cand_session
+                elif sess_date and sess_date != target_date and target_date <= today:
                     return Response({'detail': 'Specified session does not match requested date.'}, status=400)
             except (WorkSession.DoesNotExist, ValueError):
                 return Response({'detail': 'Invalid session_id for employee.'}, status=400)

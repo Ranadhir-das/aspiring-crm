@@ -6,6 +6,7 @@ from apps.accounts.models import CallerSession
 
 class VerifiedSessionAuthentication(TokenAuthentication):
     """Every token API shares the same daily attendance gate."""
+
     def authenticate_credentials(self, key):
         user, token = super().authenticate_credentials(key)
         session = CallerSession.objects.filter(caller=user, logged_out_at__isnull=True).order_by('-logged_in_at').first()

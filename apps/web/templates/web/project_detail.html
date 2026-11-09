@@ -1,0 +1,449 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}{{ project.title }} · Projects{% endblock %}
+{% block breadcrumb %}<a href="{% url 'web:projects' %}">Projects</a> / {{ project.title }}{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <div>
+    <div class="eyebrow" style="font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px;">
+      PROJECT SPECIFICATION &amp; LIFECYCLE REVIEW
+    </div>
+    <h1>{{ project.title }}<span class="accent">.</span></h1>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px;">
+      <span class="badge {% if project.status == 'COMPLETED' %}completed{% elif project.status == 'PENDING_REVIEW' %}amber{% elif project.status == 'NEEDS_CHANGES' %}rose{% elif project.status == 'IN_PROGRESS' %}blue{% endif %}">
+        {{ project.get_status_display }}
+      </span>
+      <span class="badge {% if project.priority == 'HIGH' or project.priority == 'URGENT' %}rose{% else %}blue{% endif %}">
+        Priority: {{ project.get_priority_display }}
+      </span>
+      {% if project.self_created %}
+        <span class="badge amber">Self-created</span>
+      {% endif %}
+      {% if project.is_overdue %}
+        <span class="badge rose">Overdue</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="actions" style="display: flex; gap: 8px; align-items: center;">
+    <a class="button" href="{% url 'web:projects' %}">← Back to Projects</a>
+    {% if can_review %}
+      <button type="button" class="button primary" id="openReviewBtn" onclick="openReviewModal()" style="background: var(--warning, #d97706); border-color: var(--warning, #d97706); color: #fff;">
+        ⚡ Review Completion
+      </button>
+    {% endif %}
+    {% if can_reopen %}
+      <button type="button" class="button secondary" id="openReopenBtn" onclick="openReopenModal()">
+        ↺ Reopen Project
+      </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Review & Lifecycle Status Notices -->
+{% if project.status == 'NEEDS_CHANGES' %}
+<div class="notice notice-danger">
+  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+    <span>⚠️</span> <span>Revisions Requested by Management</span>
+  </div>
+  <p style="margin: 0 0 6px 0; font-size: 0.9rem;">{{ project.review_comments }}</p>
+  <div style="font-size: 0.78rem; opacity: 0.85;">
+    Reviewed by <strong>{{ project.reviewed_by.get_full_name|default:project.reviewed_by.username }}</strong> on {{ project.completion_reviewed_at|date:'d M Y, H:i' }}
+  </div>
+</div>
+{% elif project.status == 'COMPLETED' and project.review_comments %}
+<div class="notice notice-success">
+  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+    <span>✓</span> <span>Project Approved &amp; Completed</span>
+  </div>
+  <p style="margin: 0 0 6px 0; font-size: 0.9rem;">{{ project.review_comments }}</p>
+  <div style="font-size: 0.78rem; opacity: 0.85;">
+    Approved by <strong>{{ project.reviewed_by.get_full_name|default:project.reviewed_by.username }}</strong> on {{ project.completion_reviewed_at|date:'d M Y, H:i' }}
+  </div>
+</div>
+{% elif project.status == 'PENDING_REVIEW' %}
+<div class="notice notice-warning">
+  <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+    <span>⏳</span> <span>Completion Review Pending</span>
+  </div>
+  <p style="margin: 0 0 4px 0; font-size: 0.88rem;">
+    Completion review was requested on <strong>{{ project.completion_requested_at|date:'d M Y, H:i'|default:'recently' }}</strong>.
+  </p>
+  {% if self_review_blocked %}
+    <p style="margin: 6px 0 0 0; font-size: 0.82rem; color: var(--danger, #dc2626); font-weight: 600;">
+      🛡️ Notice: You are assigned to this project. Per company policy, managers and administrators cannot review their own project completions. Another administrator must perform this review.
+    </p>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- Two-Column Layout -->
+<div style="display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.1fr); gap: 20px; align-items: start;">
+
+  <!-- Left Column: Scope & Work Reports Timeline -->
+  <div style="display: flex; flex-direction: column; gap: 20px;">
+
+    <!-- Project Description Panel -->
+    <section class="panel">
+      <div class="panel-heading" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+        <h2 style="font-size: 1rem; margin: 0;">Scope &amp; Requirements</h2>
+      </div>
+      <div style="padding: 16px 18px; font-size: 0.92rem; line-height: 1.6; color: var(--text);">
+        {% if project.description %}
+          {{ project.description|linebreaksbr }}
+        {% else %}
+          <span class="muted" style="font-style: italic;">No detailed scope or requirements provided for this project.</span>
+        {% endif %}
+      </div>
+    </section>
+
+    <!-- Work Sessions Timeline -->
+    <section class="panel">
+      <div class="panel-heading" style="padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="font-size: 1rem; margin: 0;">Work Sessions Timeline ({{ work_sessions|length }})</h2>
+        <span style="font-size: 0.82rem; color: var(--muted); font-weight: 600;">Total: {{ total_duration_formatted }}</span>
+      </div>
+
+      {% if work_sessions %}
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Employee</th>
+              <th>Duration</th>
+              <th>Work Notes</th>
+              <th>Status</th>
+              <th style="text-align: right;">Deliverables</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in work_sessions %}
+            <tr>
+              <td style="white-space: nowrap;">
+                <strong>{{ entry.work_date|date:'d M Y' }}</strong>
+                <div style="font-size: 0.72rem; color: var(--muted);">{{ entry.created_at|date:'H:i' }}</div>
+              </td>
+              <td>{% employee_link entry.employee %}</td>
+              <td style="white-space: nowrap; font-variant-numeric: tabular-nums;">
+                <strong>{{ entry.duration_formatted }}</strong>
+                <div style="font-size: 0.72rem; color: var(--muted);">{{ entry.duration_minutes }}m</div>
+              </td>
+              <td class="notes-cell" style="max-width: 280px; font-size: 0.85rem;">
+                {{ entry.description|linebreaksbr }}
+              </td>
+              <td>
+                <span class="badge {% if entry.status == 'APPROVED' %}completed{% elif entry.status == 'NEEDS_CORRECTION' %}rose{% else %}blue{% endif %}" style="font-size: 0.7rem;">
+                  {{ entry.get_status_display }}
+                </span>
+              </td>
+              <td style="text-align: right; white-space: nowrap;">
+                {% if entry.reference_link %}
+                  <a href="{{ entry.reference_link }}" target="_blank" rel="noopener noreferrer" class="button small" style="display: inline-flex; align-items: center; gap: 4px;" title="{{ entry.reference_link }}">
+                    🔗 Link ↗
+                  </a>
+                {% endif %}
+                {% if entry.photo %}
+                  <a href="{% url 'web:project-work-report-photo' entry.pk %}" target="_blank" rel="noopener noreferrer" class="button small" style="display: inline-flex; align-items: center; gap: 4px;">
+                    📷 Photo ↗
+                  </a>
+                {% endif %}
+                {% if not entry.reference_link and not entry.photo %}
+                  <span class="muted" style="font-size: 0.78rem;">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="padding: 36px 20px; text-align: center; color: var(--muted);">
+        <div style="font-size: 1.5rem; margin-bottom: 6px;">⏱️</div>
+        <p style="margin: 0; font-size: 0.9rem;">No work sessions recorded yet for this project.</p>
+        <span style="font-size: 0.78rem; display: block; margin-top: 4px;">Sessions logged by the employee will appear here in chronological order.</span>
+      </div>
+      {% endif %}
+    </section>
+
+  </div>
+
+  <!-- Right Column: Project Metadata & Audit Trail -->
+  <div style="display: flex; flex-direction: column; gap: 20px;">
+
+    <!-- Project Metadata Card -->
+    <section class="panel">
+      <div class="panel-heading" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+        <h2 style="font-size: 1rem; margin: 0;">Project Overview</h2>
+      </div>
+      <div style="padding: 14px 18px;">
+        <dl style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px 8px; margin: 0; font-size: 0.85rem;">
+          <div>
+            <dt style="color: var(--muted); font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Total Duration</dt>
+            <dd style="margin: 2px 0 0 0; font-size: 1.15rem; font-weight: 700; color: var(--accent, #3b82f6);">
+              {{ total_duration_formatted }}
+            </dd>
+          </div>
+          <div>
+            <dt style="color: var(--muted); font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Due Date</dt>
+            <dd style="margin: 2px 0 0 0; font-weight: 600;">
+              {{ project.due_date|default:'—' }}
+            </dd>
+          </div>
+          <div>
+            <dt style="color: var(--muted); font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Assigned Employee</dt>
+            <dd style="margin: 2px 0 0 0;">
+              {% employee_link project.employee %}
+            </dd>
+          </div>
+          <div>
+            <dt style="color: var(--muted); font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Assigned By</dt>
+            <dd style="margin: 2px 0 0 0;">
+              {% if project.assigned_by %}
+                {% employee_link project.assigned_by %}
+              {% else %}
+                <span class="muted">System / Self</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt style="color: var(--muted); font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Created By</dt>
+            <dd style="margin: 2px 0 0 0;">
+              {% if project.created_by %}
+                {% employee_link project.created_by %}
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </dd>
+          </div>
+          <div>
+            <dt style="color: var(--muted); font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Creation Date</dt>
+            <dd style="margin: 2px 0 0 0;">
+              {{ project.created_at|date:'d M Y, H:i' }}
+            </dd>
+          </div>
+          {% if project.reviewed_by %}
+          <div style="grid-column: span 2;">
+            <dt style="color: var(--muted); font-size: 0.72rem; text-transform: uppercase; font-weight: 600;">Last Reviewed By</dt>
+            <dd style="margin: 2px 0 0 0;">
+              {% employee_link project.reviewed_by %} on {{ project.completion_reviewed_at|date:'d M Y, H:i' }}
+            </dd>
+          </div>
+          {% endif %}
+        </dl>
+      </div>
+    </section>
+
+    <!-- Project Audit Trail -->
+    <section class="panel">
+      <div class="panel-heading" style="padding: 14px 18px; border-bottom: 1px solid var(--border);">
+        <h2 style="font-size: 1rem; margin: 0;">Project Audit Trail</h2>
+      </div>
+      <div style="padding: 14px 18px;">
+        {% if audit_events %}
+        <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px;">
+          {% for ev in audit_events %}
+          <li style="padding-bottom: 10px; border-bottom: 1px solid var(--border); font-size: 0.8rem;">
+            <div style="display: flex; justify-content: space-between; color: var(--muted); font-size: 0.72rem; margin-bottom: 2px;">
+              <span><strong>{{ ev.actor.get_full_name|default:ev.actor.username|default:'System' }}</strong> ({{ ev.actor.get_role_display|default:'User' }})</span>
+              <span>{{ ev.created_at|date:'d M, H:i' }}</span>
+            </div>
+            <div style="color: var(--text);">{{ ev.description }}</div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div style="text-align: center; color: var(--muted); padding: 16px 0; font-size: 0.82rem;">
+          No audit history recorded for this project yet.
+        </div>
+        {% endif %}
+      </div>
+    </section>
+
+  </div>
+
+</div>
+
+<!-- Review Completion Modal -->
+{% if can_review %}
+<div id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="reviewModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+  <div class="panel" style="max-width: 520px; width: 100%; border: 1px solid var(--border); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); border-radius: 12px;">
+    <div class="panel-heading" style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+      <h3 id="reviewModalTitle" style="margin: 0; font-size: 1.1rem; color: var(--text);">Project Completion Review</h3>
+      <button type="button" class="icon-button" onclick="closeReviewModal()" aria-label="Close dialog">✕</button>
+    </div>
+    <form method="post" action="{% url 'web:project-review' project.pk %}" style="padding: 20px;" onsubmit="return handleReviewSubmit(this)">
+      {% csrf_token %}
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-size: 0.82rem; font-weight: 600; text-transform: uppercase; color: var(--muted); margin-bottom: 8px;">
+          Review Decision <span style="color: var(--danger, #dc2626);">*</span>
+        </label>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <label class="decision-card approve">
+            <input type="radio" name="action" value="APPROVE" checked onchange="toggleCommentRequirement()">
+            <span style="font-weight: 600; color: #10b981;">✓ Approve Completion</span>
+            <span style="font-size: 0.75rem; color: var(--muted); margin-left: auto;">Mark Completed</span>
+          </label>
+          <label class="decision-card needs-changes">
+            <input type="radio" name="action" value="NEEDS_CHANGES" onchange="toggleCommentRequirement()">
+            <span style="font-weight: 600; color: var(--danger, #dc2626);">⚠️ Request Changes</span>
+            <span style="font-size: 0.75rem; color: var(--muted); margin-left: auto;">Requires feedback</span>
+          </label>
+          <label class="decision-card reject">
+            <input type="radio" name="action" value="REJECT" onchange="toggleCommentRequirement()">
+            <span style="font-weight: 600; color: var(--accent, #3b82f6);">✕ Reject Completion</span>
+            <span style="font-size: 0.75rem; color: var(--muted); margin-left: auto;">Return to In Progress</span>
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label for="reviewComments" style="font-size: 0.82rem; font-weight: 600; text-transform: uppercase; color: var(--muted);">
+            Feedback Comments <span id="commentRequiredTag" style="display:none; color: var(--danger, #dc2626);">*</span>
+          </label>
+          <span style="font-size: 0.75rem; color: var(--muted);"><span id="reviewCharCount">0</span>/{{ max_comment_length|default:350 }}</span>
+        </div>
+        <textarea id="reviewComments" name="comments" rows="4" maxlength="{{ max_comment_length|default:350 }}" placeholder="Provide feedback, instructions, or praise for the employee..." style="width: 100%; box-sizing: border-box; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px;" oninput="updateCharCount(this, 'reviewCharCount')"></textarea>
+        <span class="field-hint" style="font-size: 0.72rem; color: var(--muted); display: block; margin-top: 4px;">
+          Comments are stored in both the project record and audit history. Max {{ max_comment_length|default:350 }} characters.
+        </span>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="button" onclick="closeReviewModal()">Cancel</button>
+        <button type="submit" class="button primary" id="reviewSubmitBtn">Submit Review</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Reopen Modal -->
+{% if can_reopen %}
+<div id="reopenModal" role="dialog" aria-modal="true" aria-labelledby="reopenModalTitle" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+  <div class="panel" style="max-width: 500px; width: 100%; border: 1px solid var(--border); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); border-radius: 12px;">
+    <div class="panel-heading" style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+      <h3 id="reopenModalTitle" style="margin: 0; font-size: 1.1rem; color: var(--text);">Reopen Completed Project</h3>
+      <button type="button" class="icon-button" onclick="closeReopenModal()" aria-label="Close dialog">✕</button>
+    </div>
+    <form method="post" action="{% url 'web:project-reopen' project.pk %}" style="padding: 20px;" onsubmit="return handleReopenSubmit(this)">
+      {% csrf_token %}
+
+      <div style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label for="reopenReason" style="font-size: 0.82rem; font-weight: 600; text-transform: uppercase; color: var(--muted);">
+            Reason for Reopening <span style="color: var(--danger, #dc2626);">*</span>
+          </label>
+          <span style="font-size: 0.75rem; color: var(--muted);"><span id="reopenCharCount">0</span>/{{ max_reason_length|default:350 }}</span>
+        </div>
+        <textarea id="reopenReason" name="reopen_reason" rows="4" maxlength="{{ max_reason_length|default:350 }}" required placeholder="State why this completed project is being reopened for further work..." style="width: 100%; box-sizing: border-box; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px;" oninput="updateCharCount(this, 'reopenCharCount')"></textarea>
+        <span class="field-hint" style="font-size: 0.72rem; color: var(--muted); display: block; margin-top: 4px;">
+          Reopening sets status back to 'In Progress'. Reason is permanently appended to project notes and audit logs. Max {{ max_reason_length|default:350 }} characters.
+        </span>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button type="button" class="button" onclick="closeReopenModal()">Cancel</button>
+        <button type="submit" class="button secondary" id="reopenSubmitBtn">Confirm Reopen</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function openReviewModal() {
+  const modal = document.getElementById('reviewModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    toggleCommentRequirement();
+  }
+}
+
+function closeReviewModal() {
+  const modal = document.getElementById('reviewModal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+function openReopenModal() {
+  const modal = document.getElementById('reopenModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeReopenModal() {
+  const modal = document.getElementById('reopenModal');
+  if (modal) {
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+}
+
+function updateCharCount(el, counterId) {
+  const counter = document.getElementById(counterId);
+  if (counter) {
+    counter.textContent = el.value.length;
+  }
+}
+
+function toggleCommentRequirement() {
+  const actionEl = document.querySelector('input[name="action"]:checked');
+  const commentRequiredTag = document.getElementById('commentRequiredTag');
+  const commentsInput = document.getElementById('reviewComments');
+  if (actionEl && commentsInput) {
+    if (actionEl.value === 'NEEDS_CHANGES') {
+      if (commentRequiredTag) commentRequiredTag.style.display = 'inline';
+      commentsInput.required = true;
+    } else {
+      if (commentRequiredTag) commentRequiredTag.style.display = 'none';
+      commentsInput.required = false;
+    }
+  }
+}
+
+function handleReviewSubmit(form) {
+  const actionEl = document.querySelector('input[name="action"]:checked');
+  const commentsInput = document.getElementById('reviewComments');
+  if (actionEl && actionEl.value === 'NEEDS_CHANGES' && (!commentsInput || !commentsInput.value.trim())) {
+    alert('Feedback comments are required when requesting changes.');
+    if (commentsInput) commentsInput.focus();
+    return false;
+  }
+  const submitBtn = document.getElementById('reviewSubmitBtn');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+  }
+  return true;
+}
+
+function handleReopenSubmit(form) {
+  const reasonInput = document.getElementById('reopenReason');
+  if (!reasonInput || !reasonInput.value.trim()) {
+    alert('A non-empty reason is required to reopen this project.');
+    if (reasonInput) reasonInput.focus();
+    return false;
+  }
+  const submitBtn = document.getElementById('reopenSubmitBtn');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Reopening...';
+  }
+  return true;
+}
+
+// Auto open modal if URL hash specifies #review or #reopen
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.location.hash === '#review') openReviewModal();
+  if (window.location.hash === '#reopen') openReopenModal();
+});
+</script>
+{% endblock %}

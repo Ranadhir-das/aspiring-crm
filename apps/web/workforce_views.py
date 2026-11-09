@@ -10,7 +10,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Sum, Q, Value
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -23,7 +24,7 @@ from apps.leads.models import Lead
 from apps.leads.services import bulk_assign_leads
 from .forms import MANAGEMENT
 from .views import workspace, page, paginate, visible_leads
-from .models import (LeaveRequest, Attendance, Holiday, WorkReport, Project, Expense,
+from .models import (LeaveRequest, Attendance, Holiday, WorkReport, Project, ProjectWorkReport, Expense,
                      Payroll, PayrollQuery, AuditEvent, LeadCollaboration, LeadQualification,
                      Customer, Invoice, Payment, FEEDBACK, AttendanceCorrectionRequest)
 from .workforce_forms import (RegistrationForm, EmployeeForm, LeaveForm, ReportForm, HolidayForm,
@@ -111,7 +112,7 @@ def employee_home(request):
         attendance=Attendance.objects.filter(employee=request.user, date=today).first(),
         leave_counts=LeaveRequest.objects.filter(employee=request.user).values('status').annotate(count=Count('id')),
         projects=Project.objects.filter(employee=request.user).exclude(status='COMPLETED').order_by('due_date')[:8],
-        recent_reports=WorkReport.objects.filter(employee=request.user).order_by('-date')[:5],
+        recent_reports=WorkReport.objects.filter(employee=request.user).defer('photo').order_by('-date')[:5],
         reminders=FollowUp.objects.filter(caller=request.user, lead__assigned_caller=request.user, status='PENDING',
             scheduled_at__lte=timezone.now()+timedelta(days=1)).filter(Q(lead__qualification__isnull=True) | Q(lead__qualification__reminder_enabled=True)).select_related('lead').order_by('scheduled_at')[:10],
         next_holidays=Holiday.objects.filter(date__gte=today).order_by('date')[:4])
@@ -966,8 +967,72 @@ def holiday_remove(request, pk):
 
 @workspace(employee=True)
 def projects(request):
-    query = scoped(Project.objects.select_related('employee'), request.user).order_by('-created_at')
-    return page(request, 'projects', 'projects', records=paginate(request, query))
+    from apps.web.project_services import format_minutes_to_duration
+    base_query = (
+        Project.objects.select_related('employee', 'created_by', 'assigned_by', 'reviewed_by')
+        .annotate(
+            total_duration_minutes=Coalesce(Sum('work_reports__duration_minutes'), Value(0))
+        )
+    )
+    query = scoped(base_query, request.user).order_by('-created_at')
+
+    status_filter = request.GET.get('status')
+    if status_filter in dict(Project.Status.choices):
+        query = query.filter(status=status_filter)
+
+    emp_filter = request.GET.get('employee')
+    if emp_filter and request.user.role in MANAGEMENT:
+        query = query.filter(employee_id=emp_filter)
+
+    priority_filter = request.GET.get('priority')
+    if priority_filter in dict(Project.Priority.choices):
+        query = query.filter(priority=priority_filter)
+
+    q = request.GET.get('q', '').strip()
+    if q:
+        query = query.filter(Q(title__icontains=q) | Q(description__icontains=q))
+
+    # Calculate overview metrics for workspace
+    accessible_projects = scoped(Project.objects.all(), request.user)
+    metrics_agg = accessible_projects.aggregate(
+        total=Count('id'),
+        pending_review=Count('id', filter=Q(status=Project.Status.PENDING_REVIEW)),
+        needs_changes=Count('id', filter=Q(status=Project.Status.NEEDS_CHANGES)),
+        in_progress=Count('id', filter=Q(status__in=[Project.Status.STARTED, Project.Status.IN_PROGRESS])),
+        completed=Count('id', filter=Q(status=Project.Status.COMPLETED)),
+    )
+
+    # Calculate duration exclusively from ProjectWorkReport.duration_minutes
+    accessible_pwr = ProjectWorkReport.objects.filter(project__in=accessible_projects)
+    total_minutes = accessible_pwr.aggregate(total=Coalesce(Sum('duration_minutes'), Value(0)))['total']
+
+    metrics = {
+        'total': metrics_agg['total'] or 0,
+        'pending_review': metrics_agg['pending_review'] or 0,
+        'needs_changes': metrics_agg['needs_changes'] or 0,
+        'in_progress': metrics_agg['in_progress'] or 0,
+        'completed': metrics_agg['completed'] or 0,
+        'total_duration_display': format_minutes_to_duration(total_minutes),
+        'total_hours': round(total_minutes / 60.0, 1),
+    }
+
+    assignable_employees = (
+        User.objects.filter(is_active=True).order_by('first_name', 'username')
+        if request.user.role in MANAGEMENT else []
+    )
+
+    return page(
+        request, 'projects', 'projects',
+        records=paginate(request, query),
+        metrics=metrics,
+        status_filter=status_filter,
+        emp_filter=emp_filter,
+        priority_filter=priority_filter,
+        q=q,
+        assignable_employees=assignable_employees,
+        status_choices=Project.Status.choices,
+        priority_choices=Project.Priority.choices,
+    )
 
 
 @workspace(management=True)
@@ -976,27 +1041,242 @@ def project_new(request):
     if request.method == 'POST' and form.is_valid():
         project = form.save(commit=False)
         project.assigned_by = request.user
+        project.created_by = request.user
         project.save()
         audit(request, 'PROJECT', f'Assigned project #{project.pk} to employee #{project.employee_id}')
         return redirect('web:projects')
     return form_page(request, 'Assign a project', form, 'projects')
 
 
+@workspace(employee=True)
+def project_detail(request, pk):
+    from apps.web.project_services import format_minutes_to_duration
+    base_query = Project.objects.select_related('employee', 'assigned_by', 'created_by', 'reviewed_by')
+    project = get_object_or_404(scoped(base_query, request.user), pk=pk)
+
+    work_sessions = project.work_reports.select_related('employee').order_by('-work_date', '-created_at')
+    total_duration_minutes = work_sessions.aggregate(total=Coalesce(Sum('duration_minutes'), Value(0)))['total']
+    total_duration_formatted = format_minutes_to_duration(total_duration_minutes)
+
+    # Database-level word-boundary regex filtering before applying the 50-event limit
+    from django.db import connection
+    if connection.vendor == 'postgresql':
+        regex_pattern = rf'\yproject #{project.pk}\y'
+    else:
+        regex_pattern = rf'\bproject #{project.pk}\b'
+
+    audit_events = list(
+        AuditEvent.objects.filter(
+            category='PROJECT',
+            description__iregex=regex_pattern,
+        )
+        .select_related('actor')
+        .order_by('-created_at')[:50]
+    )
+
+    is_management = request.user.role in MANAGEMENT
+    is_self = project.employee_id == request.user.id
+    can_review = is_management and project.status == Project.Status.PENDING_REVIEW and (not is_self or request.user.role == 'SUPER_ADMIN')
+    can_reopen = is_management and project.status == Project.Status.COMPLETED
+    self_review_blocked = is_management and project.status == Project.Status.PENDING_REVIEW and is_self and request.user.role != 'SUPER_ADMIN'
+
+    # Compute remaining characters for comments and reopen reasons based on AuditEvent.description (max 500)
+    audit_desc_max = AuditEvent._meta.get_field('description').max_length or 500
+    review_prefix_len = len(f'Management {request.user.username} reviewed project #{project.pk} (NEEDS_CHANGES): "')
+    max_comment_length = max(0, audit_desc_max - review_prefix_len - 1)
+    reopen_prefix_len = len(f"Project #{project.pk} reopened by {request.user.username}: ")
+    max_reason_length = max(0, audit_desc_max - reopen_prefix_len)
+
+    return page(
+        request, 'project_detail', 'projects',
+        project=project,
+        work_sessions=work_sessions,
+        total_duration_minutes=total_duration_minutes,
+        total_duration_formatted=total_duration_formatted,
+        audit_events=audit_events,
+        can_review=can_review,
+        can_reopen=can_reopen,
+        self_review_blocked=self_review_blocked,
+        max_comment_length=max_comment_length,
+        max_reason_length=max_reason_length,
+    )
+
+
+@require_POST
+@workspace(management=True)
+def project_review(request, pk):
+    action = request.POST.get('action', '').strip().upper()
+    comments = request.POST.get('comments', '').strip()
+
+    if action not in {'APPROVE', 'NEEDS_CHANGES', 'REJECT'}:
+        messages.error(request, f"Invalid review action '{action}'. Action must be APPROVE, NEEDS_CHANGES, or REJECT.")
+        return redirect('web:project-detail', pk=pk)
+
+    if action == 'NEEDS_CHANGES' and not comments:
+        messages.error(request, "Feedback comments are required when requesting changes.")
+        return redirect('web:project-detail', pk=pk)
+
+    # Build audit prefix first and calculate exact remaining space for comments to guarantee fitting in AuditEvent.description (500 chars)
+    audit_prefix = f'Management {request.user.username} reviewed project #{pk} ({action}): "'
+    audit_suffix = '"'
+    max_audit_desc_len = AuditEvent._meta.get_field('description').max_length or 500
+    max_comment_length = max_audit_desc_len - len(audit_prefix) - len(audit_suffix)
+
+    if comments and len(comments) > max_comment_length:
+        messages.error(request, f"Review comments cannot exceed {max_comment_length} characters (currently {len(comments)}).")
+        return redirect('web:project-detail', pk=pk)
+
+    with transaction.atomic():
+        project = get_object_or_404(Project.objects.select_for_update(), pk=pk)
+        try:
+            project.review_completion(request.user, action, comments)
+            if comments:
+                desc = f'{audit_prefix}{comments}{audit_suffix}'
+            else:
+                desc = f"Management {request.user.username} reviewed project #{pk} ({action})"
+            audit(request, 'PROJECT', desc)
+            action_display = 'Approved' if action == 'APPROVE' else ('Changes Requested' if action == 'NEEDS_CHANGES' else 'Rejected')
+            messages.success(request, f"Project review submitted: {action_display} (Status: {project.get_status_display()}).")
+        except (ValueError, PermissionError) as e:
+            messages.error(request, str(e))
+
+    return redirect('web:project-detail', pk=pk)
+
+
+@require_POST
+@workspace(management=True)
+def project_reopen(request, pk):
+    reason = request.POST.get('reopen_reason', '').strip()
+    if not reason:
+        messages.error(request, "A non-empty reopening reason is required to reopen a completed project.")
+        return redirect('web:project-detail', pk=pk)
+
+    # Build audit prefix first and calculate exact remaining space for reopening reason to guarantee fitting in AuditEvent.description (500 chars)
+    audit_prefix = f"Project #{pk} reopened by {request.user.username}: "
+    max_audit_desc_len = AuditEvent._meta.get_field('description').max_length or 500
+    max_reason_length = max_audit_desc_len - len(audit_prefix)
+
+    if len(reason) > max_reason_length:
+        messages.error(request, f"Reopening reason cannot exceed {max_reason_length} characters (currently {len(reason)}).")
+        return redirect('web:project-detail', pk=pk)
+
+    with transaction.atomic():
+        project = get_object_or_404(Project.objects.select_for_update(), pk=pk)
+        try:
+            project.reopen(request.user, reason=reason)
+            desc = f"{audit_prefix}{reason}"
+            audit(request, 'PROJECT', desc)
+            messages.success(request, f"Project reopened successfully and status returned to {project.get_status_display()}.")
+        except (ValueError, PermissionError) as e:
+            messages.error(request, str(e))
+
+    return redirect('web:project-detail', pk=pk)
+
+
 @require_POST
 @workspace(employee=True)
 def project_update(request, pk):
-    project = get_object_or_404(scoped(Project.objects.all(), request.user), pk=pk)
     status = request.POST.get('status')
-    if status in dict(Project._meta.get_field('status').choices):
+    if not status or status not in dict(Project.Status.choices):
+        messages.error(request, "Invalid project status selected.")
+        return redirect('web:projects')
+
+    is_management = request.user.role in MANAGEMENT
+
+    with transaction.atomic():
+        project = get_object_or_404(scoped(Project.objects.select_for_update(), request.user), pk=pk)
+
+        # Guard: Non-management cannot modify terminal projects
+        if project.status in {Project.Status.COMPLETED, Project.Status.CANCELLED} and not is_management:
+            messages.error(request, f"Cannot modify a project in {project.get_status_display()} status.")
+            return redirect('web:projects')
+
+        # Guard: Completed projects must use dedicated reopen view
+        if project.status == Project.Status.COMPLETED:
+            messages.error(request, "Completed projects must be reopened through the dedicated Reopen Project workflow with a stated reason.")
+            return redirect('web:project-detail', pk=pk)
+
+        # Guard: Setting COMPLETED must use dedicated review view
+        if status == Project.Status.COMPLETED:
+            if not is_management:
+                try:
+                    project.request_completion(request.user)
+                    audit(request, 'PROJECT', f'Project #{pk} completion requested by {request.user.username}')
+                    messages.info(request, "Project completion has been requested and is pending manager review.")
+                except (ValueError, PermissionError) as e:
+                    messages.error(request, str(e))
+                return redirect('web:projects')
+            else:
+                messages.error(request, "Approving project completion must be performed through the Project Review workflow with review comments.")
+                return redirect('web:project-detail', pk=pk)
+
+        # Guard: Setting NEEDS_CHANGES must use dedicated review view
+        if status == Project.Status.NEEDS_CHANGES:
+            messages.error(request, "Requesting changes must be performed through the Project Review workflow with required feedback comments.")
+            return redirect('web:project-detail', pk=pk)
+
+        # Employee completion request
+        if status == Project.Status.PENDING_REVIEW and not is_management:
+            if project.status == Project.Status.PENDING_REVIEW:
+                messages.info(request, "Project completion has already been requested and is pending review.")
+            else:
+                try:
+                    project.request_completion(request.user)
+                    audit(request, 'PROJECT', f'Project #{pk} completion requested by {request.user.username}')
+                    messages.info(request, "Project completion has been requested and is pending manager review.")
+                except (ValueError, PermissionError) as e:
+                    messages.error(request, str(e))
+            return redirect('web:projects')
+
+        # Guard: Cannot modify project while pending review
+        if project.status == Project.Status.PENDING_REVIEW and status != Project.Status.PENDING_REVIEW:
+            if not is_management:
+                messages.error(request, "Project is pending review and cannot be modified until reviewed by management.")
+                return redirect('web:projects')
+            else:
+                messages.error(request, "Project is pending review. Please use the Project Review action to approve, request changes, or reject.")
+                return redirect('web:project-detail', pk=pk)
+
+        # Guard: Non-management cannot assign management-only statuses
+        if status in {Project.Status.ON_HOLD, Project.Status.CANCELLED} and not is_management:
+            messages.error(request, f"Setting status to {status} requires management authorization.")
+            return redirect('web:projects')
+
+        old_status = project.status
         project.status = status
-        project.save(update_fields=['status'])
-        audit(request, 'PROJECT', f'Project #{pk} status {status}')
+        project.save(update_fields=['status', 'updated_at'])
+        audit(request, 'PROJECT', f'Project #{pk} status changed from {old_status} to {status} by {request.user.username}')
+        messages.success(request, f"Project status updated to {project.get_status_display()}.")
+
     return redirect('web:projects')
+
+
+def project_work_report_photo(request, pk):
+    user = request.user if (hasattr(request, 'user') and request.user.is_authenticated) else None
+    ticket = request.GET.get('ticket')
+    if ticket:
+        try:
+            from apps.accounts.api.photo_tickets import resolve_photo_ticket_user
+            user = resolve_photo_ticket_user(ticket, expected_photo_type='project_work_report', expected_photo_id=pk)
+        except Exception:
+            raise PermissionDenied
+    elif not user:
+        raise PermissionDenied
+
+    pwr = get_object_or_404(ProjectWorkReport.objects.select_related('project'), pk=pk)
+    if user.role not in MANAGEMENT and pwr.employee_id != user.id and pwr.project.employee_id != user.id:
+        raise PermissionDenied
+    if not pwr.photo:
+        raise Http404
+    response = HttpResponse(bytes(pwr.photo), content_type='image/jpeg')
+    response['Cache-Control'] = 'no-store, private'
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @workspace(employee=True)
 def reports(request):
-    query, filters = filtered(request, scoped(WorkReport.objects.select_related('employee'), request.user))
+    query, filters = filtered(request, scoped(WorkReport.objects.select_related('employee').defer('photo'), request.user))
     if request.GET.get('export') == 'csv':
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="work-reports.csv"'
