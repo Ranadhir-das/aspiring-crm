@@ -10,6 +10,10 @@ class Notification(models.Model):
         FOLLOWUP_DUE = 'FOLLOWUP_DUE', 'Follow-up due'
         COUNSELOR_LEAD_FORWARDED = 'COUNSELOR_LEAD_FORWARDED', 'Lead forwarded to counselor'
         ADMISSION_REQUESTED = 'ADMISSION_REQUESTED', 'Admission requested'
+        ATTENDANCE_REMINDER = 'ATTENDANCE_REMINDER', 'Attendance reminder'
+        LEAVE_REQUEST = 'LEAVE_REQUEST', 'Leave request'
+        PENDING_LEADS = 'PENDING_LEADS', 'Pending leads alert'
+        ATTENDANCE_CORRECTION = 'ATTENDANCE_CORRECTION', 'Attendance correction request'
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                   related_name='notifications')

@@ -5,12 +5,18 @@ Sub-50ms execution suitable for high-frequency 1-second auto-refresh polling.
 """
 
 from datetime import datetime, time, timedelta
+from django.core.exceptions import PermissionDenied
 from django.db.models import Avg, Count, Q, Sum
 from django.db.models.functions import TruncDate, TruncHour
 from django.utils import timezone
 from django.urls import reverse
 from .employee_links import can_view_employee
 
+from apps.accounts.capabilities import (
+    can_access_analytics_overview,
+    eligible_callers_qs,
+    is_management_user,
+)
 from apps.accounts.models import User
 from apps.activity.models import ActivityLog
 from apps.calls.models import Call
@@ -145,6 +151,12 @@ def get_analytics_overview(user, params):
     - Live Telemetry status metrics
     - Real-time Activity stream (latest 20 events)
     """
+    if not can_access_analytics_overview(user):
+        raise PermissionDenied("You do not have permission to view CRM analytics.")
+
+    is_management = is_management_user(user)
+    is_caller = not is_management
+
     dt_info = parse_date_filters(params)
     start_dt = dt_info['start_dt']
     end_dt = dt_info['end_dt']
@@ -155,13 +167,11 @@ def get_analytics_overview(user, params):
     now = timezone.now()
     today = timezone.localdate()
 
-    # Dimension filters
+    # Dimension filters (non-management callers cannot filter by another caller ID)
     service_filter = params.get('service', '').strip()
-    caller_filter = params.get('caller', '').strip()
+    caller_filter = params.get('caller', '').strip() if is_management else ''
     source_filter = params.get('source', '').strip()
     status_filter = params.get('status', '').strip()
-
-    is_caller = (user.role == User.Role.CALLER)
 
     # Base QuerySets
     leads_qs = Lead.objects.all()
@@ -172,15 +182,19 @@ def get_analytics_overview(user, params):
     points_qs = PointsEntry.objects.all()
     activity_qs = ActivityLog.objects.select_related('actor', 'lead').all()
 
-    # Security Scoping: Caller can only see their own metrics
+    # Security Scoping: Non-management caller-capable users only see their own metrics
     if is_caller:
         leads_qs = leads_qs.filter(assigned_caller=user)
         calls_qs = calls_qs.filter(caller=user)
-        followups_qs = followups_qs.filter(caller=user)
+        followups_qs = followups_qs.filter(caller=user).filter(
+            Q(lead__isnull=True) | Q(lead__assigned_caller=user)
+        )
         counsellings_qs = counsellings_qs.filter(caller=user)
         admissions_qs = admissions_qs.filter(caller=user)
         points_qs = points_qs.filter(caller=user)
-        activity_qs = activity_qs.filter(Q(actor=user) | Q(lead__assigned_caller=user))
+        activity_qs = activity_qs.filter(
+            Q(actor=user, lead__isnull=True) | Q(lead__assigned_caller=user)
+        )
     elif caller_filter and str(caller_filter).isdigit():
         target_caller_id = int(caller_filter)
         leads_qs = leads_qs.filter(assigned_caller_id=target_caller_id)
@@ -547,7 +561,7 @@ def get_analytics_overview(user, params):
     current_month = get_current_appreciation_period()
     peer_appreciation_map = {
         item['employee_id']: item
-        for item in PeerAppreciation.objects.filter(month=current_month)
+        for item in PeerAppreciation.objects.filter(month=current_month, employee__in=employees)
         .values('employee_id')
         .annotate(avg=Avg('score'), count=Count('id'))
     }
@@ -575,7 +589,7 @@ def get_analytics_overview(user, params):
             'peer_appreciation_score': peer_score,
             'peer_appreciation_count': peer_count,
             'peer_appreciation_reviews': peer_count,
-            'url_profile': reverse('web:caller-detail', args=[emp.pk]),
+            'url_profile': reverse('web:caller-detail', args=[emp.pk]) if can_view_employee(user, emp) else None,
             'url_calls': f"/calls/?caller={emp.pk}&{date_qs}",
             'url_interested': f"/leads/?owner={emp.pk}&status=INTERESTED&{date_qs}",
             'url_counselling': f"/consultations/",
@@ -640,37 +654,68 @@ def get_analytics_overview(user, params):
     # -------------------------------------------------------------
     # 7. Live System Status (Authoritative Real-Time Metrics)
     # -------------------------------------------------------------
-    active_callers = Attendance.objects.filter(
-        date=today,
-        checked_in__isnull=False,
-        checked_out__isnull=True,
-    ).count() or User.objects.filter(role=User.Role.CALLER, is_active=True).count()
+    if is_caller:
+        active_callers = 1 if Attendance.objects.filter(
+            employee=user,
+            date=today,
+            checked_in__isnull=False,
+            checked_out__isnull=True,
+        ).exists() else 0
 
-    active_calls = LeadAvailability.objects.filter(
-        call_started_at__gte=now - timedelta(minutes=15)
-    ).count()
+        active_calls = LeadAvailability.objects.filter(
+            claimed_by=user,
+            call_started_at__gte=now - timedelta(minutes=15),
+        ).count()
 
-    waiting_website_leads = Lead.objects.filter(
-        source='website',
-        status=Lead.Status.PENDING,
-    ).filter(
-        Q(availability__isnull=True) | Q(availability__claimed_at__isnull=True)
-    ).count()
+        waiting_website_leads = leads_qs.filter(
+            source='website',
+            status=Lead.Status.PENDING,
+        ).count()
 
-    due_followups = FollowUp.objects.filter(
-        status=FollowUp.Status.PENDING,
-        scheduled_at__lte=now,
-    ).count()
+        due_followups = followups_qs.filter(
+            status=FollowUp.Status.PENDING,
+            scheduled_at__lte=now,
+        ).count()
 
-    claimed_leads = LeadAvailability.objects.filter(
-        claimed_at__isnull=False,
-        claimed_at__gte=now - timedelta(minutes=15),
-    ).count()
+        claimed_leads = LeadAvailability.objects.filter(
+            claimed_by=user,
+            claimed_at__isnull=False,
+            claimed_at__gte=now - timedelta(minutes=15),
+        ).count()
 
-    pending_unassigned_leads = Lead.objects.filter(
-        assigned_caller__isnull=True,
-        status=Lead.Status.PENDING,
-    ).count()
+        pending_unassigned_leads = 0
+    else:
+        active_callers = Attendance.objects.filter(
+            date=today,
+            checked_in__isnull=False,
+            checked_out__isnull=True,
+        ).count() or User.objects.filter(role=User.Role.CALLER, is_active=True).count()
+
+        active_calls = LeadAvailability.objects.filter(
+            call_started_at__gte=now - timedelta(minutes=15)
+        ).count()
+
+        waiting_website_leads = Lead.objects.filter(
+            source='website',
+            status=Lead.Status.PENDING,
+        ).filter(
+            Q(availability__isnull=True) | Q(availability__claimed_at__isnull=True)
+        ).count()
+
+        due_followups = FollowUp.objects.filter(
+            status=FollowUp.Status.PENDING,
+            scheduled_at__lte=now,
+        ).count()
+
+        claimed_leads = LeadAvailability.objects.filter(
+            claimed_at__isnull=False,
+            claimed_at__gte=now - timedelta(minutes=15),
+        ).count()
+
+        pending_unassigned_leads = Lead.objects.filter(
+            assigned_caller__isnull=True,
+            status=Lead.Status.PENDING,
+        ).count()
 
     live_status = {
         'active_callers': active_callers,
@@ -832,14 +877,26 @@ def get_analytics_overview(user, params):
     admissions_by_program = [{
         'program': r['course'] or 'General',
         'count': r['count'],
-        'total_fees': float(r['total_fees'] or 0),
+        'total_fees': float(r['total_fees'] or 0) if is_management else None,
         'url': f"/admissions/?q={r['course']}&{date_qs}",
     } for r in program_admissions_raw]
 
     # Meta options for filters
     services_list = list(Service.objects.filter(is_active=True).values('id', 'name', 'code'))
-    callers_list = list(User.objects.filter(role=User.Role.CALLER, is_active=True).values('id', 'first_name', 'last_name', 'username'))
-    sources_list = [s for s in Lead.objects.exclude(source='').values_list('source', flat=True).distinct() if s]
+    if is_management:
+        callers_list = list(
+            eligible_callers_qs()
+            .order_by('first_name', 'username')
+            .values('id', 'first_name', 'last_name', 'username')
+        )
+    else:
+        callers_list = [{
+            'id': user.pk,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'username': user.username,
+        }]
+    sources_list = [s for s in leads_qs.exclude(source='').values_list('source', flat=True).distinct() if s]
 
     quick_links = {
         'total_leads': f"/leads/?{date_qs}{owner_param}{source_param}{service_param}{status_param}",

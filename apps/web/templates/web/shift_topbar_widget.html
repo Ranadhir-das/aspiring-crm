@@ -1,0 +1,133 @@
+{% load web_tags %}
+<!-- Vaani Topbar Shift Status Pill & Modal -->
+<a href="#shift-modal" class="shift-topbar-pill" id="shift-topbar-pill" aria-label="Toggle Shift Controls" role="button">
+  <span class="shift-status-dot {% if user_active_shift.status == 'ACTIVE' %}active{% elif user_active_shift.status == 'PAUSED' %}paused{% elif user_completed_shift %}completed{% else %}inactive{% endif %}" id="topbar-shift-dot"></span>
+  <span id="topbar-shift-text">
+    {% if user_active_shift.status == 'ACTIVE' %}Shift Active
+    {% elif user_active_shift.status == 'PAUSED' %}On Break
+    {% elif user_completed_shift %}Shift Completed
+    {% else %}Start Shift
+    {% endif %}
+  </span>
+</a>
+
+<div class="shift-modal-backdrop" id="shift-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="shift-modal-title">
+  <div class="shift-modal-dialog shift-controls-scope">
+    <div class="shift-modal-header">
+      <h3 id="shift-modal-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+        Shift & Attendance
+      </h3>
+      <button type="button" class="shift-close-btn" id="shift-modal-close" aria-label="Close modal">✕</button>
+    </div>
+
+    <div class="shift-modal-body">
+      <!-- Status Badge & Date -->
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span class="shift-badge {% if user_active_shift.status == 'ACTIVE' %}active{% elif user_active_shift.status == 'PAUSED' %}paused{% elif user_completed_shift %}completed{% else %}inactive{% endif %}">
+          {% if user_active_shift.status == 'ACTIVE' %}Shift Active
+          {% elif user_active_shift.status == 'PAUSED' %}On Break
+          {% elif user_completed_shift %}Shift Completed
+          {% else %}Not Started
+          {% endif %}
+        </span>
+        <span style="font-size: 12px; color: var(--muted, #94a3b8);">{{ current_time|date:"D, d M Y" }}</span>
+      </div>
+
+      <!-- Live Shift Timers -->
+      <div class="shift-metrics-grid">
+        <div class="shift-metric-tile primary-tile">
+          <span class="tile-label">Net Work</span>
+          <span class="tile-value" data-shift-timer="net">00:00:00</span>
+        </div>
+        <div class="shift-metric-tile">
+          <span class="tile-label">Total Break</span>
+          <span class="tile-value" data-shift-timer="break">00:00:00</span>
+        </div>
+        <div class="shift-metric-tile">
+          <span class="tile-label">Gross Elapsed</span>
+          <span class="tile-value" data-shift-timer="gross">00:00:00</span>
+        </div>
+      </div>
+
+      <!-- 8-Hour Progress Bar -->
+      <div class="shift-progress-wrap">
+        <div class="shift-progress-header">
+          <span>8-Hour Shift Goal: <span data-shift-progress-pct>0%</span></span>
+          <span data-shift-remaining>8h 00m remaining</span>
+        </div>
+        <div class="shift-progress-track">
+          <div class="shift-progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <!-- Action Views -->
+      <!-- A. Not Started View -->
+      <div data-shift-view="not-started" style="{% if user_active_shift %}display:none;{% endif %}">
+        <p style="font-size: 13px; color: var(--muted, #94a3b8); margin-top: 0;">Start your workday session to begin tracking net productive hours.</p>
+        <div class="shift-actions-row">
+          <select name="category_id" class="shift-input-field" aria-label="Activity Category">
+            <option value="">Default Category</option>
+          </select>
+          <input type="text" name="start_note" class="shift-input-field" placeholder="Shift note (Optional)" maxlength="255">
+          <button type="button" class="shift-btn shift-btn-start" data-shift-action="start">
+            <span class="shift-spinner"></span>
+            <span>▶ Start Shift</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- B. Active View -->
+      <div data-shift-view="active" style="{% if not user_active_shift or user_active_shift.status != 'ACTIVE' %}display:none;{% endif %}">
+        <div style="font-size: 12px; color: var(--muted, #94a3b8); margin-bottom: 12px;">
+          Shift Started: <strong data-shift-start-time>{{ user_active_shift.started_at|date:"h:i A"|default:"-" }}</strong>
+        </div>
+        <div class="shift-actions-row">
+          <select name="break_reason_id" class="shift-input-field" aria-label="Break Reason">
+            <option value="">Select Break Reason...</option>
+          </select>
+          <input type="text" name="break_note" class="shift-input-field" placeholder="Break note (if required)" maxlength="255">
+          <button type="button" class="shift-btn shift-btn-break" data-shift-action="pause">
+            <span class="shift-spinner"></span>
+            <span>⏸ Take Break</span>
+          </button>
+          <button type="button" class="shift-btn shift-btn-end" data-shift-action="end">
+            <span class="shift-spinner"></span>
+            <span>⏹ End Shift</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- C. Paused View -->
+      <div data-shift-view="paused" style="{% if not user_active_shift or user_active_shift.status != 'PAUSED' %}display:none;{% endif %}">
+        <div style="font-size: 13px; color: #fbbf24; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <span>⏸ Currently on break: <strong data-current-break-name>Break</strong></span>
+        </div>
+        <div class="shift-actions-row">
+          <button type="button" class="shift-btn shift-btn-resume" data-shift-action="resume">
+            <span class="shift-spinner"></span>
+            <span>▶ Resume Work</span>
+          </button>
+          <button type="button" class="shift-btn shift-btn-end" data-shift-action="end">
+            <span class="shift-spinner"></span>
+            <span>⏹ End Shift</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- D. Completed View -->
+      <div data-shift-view="completed" style="{% if not user_completed_shift or user_active_shift %}display:none;{% endif %}">
+        <div style="font-size: 13px; color: #38bdf8; line-height: 1.5;">
+          ✓ You have completed your shift for today. Attendance records are updated.
+        </div>
+      </div>
+
+      <!-- Alert Box -->
+      <div class="shift-alert"></div>
+    </div>
+  </div>
+</div>
+

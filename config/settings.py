@@ -132,6 +132,9 @@ REST_FRAMEWORK = {
     # Enforces trusted single-proxy header inspection behind Nginx to prevent
     # rate-limit bypass via spoofed X-Forwarded-For prefixes.
     "NUM_PROXIES": env.int("NUM_PROXIES", default=1),
+    "DEFAULT_THROTTLE_RATES": {
+        "desktop_registration": "5/min",
+    },
 }
 
 MIDDLEWARE = [
@@ -158,6 +161,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'apps.web.context_processors.notifications',
+                'apps.web.context_processors.user_shift',
             ],
         },
     },

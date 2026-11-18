@@ -94,6 +94,12 @@ class User(AbstractUser):
         help_text="Approved by administrator to enforce office geofencing for shift actions (Start Shift, Resume, End Shift) when new shift workflow is enabled.",
     )
 
+    desktop_tracking_enabled = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Approved by administrator for Windows desktop PC activity tracking.",
+    )
+
     manager = models.ForeignKey(
         "self",
         on_delete=models.SET_NULL,

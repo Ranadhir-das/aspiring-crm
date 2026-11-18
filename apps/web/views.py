@@ -359,6 +359,9 @@ def lead_create(request):
         lead = form.save(commit=False)
         lead._changed_by = request.user
         lead.save()
+        if lead.assigned_caller_id is None:
+            from apps.notifications.services import notify_admins_about_pending_lead
+            transaction.on_commit(lambda: notify_admins_about_pending_lead(lead), robust=True)
         messages.success(request, 'Lead created. Assign a caller from the lead directory.')
         return redirect('web:lead-detail', pk=lead.pk)
     return page(request, 'lead_form', 'leads', form=form, title='Create a lead')

@@ -79,3 +79,33 @@ def eligible_counselors_qs():
         is_active=True,
         registration_pending=False,
     )
+
+
+MANAGEMENT_ROLES = {'SUPER_ADMIN', 'ADMIN', 'MANAGER'}
+
+
+def is_management_user(user):
+    """Check if a user is an active, approved management user (SUPER_ADMIN, ADMIN, MANAGER).
+
+    Management status is determined strictly by primary role and account validity,
+    never by caller/counselor capability flags.
+    """
+    if not user or not getattr(user, 'is_authenticated', False) or not getattr(user, 'is_active', False):
+        return False
+    if getattr(user, 'registration_pending', False):
+        return False
+    return getattr(user, 'role', None) in MANAGEMENT_ROLES
+
+
+def can_access_analytics_overview(user):
+    """Check if a user is authorized to access the CRM Overview dashboard and analytics API.
+
+    True for:
+    - Active, approved management users (SUPER_ADMIN, ADMIN, MANAGER).
+    - Active, approved caller-capable users (CALLER, or COUNSELOR/EMPLOYEE with can_act_as_caller=True).
+    False for:
+    - Anonymous, inactive, or registration-pending users.
+    - Non-calling non-management roles (pure COUNSELOR, pure EMPLOYEE, IT, VIDEO_EDITOR, ACCOUNTANT).
+    """
+    return is_management_user(user) or is_caller_capable(user)
+

@@ -250,6 +250,8 @@ def leave_apply(request):
             leave = form.save(commit=False)
             leave.employee = employee
             leave.save()
+            from apps.notifications.services import notify_admins_about_leave_request
+            transaction.on_commit(lambda: notify_admins_about_leave_request(leave))
             audit(request, 'LEAVE', f'Applied for leave #{leave.pk}: {leave.start_date} to {leave.end_date}')
             messages.success(request, 'Leave application submitted for review.')
             return redirect('web:leaves')
@@ -787,6 +789,8 @@ def attendance_correction_submit(request):
         correction.attendance = att
 
         correction.save()
+        from apps.notifications.services import notify_admins_about_attendance_correction
+        transaction.on_commit(lambda: notify_admins_about_attendance_correction(correction))
         audit(request, 'POLICY', f'Employee {request.user.username} submitted attendance correction #{correction.pk} for {correction.date} ({correction.request_type})')
         messages.success(request, f'Attendance correction request #{correction.pk} submitted successfully.')
         return redirect('web:attendance-corrections' if request.user.role in MANAGEMENT else 'web:attendance')

@@ -85,6 +85,8 @@ class EmployeeLeaveView(EmployeeView):
         leave = form.save(commit=False)
         leave.employee = request.user
         leave.save()
+        from apps.notifications.services import notify_admins_about_leave_request
+        transaction.on_commit(lambda: notify_admins_about_leave_request(leave))
         AuditEvent.objects.create(actor=request.user, category='LEAVE', description=f'Mobile leave request #{leave.pk}')
         return Response({'id': leave.pk}, status=201)
 

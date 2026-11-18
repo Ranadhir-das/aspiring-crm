@@ -1,0 +1,270 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}Work Tracking Reports · Vaani CRM{% endblock %}
+{% block breadcrumb %}
+<a href="{% url 'web:pc-tracking-dashboard' %}">PC Work Tracking</a> / Reports
+{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>Work Tracking Reports<span class="accent">.</span></h1>
+    <p>Comprehensive daily, monthly, and department workstation activity reports and exports.</p>
+  </div>
+  <div class="actions">
+    <a class="button" href="{% url 'web:pc-tracking-dashboard' %}">← Back to Dashboard</a>
+  </div>
+</div>
+
+<!-- Transparency Notice -->
+<div class="notice-transparency">
+  <span style="font-size:16px;">🛡️</span>
+  <span><strong>Workstation Transparency:</strong> {{ disclaimer }}</span>
+</div>
+
+<!-- Tab Navigation -->
+<div class="tabs" style="margin-bottom:20px;">
+  <a href="{% url 'web:pc-tracking-report-daily' %}" {% if active_tab == 'daily' %}aria-current="page"{% endif %}>
+    Daily Employee Report
+  </a>
+  <a href="{% url 'web:pc-tracking-report-monthly' %}" {% if active_tab == 'monthly' %}aria-current="page"{% endif %}>
+    Monthly Employee Report
+  </a>
+  <a href="{% url 'web:pc-tracking-report-departments' %}" {% if active_tab == 'department' %}aria-current="page"{% endif %}>
+    Department Summary
+  </a>
+</div>
+
+{% if active_tab == 'daily' %}
+<!-- 1. Daily Report Tab -->
+<section class="panel spaced">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+    <form class="filters" method="get" style="margin-bottom:0;">
+      <div class="field">
+        <label for="id_date">Date</label>
+        {{ daily_form.date }}
+      </div>
+      <div class="field">
+        <label for="id_department">Department</label>
+        {{ daily_form.department }}
+      </div>
+      <div class="field" style="align-self:flex-end;">
+        <button class="button primary" type="submit">Filter</button>
+      </div>
+    </form>
+
+    <div style="display:flex;gap:8px;">
+      <a class="button" href="?date={{ target_date|date:'Y-m-d' }}&export=csv" style="font-size:12px;">
+        <span>📥</span> Export CSV
+      </a>
+      <a class="button" href="?date={{ target_date|date:'Y-m-d' }}&export=xlsx" style="font-size:12px;">
+        <span>📊</span> Export Excel
+      </a>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Department</th>
+          <th>Shift Gross</th>
+          <th>Break Time</th>
+          <th>PC Active</th>
+          <th>PC Idle</th>
+          <th>Untracked Time</th>
+          <th>Coverage %</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in daily_rows %}
+        <tr>
+          <td>
+            <strong>{{ row.employee_name }}</strong>
+            <div class="muted" style="font-size:11px;">@{{ row.username }}</div>
+          </td>
+          <td><span class="badge slate">{{ row.department }}</span></td>
+          <td>{{ row.formatted_shift_gross }}</td>
+          <td><span style="color:#fb923c;">{{ row.formatted_break }}</span></td>
+          <td><strong style="color:#10b981;">{{ row.formatted_active }}</strong></td>
+          <td><span style="color:#f59e0b;">{{ row.formatted_idle }}</span></td>
+          <td><span style="color:var(--muted);">{{ row.formatted_untracked }}</span></td>
+          <td>
+            {% if row.tracking_coverage >= 80 %}
+              <span class="badge mint">{{ row.tracking_coverage }}%</span>
+            {% elif row.tracking_coverage >= 50 %}
+              <span class="badge amber">{{ row.tracking_coverage }}%</span>
+            {% else %}
+              <span class="badge rose">{{ row.tracking_coverage }}%</span>
+            {% endif %}
+          </td>
+          <td>
+            <a class="button small" href="{% url 'web:pc-tracking-employee-detail' row.employee_id %}?date={{ target_date|date:'Y-m-d' }}" style="padding:3px 8px;font-size:11px;">
+              Timeline →
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="empty">No employee activity records found for {{ target_date|date:'d M Y' }}.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% elif active_tab == 'monthly' %}
+<!-- 2. Monthly Report Tab -->
+<section class="panel spaced">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+    <form class="filters" method="get" style="margin-bottom:0;">
+      <div class="field">
+        <label for="id_year">Year</label>
+        {{ monthly_form.year }}
+      </div>
+      <div class="field">
+        <label for="id_month">Month</label>
+        {{ monthly_form.month }}
+      </div>
+      <div class="field">
+        <label for="id_department">Department</label>
+        {{ monthly_form.department }}
+      </div>
+      <div class="field" style="align-self:flex-end;">
+        <button class="button primary" type="submit">Filter</button>
+      </div>
+    </form>
+
+    <div style="display:flex;gap:8px;">
+      <a class="button" href="?year={{ target_year }}&month={{ target_month }}&export=csv" style="font-size:12px;">
+        <span>📥</span> Export CSV
+      </a>
+      <a class="button" href="?year={{ target_year }}&month={{ target_month }}&export=xlsx" style="font-size:12px;">
+        <span>📊</span> Export Excel
+      </a>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Department</th>
+          <th>Days Worked</th>
+          <th>Shift Hours</th>
+          <th>Break Hours</th>
+          <th>PC Active Hours</th>
+          <th>PC Idle Hours</th>
+          <th>Untracked Hours</th>
+          <th>Coverage %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in monthly_rows %}
+        <tr>
+          <td><strong>{{ row.employee_name }}</strong></td>
+          <td><span class="badge slate">{{ row.department }}</span></td>
+          <td><strong>{{ row.days_worked }}</strong> days</td>
+          <td>{{ row.shift_hours }}h</td>
+          <td><span style="color:#fb923c;">{{ row.break_hours }}h</span></td>
+          <td><strong style="color:#10b981;">{{ row.active_hours }}h</strong></td>
+          <td><span style="color:#f59e0b;">{{ row.idle_hours }}h</span></td>
+          <td><span style="color:var(--muted);">{{ row.untracked_hours }}h</span></td>
+          <td>
+            {% if row.coverage_pct >= 80 %}
+              <span class="badge mint">{{ row.coverage_pct }}%</span>
+            {% elif row.coverage_pct >= 50 %}
+              <span class="badge amber">{{ row.coverage_pct }}%</span>
+            {% else %}
+              <span class="badge rose">{{ row.coverage_pct }}%</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="empty">No monthly activity data found for {{ target_month }}/{{ target_year }}.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% elif active_tab == 'department' %}
+<!-- 3. Department Summary Tab -->
+<section class="panel spaced">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+    <form class="filters" method="get" style="margin-bottom:0;">
+      <div class="field">
+        <label for="id_date_from">Date from</label>
+        {{ department_form.date_from }}
+      </div>
+      <div class="field">
+        <label for="id_date_to">Date to</label>
+        {{ department_form.date_to }}
+      </div>
+      <div class="field" style="align-self:flex-end;">
+        <button class="button primary" type="submit">Filter</button>
+      </div>
+    </form>
+
+    <div style="display:flex;gap:8px;">
+      <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&export=csv" style="font-size:12px;">
+        <span>📥</span> Export CSV
+      </a>
+      <a class="button" href="?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}&export=xlsx" style="font-size:12px;">
+        <span>📊</span> Export Excel
+      </a>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Department</th>
+          <th>Headcount</th>
+          <th>Total Shifts</th>
+          <th>PC Active Hours</th>
+          <th>PC Idle Hours</th>
+          <th>Break Hours</th>
+          <th>Untracked Hours</th>
+          <th>Avg Coverage %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in department_rows %}
+        <tr>
+          <td><strong>{{ row.department_name }}</strong></td>
+          <td>{{ row.headcount }}</td>
+          <td>{{ row.total_shifts }}</td>
+          <td><strong style="color:#10b981;">{{ row.active_hours }}h</strong></td>
+          <td><span style="color:#f59e0b;">{{ row.idle_hours }}h</span></td>
+          <td><span style="color:#fb923c;">{{ row.break_hours }}h</span></td>
+          <td><span style="color:var(--muted);">{{ row.untracked_hours }}h</span></td>
+          <td>
+            {% if row.coverage_pct >= 80 %}
+              <span class="badge mint">{{ row.coverage_pct }}%</span>
+            {% elif row.coverage_pct >= 50 %}
+              <span class="badge amber">{{ row.coverage_pct }}%</span>
+            {% else %}
+              <span class="badge rose">{{ row.coverage_pct }}%</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="empty">No department summary data found for {{ date_from|date:'d M Y' }} to {{ date_to|date:'d M Y' }}.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,207 @@
+{% extends 'web/base.html' %}
+{% load web_tags %}
+{% block title %}PC Work Tracking · Vaani CRM{% endblock %}
+{% block breadcrumb %}PC Work Tracking{% endblock %}
+
+{% block content %}
+<div class="page-heading">
+  <div>
+    <h1>PC Work Tracking<span class="accent">.</span></h1>
+    <p>Workstation activity tracking, idle duration, and shift coverage telemetry.</p>
+  </div>
+  <div class="actions">
+    {% if can_manage %}
+    <a class="button" href="{% url 'web:pc-tracking-report-daily' %}">
+      <span>📊</span> Work Tracking Reports
+    </a>
+    {% endif %}
+    <a class="button" href="{% url 'web:pc-tracking-dashboard' %}">Reset filters</a>
+  </div>
+</div>
+
+<!-- Transparency & Dignity Notice -->
+<div class="notice-transparency">
+  <span style="font-size:18px;line-height:1.2;">🛡️</span>
+  <div>
+    <strong>Transparency Notice</strong>
+    {{ disclaimer }}
+  </div>
+</div>
+
+<section class="metrics">
+  {% for metric in metrics %}
+  <div class="metric">
+    <div class="metric-top">{{ metric.label }}</div>
+    <strong style="color:{{ metric.badge_color }};">{{ metric.value }}</strong>
+    {% if metric.hint %}
+    <span class="muted" style="font-size:11px;display:block;margin-top:4px;">{{ metric.hint }}</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<section class="panel spaced">
+  <form class="filters" method="get">
+    <div class="field">
+      <label for="id_date">Date</label>
+      {{ filters.date }}
+    </div>
+    {% if filters.employee.field.widget.input_type != 'hidden' %}
+    <div class="field">
+      <label for="id_employee">Employee</label>
+      {{ filters.employee }}
+    </div>
+    {% else %}
+      {{ filters.employee }}
+    {% endif %}
+    <div class="field">
+      <label for="id_department">Department</label>
+      {{ filters.department }}
+    </div>
+    <div class="field">
+      <label for="id_tracking_state">PC State</label>
+      {{ filters.tracking_state }}
+    </div>
+    <div class="field">
+      <label for="id_device">Device</label>
+      {{ filters.device }}
+    </div>
+    <div class="field" style="align-self: flex-end;">
+      <button class="button primary" type="submit">Apply filters</button>
+    </div>
+  </form>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Department</th>
+          <th>Attendance</th>
+          <th>PC State</th>
+          <th>Device</th>
+          <th>Last Seen</th>
+          <th>Active Time</th>
+          <th>Idle Time</th>
+          <th>Break Time</th>
+          <th>Untracked Time</th>
+          <th>Coverage</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in records %}
+        <tr>
+          <td>
+            <a href="{% url 'web:pc-tracking-employee-detail' row.employee_id %}?date={{ target_date|date:'Y-m-d' }}" style="font-weight:600;color:var(--text);">
+              {{ row.employee_name }}
+            </a>
+            <div class="muted" style="font-size:11px;">@{{ row.username }}</div>
+          </td>
+          <td>
+            <span class="badge slate">
+              {{ row.department }}
+            </span>
+          </td>
+          <td>
+            {% if row.attendance_state == 'ACTIVE' %}
+              <span class="badge mint">Active</span>
+            {% elif row.attendance_state == 'PAUSED' %}
+              <span class="badge amber">On Break</span>
+            {% elif row.attendance_state == 'COMPLETED' %}
+              <span class="badge blue">Completed</span>
+            {% elif row.attendance_state == 'PRESENT' %}
+              <span class="badge mint">Present</span>
+            {% else %}
+              <span class="badge slate">{{ row.attendance_state }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.tracking_state == 'ACTIVE' %}
+              <span class="badge mint">Active</span>
+            {% elif row.tracking_state == 'IDLE' %}
+              <span class="badge amber">Idle</span>
+            {% elif row.tracking_state == 'LOCKED' %}
+              <span class="badge blue">Locked</span>
+            {% elif row.tracking_state == 'SLEEPING' %}
+              <span class="badge purple">Sleeping</span>
+            {% elif row.tracking_state == 'PAUSED' %}
+              <span class="badge orange">Shift Break</span>
+            {% elif row.tracking_state == 'OFFLINE' %}
+              <span class="badge rose">Offline</span>
+            {% elif row.tracking_state == 'COMPLETED' %}
+              <span class="badge slate">Completed</span>
+            {% elif row.tracking_state == 'NO_DEVICE' %}
+              <span class="badge slate">No Device</span>
+            {% else %}
+              <span class="badge slate">{{ row.tracking_state }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.device %}
+              <div style="font-size:12px;font-weight:500;">{{ row.device.machine_name }}</div>
+              <div class="muted" style="font-size:10px;">{{ row.device.client_version|default:'v1.0.0' }}</div>
+            {% else %}
+              <span class="muted" style="font-size:12px;">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if row.device_last_seen %}
+              <span style="font-size:12px;">{{ row.device_last_seen|date:'H:i' }}</span>
+              <div class="muted" style="font-size:10px;">{{ row.device_last_seen|date:'d M' }}</div>
+            {% else %}
+              <span class="muted" style="font-size:12px;">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <strong style="color:#10b981;font-size:12px;">{{ row.formatted_active }}</strong>
+          </td>
+          <td>
+            <span style="color:#f59e0b;font-size:12px;">{{ row.formatted_idle }}</span>
+          </td>
+          <td>
+            <span style="color:#fb923c;font-size:12px;">{{ row.formatted_break }}</span>
+          </td>
+          <td>
+            <span style="color:var(--muted);font-size:12px;">{{ row.formatted_untracked }}</span>
+          </td>
+          <td>
+            {% if row.tracking_coverage >= 80 %}
+              <span class="badge mint">{{ row.tracking_coverage }}%</span>
+            {% elif row.tracking_coverage >= 50 %}
+              <span class="badge amber">{{ row.tracking_coverage }}%</span>
+            {% else %}
+              <span class="badge rose">{{ row.tracking_coverage }}%</span>
+            {% endif %}
+          </td>
+          <td>
+            <a class="button small" href="{% url 'web:pc-tracking-employee-detail' row.employee_id %}?date={{ target_date|date:'Y-m-d' }}" style="padding:4px 8px;font-size:11px;">
+              Timeline →
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="12" class="empty">
+            No workstation tracking data found for {{ target_date|date:'d M Y' }}.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if records.has_other_pages %}
+  <div class="pagination" style="margin-top:16px;display:flex;justify-content:center;gap:8px;">
+    {% if records.has_previous %}
+      <a class="button small" href="?page={{ records.previous_page_number }}&date={{ target_date|date:'Y-m-d' }}">Previous</a>
+    {% endif %}
+    <span class="muted" style="align-self:center;font-size:12px;">Page {{ records.number }} of {{ records.paginator.num_pages }}</span>
+    {% if records.has_next %}
+      <a class="button small" href="?page={{ records.next_page_number }}&date={{ target_date|date:'Y-m-d' }}">Next</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+

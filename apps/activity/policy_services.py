@@ -593,6 +593,7 @@ def evaluate_protected_action(
     gps_reading: GpsReading | None = None,
     session: WorkSession | None = None,
     now: datetime | None = None,
+    exempt_geofence: bool = False,
 ) -> PolicyEvaluationResult:
     """
     Unified validation entry-point for protected actions.
@@ -601,7 +602,7 @@ def evaluate_protected_action(
     """
     server_now = now or timezone.now()
 
-    emp_geofence_enforced = is_employee_geofence_enforced(user)
+    emp_geofence_enforced = False if exempt_geofence else is_employee_geofence_enforced(user)
 
     # Determine mapped rule types
     if action == ProtectedAction.START_SHIFT:

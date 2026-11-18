@@ -589,3 +589,249 @@ class PolicyException(models.Model):
         status_label = "APPROVED" if (self.is_approved and self.is_active) else "INACTIVE/PENDING"
         return f"{self.user.username} - {self.rule_type} ({status_label})"
 
+
+class DesktopDevice(models.Model):
+    """Registered employee Windows desktop/laptop PC."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="desktop_devices",
+    )
+    device_uuid = models.CharField(max_length=64, db_index=True)
+    machine_name = models.CharField(max_length=255)
+    os_version = models.CharField(max_length=255, blank=True, default="")
+    client_version = models.CharField(max_length=64, blank=True, default="")
+    auth_token_hash = models.CharField(max_length=128, db_index=True)
+    is_approved = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    is_revoked = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="revoked_desktop_devices",
+    )
+    revocation_reason = models.CharField(max_length=255, blank=True, default="")
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "device_uuid"],
+                name="unique_user_desktop_device",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "is_active", "is_revoked"], name="idx_dsk_dev_user_status"),
+            models.Index(fields=["device_uuid", "auth_token_hash"], name="idx_dsk_dev_lookup"),
+        ]
+
+    def set_token(self, token: str) -> None:
+        import hashlib
+        self.auth_token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    def check_token(self, token: str) -> bool:
+        import hashlib
+        expected = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        return self.auth_token_hash == expected
+
+    def revoke(self, revoked_by_user, reason: str = "") -> None:
+        self.is_revoked = True
+        self.is_active = False
+        self.revoked_at = timezone.now()
+        self.revoked_by = revoked_by_user
+        self.revocation_reason = reason[:255]
+        self.save(update_fields=["is_revoked", "is_active", "revoked_at", "revoked_by", "revocation_reason", "updated_at"])
+
+    def __str__(self):
+        return f"{self.machine_name} ({self.user.username})"
+
+
+class DesktopDevicePairingCode(models.Model):
+    """Short-lived pairing code generated on web CRM to pair a Windows workstation."""
+    code = models.CharField(max_length=32, unique=True, db_index=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="desktop_pairing_codes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+    is_used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    def is_valid(self) -> bool:
+        return not self.is_used and timezone.now() <= self.expires_at
+
+    def __str__(self):
+        return f"PairingCode {self.code} for {self.user.username}"
+
+
+class DesktopTrackingSession(models.Model):
+    """Active PC tracking session bound directly to an existing WorkSession."""
+    id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="desktop_tracking_sessions",
+    )
+    device = models.ForeignKey(
+        DesktopDevice,
+        on_delete=models.CASCADE,
+        related_name="tracking_sessions",
+    )
+    work_session = models.ForeignKey(
+        WorkSession,
+        on_delete=models.CASCADE,
+        related_name="desktop_tracking_sessions",
+    )
+    started_at = models.DateTimeField(default=timezone.now, db_index=True)
+    ended_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    last_heartbeat_at = models.DateTimeField(default=timezone.now)
+    total_active_seconds = models.PositiveIntegerField(default=0)
+    total_idle_seconds = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "work_session"], name="idx_pc_sess_user_ws"),
+            models.Index(fields=["device", "started_at"], name="idx_pc_sess_dev_start"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(ended_at__isnull=True) | models.Q(ended_at__gte=models.F("started_at")),
+                name="tracking_session_dates_ordered",
+            ),
+        ]
+
+    def __str__(self):
+        return f"DesktopSession #{self.id} ({self.user.username} on {self.device.machine_name})"
+
+
+class DesktopActivityBucket(models.Model):
+    """Aggregated 60-second activity bucket received from the Windows tracker."""
+    class State(models.TextChoices):
+        ACTIVE = "ACTIVE", "Active"
+        IDLE = "IDLE", "Idle"
+        LOCKED = "LOCKED", "Locked"
+        SLEEPING = "SLEEPING", "Sleeping"
+        PAUSED = "PAUSED", "Paused"
+        UNTRACKED = "UNTRACKED", "Untracked"
+
+    id = models.BigAutoField(primary_key=True)
+    tracking_session = models.ForeignKey(
+        DesktopTrackingSession,
+        on_delete=models.CASCADE,
+        related_name="activity_buckets",
+    )
+    device = models.ForeignKey(
+        DesktopDevice,
+        on_delete=models.CASCADE,
+        related_name="activity_buckets",
+    )
+    work_session = models.ForeignKey(
+        WorkSession,
+        on_delete=models.CASCADE,
+        related_name="desktop_activity_buckets",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="desktop_activity_buckets",
+    )
+    bucket_id = models.UUIDField(unique=True, db_index=True)
+    bucket_start = models.DateTimeField(db_index=True)
+    bucket_end = models.DateTimeField(db_index=True)
+    active_seconds = models.PositiveSmallIntegerField(default=0)
+    idle_seconds = models.PositiveSmallIntegerField(default=0)
+    state = models.CharField(max_length=16, choices=State.choices, default=State.ACTIVE)
+    is_locked = models.BooleanField(default=False)
+    is_sleeping = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "bucket_start"], name="idx_bkt_user_start"),
+            models.Index(fields=["work_session", "bucket_start"], name="idx_bkt_ws_start"),
+            models.Index(fields=["device", "bucket_start"], name="idx_bkt_dev_start"),
+            models.Index(fields=["tracking_session", "bucket_start"], name="idx_bkt_ts_start"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(bucket_end__gte=models.F("bucket_start")),
+                name="bucket_dates_ordered",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(active_seconds__lte=3600) & models.Q(idle_seconds__lte=3600),
+                name="bucket_seconds_bounded",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Bucket {self.bucket_id} ({self.state}): {self.active_seconds}s active, {self.idle_seconds}s idle"
+
+
+class DesktopAppUsage(models.Model):
+    """Transparent foreground executable duration within an activity bucket."""
+    id = models.BigAutoField(primary_key=True)
+    bucket = models.ForeignKey(
+        DesktopActivityBucket,
+        on_delete=models.CASCADE,
+        related_name="app_usages",
+    )
+    process_name = models.CharField(max_length=255, db_index=True)
+    duration_seconds = models.PositiveSmallIntegerField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["bucket", "process_name"], name="idx_app_use_b_proc"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(duration_seconds__lte=3600),
+                name="app_usage_dur_bounded",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.process_name}: {self.duration_seconds}s"
+
+
+class DesktopDailySummary(models.Model):
+    """Archived daily PC tracking aggregation preserving historical reporting after raw bucket pruning."""
+    id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="desktop_daily_summaries",
+    )
+    date = models.DateField(db_index=True)
+    total_active_seconds = models.PositiveIntegerField(default=0)
+    total_idle_seconds = models.PositiveIntegerField(default=0)
+    total_break_seconds = models.PositiveIntegerField(default=0)
+    untracked_seconds = models.PositiveIntegerField(default=0)
+    expected_work_seconds = models.PositiveIntegerField(default=0)
+    tracking_coverage = models.PositiveSmallIntegerField(default=0)
+    app_usage_summary = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "date"], name="unique_user_daily_pc_summary"),
+        ]
+        indexes = [
+            models.Index(fields=["date", "user"], name="idx_pc_daily_sum_date_usr"),
+        ]
+
+    def __str__(self):
+        return f"DesktopDailySummary {self.date} for {self.user.username}: {self.total_active_seconds}s active"
+
+
+

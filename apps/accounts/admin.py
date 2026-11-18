@@ -33,6 +33,7 @@ class CustomUserAdmin(UserAdmin):
         "role",
         "designation",
         "manager",
+        "desktop_tracking_enabled",
         "is_active",
         "created_at",
     )
@@ -44,6 +45,7 @@ class CustomUserAdmin(UserAdmin):
         "can_act_as_caller",
         "can_act_as_counselor",
         "can_contact_via_message",
+        "desktop_tracking_enabled",
     )
 
     search_fields = (
@@ -70,6 +72,7 @@ class CustomUserAdmin(UserAdmin):
                     "can_act_as_caller",
                     "can_act_as_counselor",
                     "can_contact_via_message",
+                    "desktop_tracking_enabled",
                 )
             },
         ),
@@ -87,6 +90,7 @@ class CustomUserAdmin(UserAdmin):
                     "can_act_as_caller",
                     "can_act_as_counselor",
                     "can_contact_via_message",
+                    "desktop_tracking_enabled",
                 )
             },
         ),

@@ -85,3 +85,49 @@ def notifications(request):
         'header_notifications': items[:30],
         'header_notifications_count': len(items),
     }
+
+
+def user_shift(request):
+    """Provides current shift state and policy information for the authenticated user."""
+    user = getattr(request, 'user', None)
+    if not user or not user.is_authenticated:
+        return {}
+
+    from apps.activity.models import WorkSession
+    from apps.activity.policy_services import is_employee_geofence_enforced
+    from apps.web.models import Attendance
+    from django.utils import timezone
+
+    now = timezone.now()
+    today = timezone.localdate(now)
+
+    active_session = (
+        WorkSession.objects.filter(
+            user=user,
+            status__in=[WorkSession.Status.ACTIVE, WorkSession.Status.PAUSED],
+        )
+        .prefetch_related('segments__category', 'breaks__reason_config')
+        .first()
+    )
+
+    last_completed = None
+    if not active_session:
+        last_completed = (
+            WorkSession.objects.filter(
+                user=user,
+                date=today,
+                status=WorkSession.Status.COMPLETED,
+            )
+            .order_by('-ended_at')
+            .first()
+        )
+
+    today_attendance = Attendance.objects.filter(employee=user, date=today).first()
+
+    return {
+        'user_active_shift': active_session,
+        'user_completed_shift': last_completed,
+        'user_today_attendance': today_attendance,
+        'user_geofence_enforced': is_employee_geofence_enforced(user),
+        'user_shift_workflow_enabled': getattr(user, 'shift_workflow_enabled', False),
+    }

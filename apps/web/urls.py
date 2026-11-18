@@ -20,7 +20,9 @@ from . import location_views
 from . import counselor_views
 from . import workforce_views as workforce
 from . import workforce_activity_views
+from . import workforce_shift_views as shift_views
 from . import branch_views
+from . import pc_tracking_views as pc_views
 
 app_name = 'web'
 urlpatterns = [
@@ -73,6 +75,11 @@ urlpatterns = [
     path('leave/<int:pk>/action/', workforce.leave_action, name='leave-action'),
     path('attendance/', workforce.attendance, name='attendance'),
     path('attendance/action/', workforce.attendance_action, name='attendance-action'),
+    path('shift/current/', shift_views.shift_current, name='shift-current'),
+    path('shift/start/', shift_views.shift_start, name='shift-start'),
+    path('shift/pause/', shift_views.shift_pause, name='shift-pause'),
+    path('shift/resume/', shift_views.shift_resume, name='shift-resume'),
+    path('shift/end/', shift_views.shift_end, name='shift-end'),
     path('attendance/employee/<int:user_id>/', workforce.employee_attendance_history, name='employee-attendance-history'),
     path('attendance/corrections/', workforce.attendance_corrections_list, name='attendance-corrections'),
     path('attendance/corrections/admin-create/', workforce.attendance_correction_admin_create, name='attendance-correction-admin-create'),
@@ -105,6 +112,11 @@ urlpatterns = [
     path('workforce/activity/', workforce_activity_views.activity_dashboard, name='workforce-activity'),
     path('workforce/activity/<int:pk>/', workforce_activity_views.activity_detail, name='workforce-activity-detail'),
     path('workforce/activity/settings/', workforce_activity_views.activity_settings, name='workforce-activity-settings'),
+    path('pc-tracking/', pc_views.pc_tracking_dashboard, name='pc-tracking-dashboard'),
+    path('pc-tracking/employee/<int:user_id>/', pc_views.pc_tracking_employee_detail, name='pc-tracking-employee-detail'),
+    path('pc-tracking/reports/daily/', pc_views.pc_tracking_daily_report, name='pc-tracking-report-daily'),
+    path('pc-tracking/reports/monthly/', pc_views.pc_tracking_monthly_report, name='pc-tracking-report-monthly'),
+    path('pc-tracking/reports/departments/', pc_views.pc_tracking_department_summary, name='pc-tracking-report-departments'),
     path('branches/', branch_views.branch_list, name='branches'),
     path('branches/create/', branch_views.branch_create, name='branch-create'),
     path('branches/<uuid:pk>/edit/', branch_views.branch_edit, name='branch-edit'),

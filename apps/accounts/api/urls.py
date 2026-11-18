@@ -22,6 +22,7 @@ from .push_views import PushDeviceView, PushDeviceDetailView
 from apps.leads.api.service_views import CallerServicesView
 from .app_update import AppUpdateView
 from .location import MobileLocationView, MobileLocationStatusView
+from .webview_bridge import webview_sso_bridge
 
 
 urlpatterns = [
@@ -67,4 +68,5 @@ urlpatterns = [
         AdminEmployeeCapabilityView.as_view(),
         name="admin-employee-capabilities",
     ),
+    path("webview-bridge/", webview_sso_bridge, name="mobile-webview-bridge"),
 ]

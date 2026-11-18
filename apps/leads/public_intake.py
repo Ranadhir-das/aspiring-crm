@@ -125,5 +125,8 @@ def create_website_lead(validated_data, website_source=None, ip_address=''):
     )
     from apps.accounts.push_notifications import notify_callers_about_new_website_lead
     transaction.on_commit(lambda: notify_callers_about_new_website_lead(lead.pk), robust=True)
+    if lead.assigned_caller_id is None:
+        from apps.notifications.services import notify_admins_about_pending_lead
+        transaction.on_commit(lambda: notify_admins_about_pending_lead(lead), robust=True)
     return lead, False, submission
 

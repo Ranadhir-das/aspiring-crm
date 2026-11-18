@@ -548,6 +548,17 @@ def end_work_session(
     session.admin_closure_note = admin_note or ""
     session.save(update_fields=["status", "ended_at", "closure_reason", "closed_by", "admin_closure_note", "updated_at"])
 
+    # 4. Finalize associated DesktopTrackingSessions if open
+    try:
+        from apps.activity.models import DesktopTrackingSession
+        for ts in DesktopTrackingSession.objects.filter(work_session=session, ended_at__isnull=True):
+            effective_end = max(now, ts.started_at)
+            ts.ended_at = effective_end
+            ts.last_heartbeat_at = effective_end
+            ts.save(update_fields=["ended_at", "last_heartbeat_at", "updated_at"])
+    except Exception:
+        pass
+
     return session
 
 
@@ -896,6 +907,17 @@ def recover_overdue_sessions(now=None) -> dict:
                 session.ended_at = current_cutoff_utc
                 session.closure_reason = WorkSession.ClosureReason.MIDNIGHT_CUTOFF
                 session.save(update_fields=["status", "ended_at", "closure_reason", "updated_at"])
+
+                # Finalize associated DesktopTrackingSessions if open
+                try:
+                    from apps.activity.models import DesktopTrackingSession
+                    for ts in DesktopTrackingSession.objects.filter(work_session=session, ended_at__isnull=True):
+                        effective_end = max(current_cutoff_utc, ts.started_at)
+                        ts.ended_at = effective_end
+                        ts.last_heartbeat_at = effective_end
+                        ts.save(update_fields=["ended_at", "last_heartbeat_at", "updated_at"])
+                except Exception:
+                    pass
 
                 summary["closed"] += 1
 
