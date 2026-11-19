@@ -1004,3 +1004,372 @@
     padding: 18px;
   }
 }
+
+/* ==========================================================================
+   Duplicate Lead Resolution Alert Modal (<dialog>) & Inline Decision Banner
+   ========================================================================== */
+dialog.dup-alert-dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog.dup-alert-dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: rgba(15, 18, 28, 0.68);
+  backdrop-filter: blur(4px);
+}
+dialog.dup-alert-dialog {
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid rgba(245, 158, 11, 0.38);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(245, 158, 11, 0.16);
+}
+dialog.dup-alert-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.dup-dialog-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 26px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dup-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.dup-alert-icon-wrap {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.dup-header-copy {
+  flex: 1;
+  min-width: 0;
+}
+.dup-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.dup-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #d97706;
+}
+[data-theme="dark"] .dup-eyebrow {
+  color: #fbbf24;
+}
+.dup-method-pill {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(103, 81, 185, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(103, 81, 185, 0.25);
+}
+.dup-header-copy h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+.dup-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.dup-close-form {
+  margin: 0;
+}
+.dup-close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.dup-close-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* KPI Breakdown Strip */
+.dup-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.dup-kpi-box {
+  padding: 12px 15px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.dup-kpi-box.is-new {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.06);
+}
+.dup-kpi-box.is-dup {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.08);
+}
+.dup-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.dup-kpi-val {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.dup-kpi-box.is-new .dup-kpi-val {
+  color: #10b981;
+}
+.dup-kpi-box.is-dup .dup-kpi-val {
+  color: #d97706;
+}
+[data-theme="dark"] .dup-kpi-box.is-dup .dup-kpi-val {
+  color: #fbbf24;
+}
+.dup-kpi-caller {
+  font-size: 14px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Duplicate Details Table */
+.dup-table-wrap {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.dup-table-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.dup-scroll {
+  max-height: 220px;
+}
+
+/* 3 Resolution Choice Cards */
+.dup-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.dup-option-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.dup-option-card:hover {
+  transform: translateY(-2px);
+}
+.dup-option-card.is-new-only {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: rgba(16, 185, 129, 0.04);
+}
+.dup-option-card.is-confirm-dup {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.04);
+}
+.dup-option-card.is-reject {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.03);
+}
+.dup-option-top {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dup-option-badge {
+  align-self: flex-start;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.dup-option-badge.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+[data-theme="dark"] .dup-option-badge.success {
+  color: #34d399;
+}
+.dup-option-badge.warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #d97706;
+}
+[data-theme="dark"] .dup-option-badge.warning {
+  color: #fbbf24;
+}
+.dup-option-badge.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+[data-theme="dark"] .dup-option-badge.danger {
+  color: #f87171;
+}
+.dup-option-card h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+.dup-option-card p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.48;
+  color: var(--muted);
+  flex: 1;
+}
+.dup-action-btn,
+.dup-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all .15s ease;
+  border: 1px solid transparent;
+}
+.dup-action-btn {
+  width: 100%;
+}
+.dup-action-btn.is-green,
+.dup-inline-btn.is-green {
+  background: #10b981 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+.dup-action-btn.is-green:hover,
+.dup-inline-btn.is-green:hover {
+  background: #059669 !important;
+}
+.dup-action-btn.is-amber,
+.dup-inline-btn.is-amber {
+  background: #d97706 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.25);
+}
+.dup-action-btn.is-amber:hover,
+.dup-inline-btn.is-amber:hover {
+  background: #b45309 !important;
+}
+.dup-action-btn.is-red,
+.dup-inline-btn.is-red {
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+.dup-action-btn.is-red:hover,
+.dup-inline-btn.is-red:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+/* Inline Decision Card on Page */
+.dup-inline-alert-card {
+  border: 1.5px solid rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.06);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-top: 24px;
+}
+.dup-inline-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.dup-inline-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex: 1;
+  min-width: 280px;
+}
+.dup-inline-left h2 {
+  margin: 0 0 4px;
+  font-size: 16.5px;
+  font-weight: 800;
+  color: var(--text);
+}
+.dup-inline-left p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.dup-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 860px) {
+  .dup-kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dup-decision-grid {
+    grid-template-columns: 1fr;
+  }
+}

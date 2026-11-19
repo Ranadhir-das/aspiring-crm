@@ -10,6 +10,7 @@ class LeadImportSerializer(serializers.Serializer):
     file = serializers.FileField(required=False)
     import_identifier = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
     import_token = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
+    duplicate_policy = serializers.CharField(max_length=40, required=False, allow_blank=True, default='')
 
     def validate_file(self, value):
         if value:
@@ -64,13 +65,10 @@ class BulkLeadAssignmentSerializer(serializers.Serializer):
 
     def validate_caller_id(self, value):
         User = get_user_model()
+        from apps.accounts.capabilities import eligible_callers_qs
 
         try:
-            caller = User.objects.get(
-                id=value,
-                role=User.Role.CALLER,
-                is_active=True,
-            )
+            caller = eligible_callers_qs().get(id=value)
         except User.DoesNotExist:
             raise serializers.ValidationError(
                 "Selected user is not an active caller."
@@ -166,7 +164,8 @@ class LeadUpdateSerializer(serializers.ModelSerializer):
 
     def validate_status(self, value):
         request = self.context.get("request")
-        if request and getattr(request.user, "role", None) == "CALLER" and value == Lead.Status.ADMISSION_DONE:
+        from apps.accounts.capabilities import is_management_user
+        if request and not is_management_user(getattr(request, "user", None)) and value == Lead.Status.ADMISSION_DONE:
             raise serializers.ValidationError(
                 "Callers cannot mark leads as Admitted. Admission is an admin-only operation."
             )

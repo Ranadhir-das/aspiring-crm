@@ -4,6 +4,7 @@ from .views import (
     LeadListView,
     LeadDetailView,
     LeadUpdateView,
+    Lead360TimelineAPIView,
     LeadImportPreviewView,
     LeadImportCommitView,
     BulkLeadAssignmentView,
@@ -43,6 +44,7 @@ urlpatterns = [
     path("routing/", LeadRoutingAPIView.as_view(), name="admin-lead-routing-api"),
     path("", LeadListView.as_view(), name="lead-list"),
     path("<int:id>/", LeadDetailView.as_view(), name="lead-detail"),
+    path("<int:id>/timeline/", Lead360TimelineAPIView.as_view(), name="lead-360-timeline"),
     path("<int:id>/update/", LeadUpdateView.as_view(), name="lead-update"),
 
     path(

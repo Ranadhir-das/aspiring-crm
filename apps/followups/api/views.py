@@ -18,6 +18,7 @@ class FollowUpListView(ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        from apps.accounts.capabilities import is_caller_capable, is_management_user
 
         queryset = (
             FollowUp.objects
@@ -25,17 +26,13 @@ class FollowUpListView(ListAPIView):
             .order_by("scheduled_at")
         )
 
-        # Caller can only see their own followups.
-        if user.role == User.Role.CALLER:
-            return queryset.filter(caller=user)
-
         # Management roles can see all followups.
-        if user.role in {
-            User.Role.SUPER_ADMIN,
-            User.Role.ADMIN,
-            User.Role.MANAGER,
-        }:
+        if is_management_user(user):
             return queryset
+
+        # Callers and dual-role callers can only see their own followups on assigned/direct leads.
+        if is_caller_capable(user):
+            return queryset.filter(caller=user).filter(Q(lead__isnull=True) | Q(lead__assigned_caller=user))
 
         return FollowUp.objects.none()
 
@@ -47,21 +44,18 @@ class FollowUpDetailView(RetrieveAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        from apps.accounts.capabilities import is_caller_capable, is_management_user
 
         queryset = (
             FollowUp.objects
             .select_related("lead", "caller")
         )
 
-        if user.role == User.Role.CALLER:
-            return queryset.filter(caller=user)
-
-        if user.role in {
-            User.Role.SUPER_ADMIN,
-            User.Role.ADMIN,
-            User.Role.MANAGER,
-        }:
+        if is_management_user(user):
             return queryset
+
+        if is_caller_capable(user):
+            return queryset.filter(caller=user).filter(Q(lead__isnull=True) | Q(lead__assigned_caller=user))
 
         return FollowUp.objects.none()
 
@@ -73,9 +67,10 @@ class FollowUpUpdateView(UpdateAPIView):
 
     @transaction.atomic
     def update(self, request, *args, **kwargs):
+        from apps.accounts.capabilities import is_caller_capable, is_management_user
         # Match call submission's caller -> reminder lock order (including the
         # completion points signal), so a call and a manual completion serialize.
-        caller_id = request.user.pk if request.user.role == User.Role.CALLER else (
+        caller_id = request.user.pk if (not is_management_user(request.user) and is_caller_capable(request.user)) else (
             FollowUp.objects.filter(pk=kwargs['id']).values_list('caller_id', flat=True).first()
         )
         if caller_id:
@@ -84,18 +79,15 @@ class FollowUpUpdateView(UpdateAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        from apps.accounts.capabilities import is_caller_capable, is_management_user
 
         queryset = FollowUp.objects.select_for_update(of=('self',))
 
-        if user.role == User.Role.CALLER:
-            return queryset.filter(caller=user).filter(Q(lead__isnull=True) | Q(lead__assigned_caller=user))
-
-        if user.role in {
-            User.Role.SUPER_ADMIN,
-            User.Role.ADMIN,
-            User.Role.MANAGER,
-        }:
+        if is_management_user(user):
             return queryset
+
+        if is_caller_capable(user):
+            return queryset.filter(caller=user).filter(Q(lead__isnull=True) | Q(lead__assigned_caller=user))
 
         return FollowUp.objects.none()
 
@@ -106,6 +98,7 @@ class MobileFollowUpListView(ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        from apps.accounts.capabilities import is_caller_capable, is_management_user
 
         queryset = (
             FollowUp.objects
@@ -114,16 +107,12 @@ class MobileFollowUpListView(ListAPIView):
             .order_by("scheduled_at")
         )
 
-        # Caller can only see their own pending follow-ups.
-        if user.role == User.Role.CALLER:
-            return queryset.filter(caller=user)
-
         # Management roles can see all pending follow-ups.
-        if user.role in {
-            User.Role.SUPER_ADMIN,
-            User.Role.ADMIN,
-            User.Role.MANAGER,
-        }:
+        if is_management_user(user):
             return queryset
+
+        # Caller and dual-role caller can only see their own pending follow-ups.
+        if is_caller_capable(user):
+            return queryset.filter(caller=user).filter(Q(lead__isnull=True) | Q(lead__assigned_caller=user))
 
         return FollowUp.objects.none()

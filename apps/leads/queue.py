@@ -47,12 +47,8 @@ def caller_lead_queue(caller: Optional[User], now: Optional[datetime] = None):
 
     Tie-breaker: lead id ascending.
     """
-    if (
-        not caller
-        or not getattr(caller, 'is_authenticated', False)
-        or not caller.is_active
-        or caller.role != User.Role.CALLER
-    ):
+    from apps.accounts.capabilities import is_caller_capable
+    if not is_caller_capable(caller):
         return Lead.objects.none()
 
     # Release expired temporary claims first

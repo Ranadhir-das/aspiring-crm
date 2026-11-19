@@ -21,7 +21,14 @@ from apps.accounts.models import User
 from apps.calls.models import Call
 from apps.followups.models import FollowUp
 from apps.leads.models import Lead, LeadImportBatch
-from apps.leads.services import bulk_assign_leads, commit_import, commit_paste_import, preview_import
+from apps.leads.services import (
+    bulk_assign_leads,
+    commit_import,
+    commit_paste_import,
+    normalize_duplicate_policy,
+    preview_import,
+    preview_paste_import,
+)
 from apps.leads.import_storage import save_import_preview_file, get_import_preview_file, cleanup_import_preview_file
 from .forms import ACCESS, CALLING, MANAGEMENT, FollowUpForm, ImportForm, LeadForm, LoginForm
 
@@ -32,7 +39,8 @@ class CRMLoginView(LoginView):
 
     def get_default_redirect_url(self):
         user = self.request.user
-        if user.is_authenticated and user.role not in CALLING:
+        from apps.accounts.capabilities import can_access_calling_workspace
+        if user.is_authenticated and not can_access_calling_workspace(user):
             return str(reverse_lazy('web:employee-home'))
         return super().get_default_redirect_url()
 
@@ -42,7 +50,15 @@ def workspace(management=False, employee=False):
         @login_required
         @wraps(view)
         def wrapped(request, *args, **kwargs):
-            if request.user.role not in (MANAGEMENT if management else ACCESS if employee else CALLING):
+            from apps.accounts.capabilities import can_access_calling_workspace, is_management_user
+            user = request.user
+            if management:
+                allowed = is_management_user(user)
+            elif employee:
+                allowed = getattr(user, 'role', None) in ACCESS
+            else:
+                allowed = can_access_calling_workspace(user)
+            if not allowed:
                 raise PermissionDenied
             return view(request, *args, **kwargs)
         return wrapped
@@ -50,23 +66,40 @@ def workspace(management=False, employee=False):
 
 
 def visible_leads(user):
-    query = Lead.objects.select_related('assigned_caller', 'import_batch')
-    return query.filter(assigned_caller=user) if user.role == User.Role.CALLER else query
+    from apps.accounts.capabilities import is_caller_capable, is_management_user
+    from apps.leads.apostille_leads import restrict_apostille
+    query = Lead.objects.select_related('assigned_caller', 'import_batch', 'service_type')
+    if is_management_user(user):
+        return query
+    if is_caller_capable(user):
+        return restrict_apostille(query.filter(assigned_caller=user), user)
+    return query.none()
 
 
 def visible_calls(user):
+    from apps.accounts.capabilities import is_caller_capable, is_management_user
     query = Call.objects.select_related('lead', 'lead__import_batch', 'caller', 'recording')
-    return query.filter(caller=user).filter(Q(lead__assigned_caller=user) | Q(lead__isnull=True)) if user.role == User.Role.CALLER else query
+    if is_management_user(user):
+        return query
+    if is_caller_capable(user):
+        return query.filter(caller=user).filter(Q(lead__assigned_caller=user) | Q(lead__isnull=True))
+    return query.none()
 
 
 def visible_followups(user):
+    from apps.accounts.capabilities import is_caller_capable, is_management_user
     query = FollowUp.objects.select_related('lead', 'lead__import_batch', 'caller')
-    return query.filter(caller=user).filter(Q(lead__assigned_caller=user) | Q(lead__isnull=True)) if user.role == User.Role.CALLER else query
+    if is_management_user(user):
+        return query
+    if is_caller_capable(user):
+        return query.filter(caller=user).filter(Q(lead__assigned_caller=user) | Q(lead__isnull=True))
+    return query.none()
 
 
 def page(request, template, section, **context):
-    context.update(section=section, can_manage=request.user.role in MANAGEMENT,
-                   can_call=request.user.role in CALLING,
+    from apps.accounts.capabilities import can_access_calling_workspace, is_management_user
+    context.update(section=section, can_manage=is_management_user(request.user),
+                   can_call=can_access_calling_workspace(request.user),
                    can_manage_employees=request.user.role in {'SUPER_ADMIN', 'ADMIN'},
                    can_finance=request.user.role in {'SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'},
                    display_name=request.user.get_full_name() or request.user.username,
@@ -369,16 +402,38 @@ def lead_create(request):
 
 @workspace()
 def lead_detail(request, pk):
+    from apps.accounts.capabilities import is_management_user
+    from apps.activity.models import ActivityLog
+    from apps.leads.counselor_services import visible_counselor_notes
+    from apps.leads.lead360_service import VALID_TIMELINE_CATEGORIES, build_lead_360_payload
+    from apps.leads.models import WhatsAppTemplate
+    from .models import AuditEvent, LeadCollaboration, LeadQualification
+    from .workforce_forms import QualificationForm
+
     lead = get_object_or_404(visible_leads(request.user), pk=pk)
-    form = LeadForm(request.POST if request.method == 'POST' and request.POST.get('action') == 'save' else None, instance=lead)
-    follow_form = FollowUpForm(request.POST if request.method == 'POST' and request.POST.get('action') == 'followup' else None)
+    original_status = lead.status
+    is_mgmt = is_management_user(request.user)
+    action = request.POST.get('action') if request.method == 'POST' else None
+
+    form = LeadForm(request.POST if action == 'save' else None, instance=lead)
+    follow_form = FollowUpForm(request.POST if action == 'followup' else None)
+    qual_instance = LeadQualification.objects.filter(lead=lead).first() or LeadQualification(lead=lead)
+    qualification_form = QualificationForm(request.POST if action == 'qualification' else None, instance=qual_instance)
+
     if request.method == 'POST':
-        if request.POST.get('action') == 'save' and form.is_valid():
-            lead._changed_by = request.user
-            form.save()
-            messages.success(request, 'Lead details saved.')
-            return redirect('web:lead-detail', pk=pk)
-        if request.POST.get('action') == 'followup' and follow_form.is_valid():
+        if action == 'save' and form.is_valid():
+            if (
+                not is_mgmt
+                and form.cleaned_data.get('status') == Lead.Status.ADMISSION_DONE
+                and original_status != Lead.Status.ADMISSION_DONE
+            ):
+                form.add_error('status', 'Callers cannot mark leads as Admitted. Admission is an admin-only operation.')
+            else:
+                lead._changed_by = request.user
+                form.save()
+                messages.success(request, 'Lead details saved.')
+                return redirect('web:lead-detail', pk=pk)
+        if action == 'followup' and follow_form.is_valid():
             if not lead.assigned_caller:
                 follow_form.add_error(None, 'Assign a caller before scheduling a follow-up.')
             else:
@@ -388,23 +443,69 @@ def lead_detail(request, pk):
                     lead.save(update_fields=['status', 'updated_at'])
                 messages.success(request, 'Follow-up scheduled for the assigned caller.')
                 return redirect('web:lead-detail', pk=pk)
-    from apps.activity.models import ActivityLog
-    from apps.leads.models import WhatsAppTemplate
+        if action == 'qualification':
+            with transaction.atomic():
+                Lead.objects.select_for_update().get(pk=lead.pk)
+                locked_qual = LeadQualification.objects.filter(lead=lead).first() or LeadQualification(lead=lead)
+                qualification_form = QualificationForm(request.POST, instance=locked_qual)
+                if qualification_form.is_valid():
+                    qualification_form.save()
+                    AuditEvent.objects.create(
+                        actor=request.user,
+                        category='LEAD',
+                        description=f'Updated qualification for lead #{pk}',
+                    )
+                    messages.success(request, 'Lead qualification saved.')
+                    return redirect('web:lead-detail', pk=pk)
+        if action in ('collaboration_note', 'note'):
+            note_body = request.POST.get('note', '').strip()
+            if note_body:
+                LeadCollaboration.objects.create(
+                    lead=lead,
+                    author=request.user,
+                    note=note_body[:5000],
+                    consult_admin=request.POST.get('consult') == 'on',
+                )
+                AuditEvent.objects.create(
+                    actor=request.user,
+                    category='LEAD',
+                    description=f'Added note/consultation for lead #{pk}',
+                )
+                messages.success(request, 'Collaboration note saved.')
+                return redirect('web:lead-detail', pk=pk)
+
+    selected_category = request.GET.get('category', 'ALL').strip().upper()
+    if selected_category not in VALID_TIMELINE_CATEGORIES:
+        selected_category = 'ALL'
+
+    lead_360 = build_lead_360_payload(
+        request.user,
+        lead.pk,
+        allow_counselor=False,
+        category_raw=selected_category,
+        limit_raw=50,
+    )
+
     website_submissions = list(lead.website_submissions.select_related('website_source', 'service_type').order_by('-submitted_at')[:20])
     whatsapp_templates = list(WhatsAppTemplate.objects.filter(Q(owner__isnull=True) | Q(owner=request.user), is_active=True).order_by('title'))
-    from apps.leads.counselor_services import visible_counselor_notes
     counselor_notes = list(visible_counselor_notes(request.user, lead).order_by('-created_at', '-id')[:50])
+    collaboration_notes = list(lead.collaboration_notes.select_related('author').order_by('-created_at')[:20])
+    activity_qs = ActivityLog.objects.filter(lead=lead).select_related('actor').order_by('-created_at')
+    if not is_mgmt:
+        activity_qs = activity_qs.filter(Q(actor=request.user) | Q(verb=ActivityLog.Verb.LEAD_CREATED))
     counselor_panel = None
-    if request.user.role in MANAGEMENT:
+    if is_mgmt:
         counselor_panel = {
             'assignments': lead.counselor_assignments.select_related('counselor', 'caller', 'forwarded_by')[:20],
             'notes': counselor_notes,
             'admission_requests': lead.admission_requests.select_related('counselor', 'reviewed_by')[:20],
         }
     return page(request, 'lead_detail', 'leads', lead=lead, form=form, follow_form=follow_form,
+                qualification_form=qualification_form, collaboration_notes=collaboration_notes,
+                lead_360=lead_360, selected_timeline_category=selected_category,
                 history=visible_calls(request.user).filter(lead=lead).order_by('-started_at')[:30],
                 followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20],
-                activity_log=ActivityLog.objects.filter(lead=lead).select_related('actor').order_by('-created_at')[:50],
+                activity_log=activity_qs[:50],
                 website_submissions=website_submissions,
                 whatsapp_templates=whatsapp_templates, counselor_panel=counselor_panel,
                 counselor_notes=counselor_notes)
@@ -444,37 +545,93 @@ def lead_import(request):
     form = ImportForm(post_data or None, request.FILES or None)
     preview = None
     paste_result = None
+    duplicate_alert = None
 
     if request.method == 'POST' and form.is_valid():
         upload = form.cleaned_data.get('file')
         pasted_text = form.cleaned_data.get('pasted_numbers')
         action = request.POST.get('action')
+        caller_obj = form.cleaned_data.get('caller')
+        caller_display = (caller_obj.get_full_name() or caller_obj.username) if caller_obj else None
+
+        # Extract duplicate resolution decision from either button action or hidden/radio input
+        raw_policy = request.POST.get('duplicate_policy') or form.cleaned_data.get('duplicate_policy')
+        if action in ('confirm_assign_duplicate', 'assign_new_only', 'reject_duplicate'):
+            raw_policy = 'reject' if action == 'reject_duplicate' else action
+            action = 'import'
+        duplicate_policy = normalize_duplicate_policy(raw_policy)
+        check_duplicates = request.POST.get('check_duplicates') == '1'
 
         import_method = request.POST.get('import_method') or form.cleaned_data.get('import_method')
-        is_paste_action = (action == 'import_paste') or (action == 'import' and (import_method == 'paste' or (pasted_text and not upload and not import_token)))
+        is_paste_action = (action in ('import_paste', 'preview_paste')) or (
+            action == 'import' and (import_method == 'paste' or (pasted_text and not upload and not import_token))
+        )
 
         if is_paste_action:
             if not pasted_text:
                 form.add_error('pasted_numbers', 'Please paste phone numbers to import.')
             else:
-                result = commit_paste_import(
-                    pasted_text,
-                    request.user,
-                    assigned_caller=form.cleaned_data['caller'],
-                    preferred_course=form.cleaned_data['preferred_course'],
-                    preferred_course_custom=form.cleaned_data['preferred_course_custom'],
-                    batch_name=form.cleaned_data.get('batch_name'),
-                )
-                paste_result = result
-                if result['success']:
-                    if form.cleaned_data['caller']:
-                        caller_name = form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username
-                        messages.success(request, f"Assigned {result['created_count']} new leads to {caller_name}.")
-                    messages.success(request, f"Created batch \"{result['batch_name']}\" with {result['created_count']} leads." +
-                                     (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else ""))
+                from apps.leads.courses import course_label
+                c_label = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
+                paste_preview = preview_paste_import(pasted_text)
+
+                if action == 'preview_paste' or (
+                    check_duplicates and not duplicate_policy and paste_preview['duplicate_count'] > 0
+                ):
+                    duplicate_alert = {
+                        'method': 'paste',
+                        'course_label': c_label,
+                        'batch_name': form.cleaned_data.get('batch_name') or '',
+                        'caller_name': caller_display,
+                        'total_count': paste_preview['valid_count'],
+                        'new_unique_count': paste_preview['new_unique_count'],
+                        'duplicate_count': paste_preview['duplicate_count'],
+                        'skipped_count': paste_preview['skipped_count'],
+                        'duplicate_entries': paste_preview['duplicate_entries'][:50],
+                    }
+                elif duplicate_policy == 'reject':
+                    messages.warning(
+                        request,
+                        f"Duplicate lead import rejected. {paste_preview['duplicate_count']} duplicate number(s) were not imported or assigned."
+                    )
                     form = ImportForm()
                 else:
-                    messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
+                    result = commit_paste_import(
+                        pasted_text,
+                        request.user,
+                        assigned_caller=caller_obj,
+                        preferred_course=form.cleaned_data['preferred_course'],
+                        preferred_course_custom=form.cleaned_data['preferred_course_custom'],
+                        batch_name=form.cleaned_data.get('batch_name'),
+                        duplicate_policy=duplicate_policy,
+                    )
+                    paste_result = result
+                    if result.get('no_new_leads'):
+                        messages.warning(
+                            request,
+                            f"All {result['duplicate_count']} valid phone number(s) were already duplicates. 0 new leads were created or assigned."
+                        )
+                        form = ImportForm()
+                    elif result['success']:
+                        if caller_obj and result['created_count'] > 0:
+                            messages.success(request, f"Assigned {result['created_count']} leads to {caller_display}.")
+                        skip_dup_note = (
+                            f" ({result['skipped_duplicate_count']} duplicate(s) skipped — only new leads imported)."
+                            if result.get('skipped_duplicate_count')
+                            else (
+                                f" ({result['duplicate_count']} duplicate(s) confirmed & assigned)."
+                                if result.get('duplicate_count') and duplicate_policy == 'confirm_assign_duplicate'
+                                else ""
+                            )
+                        )
+                        messages.success(
+                            request,
+                            f"Created batch \"{result['batch_name']}\" with {result['created_count']} leads{skip_dup_note}"
+                            + (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else "")
+                        )
+                        form = ImportForm()
+                    else:
+                        messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
         elif action in ('preview', 'import'):
             # If importing without a new file attachment, retrieve the validated preview file
             if action == 'import' and not upload and import_token:
@@ -484,49 +641,130 @@ def lead_import(request):
                 form.add_error('file', 'Please choose a CSV or Excel file.')
             else:
                 try:
-                    if action == 'import':
-                        result = commit_import(
-                            upload,
-                            request.user,
-                            assigned_caller=form.cleaned_data['caller'],
-                            preferred_course=form.cleaned_data['preferred_course'],
-                            preferred_course_custom=form.cleaned_data['preferred_course_custom'],
-                        )
+                    from apps.leads.courses import course_label
+                    c_label = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
+
+                    if action == 'import' and duplicate_policy == 'reject':
                         if import_token:
                             cleanup_import_preview_file(import_token, request.user.id)
                             request.session.pop('lead_import_token', None)
-                        if form.cleaned_data['caller']:
-                            messages.success(request, f"Assigned {result['created_count']} new leads to {form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username}.")
-                        dup_msg = f" ({result['duplicate_count']} duplicate{'s' if result['duplicate_count'] != 1 else ''} created as separate leads)" if result.get('duplicate_count') else ""
-                        skip_msg = f"; {result['skipped_count']} invalid rows skipped." if result.get('skipped_count') else "."
-                        messages.success(request, f"Imported {result['created_count']} leads{dup_msg}{skip_msg}")
-                        from django.urls import reverse
-                        return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
+                        messages.warning(request, "Batch import rejected due to duplicate leads. No leads were created or assigned.")
+                        form = ImportForm(initial={'import_method': 'file'})
+                    elif action == 'import':
+                        # Check if browser requested interactive duplicate alert gate before committing
+                        file_preview_check = preview_import(upload) if (check_duplicates and not duplicate_policy) else None
+                        if hasattr(upload, 'seek'):
+                            upload.seek(0)
 
-                    # action == 'preview'
-                    preview = preview_import(upload)
-                    token = save_import_preview_file(request.user.id, upload)
-                    request.session['lead_import_token'] = token
-                    preview['import_token'] = token
-                    preview['filename'] = getattr(upload, 'name', 'leads.csv')
-                    from apps.leads.courses import course_label
-                    preview['course_label'] = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
+                        if file_preview_check and file_preview_check.get('duplicate_count', 0) > 0:
+                            token = import_token or save_import_preview_file(request.user.id, upload)
+                            request.session['lead_import_token'] = token
+                            preview = file_preview_check
+                            preview['import_token'] = token
+                            preview['filename'] = getattr(upload, 'name', 'leads.csv')
+                            preview['course_label'] = c_label
+                            duplicate_alert = {
+                                'method': 'file',
+                                'filename': preview['filename'],
+                                'import_token': token,
+                                'course_label': c_label,
+                                'caller_name': caller_display,
+                                'total_count': preview['valid_count'],
+                                'new_unique_count': preview['new_unique_count'],
+                                'duplicate_count': preview['duplicate_count'],
+                                'skipped_count': preview['error_count'],
+                                'duplicate_entries': [
+                                    {
+                                        'row_number': r['row_number'],
+                                        'phone': r['normalized_phone'] or r['data'].get('phone', ''),
+                                        'name': r['data'].get('name', ''),
+                                        'reason': r['duplicate_info']['reason'] if r.get('duplicate_info') else 'Duplicate',
+                                        'existing_name': r['duplicate_info']['existing_name'] if r.get('duplicate_info') else '',
+                                        'existing_caller': r['duplicate_info']['existing_caller'] if r.get('duplicate_info') else '',
+                                        'existing_status': r['duplicate_info']['existing_status'] if r.get('duplicate_info') else '',
+                                    }
+                                    for r in preview.get('duplicate_rows', [])[:50]
+                                ],
+                            }
+                        else:
+                            result = commit_import(
+                                upload,
+                                request.user,
+                                assigned_caller=caller_obj,
+                                preferred_course=form.cleaned_data['preferred_course'],
+                                preferred_course_custom=form.cleaned_data['preferred_course_custom'],
+                                duplicate_policy=duplicate_policy,
+                            )
+                            if import_token:
+                                cleanup_import_preview_file(import_token, request.user.id)
+                                request.session.pop('lead_import_token', None)
+                            if result.get('no_new_leads'):
+                                messages.warning(
+                                    request,
+                                    f"All {result['duplicate_count']} valid lead row(s) in \"{result['filename']}\" were duplicates. 0 new leads were created or assigned."
+                                )
+                                form = ImportForm(initial={'import_method': 'file'})
+                            else:
+                                if caller_obj and result['created_count'] > 0:
+                                    messages.success(request, f"Assigned {result['created_count']} new leads to {caller_display}.")
+                                if result.get('skipped_duplicate_count'):
+                                    dup_msg = f" ({result['skipped_duplicate_count']} duplicate{'s' if result['skipped_duplicate_count'] != 1 else ''} skipped; only new leads imported)"
+                                elif result.get('duplicate_count'):
+                                    dup_msg = f" ({result['duplicate_count']} duplicate{'s' if result['duplicate_count'] != 1 else ''} created as separate leads)"
+                                else:
+                                    dup_msg = ""
+                                skip_msg = f"; {result['skipped_count']} invalid rows skipped." if result.get('skipped_count') else "."
+                                messages.success(request, f"Imported {result['created_count']} leads{dup_msg}{skip_msg}")
+                                from django.urls import reverse
+                                return redirect(reverse('web:lead-distribute') + f"?batch={result['batch_id']}")
+                    else:
+                        # action == 'preview'
+                        preview = preview_import(upload)
+                        token = save_import_preview_file(request.user.id, upload)
+                        request.session['lead_import_token'] = token
+                        preview['import_token'] = token
+                        preview['filename'] = getattr(upload, 'name', 'leads.csv')
+                        preview['course_label'] = c_label
+                        if preview.get('duplicate_count', 0) > 0:
+                            duplicate_alert = {
+                                'method': 'file',
+                                'filename': preview['filename'],
+                                'import_token': token,
+                                'course_label': c_label,
+                                'caller_name': caller_display,
+                                'total_count': preview['valid_count'],
+                                'new_unique_count': preview['new_unique_count'],
+                                'duplicate_count': preview['duplicate_count'],
+                                'skipped_count': preview['error_count'],
+                                'duplicate_entries': [
+                                    {
+                                        'row_number': r['row_number'],
+                                        'phone': r['normalized_phone'] or r['data'].get('phone', ''),
+                                        'name': r['data'].get('name', ''),
+                                        'reason': r['duplicate_info']['reason'] if r.get('duplicate_info') else 'Duplicate',
+                                        'existing_name': r['duplicate_info']['existing_name'] if r.get('duplicate_info') else '',
+                                        'existing_caller': r['duplicate_info']['existing_caller'] if r.get('duplicate_info') else '',
+                                        'existing_status': r['duplicate_info']['existing_status'] if r.get('duplicate_info') else '',
+                                    }
+                                    for r in preview.get('duplicate_rows', [])[:50]
+                                ],
+                            }
                 except (ValueError, UnicodeError, BadZipFile) as exc:
                     form.add_error('file', f'This file could not be read: {exc}. Check its format and required name/phone columns.')
         elif pasted_text:
             result = commit_paste_import(
                 pasted_text,
                 request.user,
-                assigned_caller=form.cleaned_data['caller'],
+                assigned_caller=caller_obj,
                 preferred_course=form.cleaned_data['preferred_course'],
                 preferred_course_custom=form.cleaned_data['preferred_course_custom'],
                 batch_name=form.cleaned_data.get('batch_name'),
+                duplicate_policy=duplicate_policy,
             )
             paste_result = result
             if result['success']:
-                if form.cleaned_data['caller']:
-                    caller_name = form.cleaned_data['caller'].get_full_name() or form.cleaned_data['caller'].username
-                    messages.success(request, f"Assigned {result['created_count']} new leads to {caller_name}.")
+                if caller_obj and result['created_count'] > 0:
+                    messages.success(request, f"Assigned {result['created_count']} new leads to {caller_display}.")
                 messages.success(request, f"Created batch \"{result['batch_name']}\" with {result['created_count']} leads." +
                                  (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else ""))
             else:
@@ -558,6 +796,7 @@ def lead_import(request):
             except Exception:
                 pass
     return page(request, 'import', 'import', form=form, preview=preview, paste_result=paste_result,
+                duplicate_alert=duplicate_alert,
                 batches=LeadImportBatch.objects.select_related('imported_by').annotate(remaining=Count('leads', filter=Q(leads__assigned_caller__isnull=True)), allocated=Count('leads', filter=Q(leads__assigned_caller__isnull=False))).order_by('-created_at')[:10])
 
 
@@ -1070,14 +1309,16 @@ def caller_sessions(request):
 
 @workspace()
 def admissions_view(request):
+    from apps.accounts.capabilities import is_management_user
     from apps.leads.models import Admission
     from django.db.models import Sum
     user = request.user
+    is_management = is_management_user(user)
     query = Admission.objects.select_related('lead', 'caller', 'created_by').order_by('-admission_date', '-created_at')
     active_filters_count = 0
 
     caller_id = request.GET.get('caller', '').strip()
-    if user.role == User.Role.CALLER:
+    if not is_management:
         query = query.filter(caller=user)
     elif caller_id and caller_id.isdigit():
         query = query.filter(caller_id=int(caller_id))

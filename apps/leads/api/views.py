@@ -97,6 +97,7 @@ class LeadImportCommitView(APIView):
                 imported_by=request.user,
                 preferred_course=serializer.validated_data["preferred_course"],
                 preferred_course_custom=serializer.validated_data["preferred_course_custom"],
+                duplicate_policy=serializer.validated_data.get("duplicate_policy") or None,
             )
             if token:
                 cleanup_import_preview_file(token, request.user.id)
@@ -183,6 +184,7 @@ class LeadListView(ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        from apps.accounts.capabilities import is_caller_capable, is_management_user
 
         queryset = (
             Lead.objects
@@ -194,15 +196,11 @@ class LeadListView(ListAPIView):
         if status_param:
             queryset = queryset.filter(status=status_param)
 
-        if user.role == User.Role.CALLER:
-            return restrict_apostille(queryset.filter(assigned_caller=user), user)
-
-        if user.role in {
-            User.Role.SUPER_ADMIN,
-            User.Role.ADMIN,
-            User.Role.MANAGER,
-        }:
+        if is_management_user(user):
             return queryset
+
+        if is_caller_capable(user):
+            return restrict_apostille(queryset.filter(assigned_caller=user), user)
 
         return Lead.objects.none()
 
@@ -216,21 +214,18 @@ class LeadDetailView(RetrieveAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        from apps.accounts.capabilities import is_caller_capable, is_management_user
 
         queryset = (
             Lead.objects
             .select_related("assigned_caller")
         )
 
-        if user.role == User.Role.CALLER:
-            return restrict_apostille(queryset.filter(assigned_caller=user), user)
-
-        if user.role in {
-            User.Role.SUPER_ADMIN,
-            User.Role.ADMIN,
-            User.Role.MANAGER,
-        }:
+        if is_management_user(user):
             return queryset
+
+        if is_caller_capable(user):
+            return restrict_apostille(queryset.filter(assigned_caller=user), user)
 
         return Lead.objects.none()
 
@@ -245,20 +240,39 @@ class LeadUpdateView(UpdateAPIView):
 
     def get_queryset(self):
         user = self.request.user
+        from apps.accounts.capabilities import is_caller_capable, is_management_user
 
         queryset = (
             Lead.objects
             .select_related("assigned_caller")
         )
 
-        if user.role == User.Role.CALLER:
-            return restrict_apostille(queryset.filter(assigned_caller=user), user)
-
-        if user.role in {
-            User.Role.SUPER_ADMIN,
-            User.Role.ADMIN,
-            User.Role.MANAGER,
-        }:
+        if is_management_user(user):
             return queryset
 
+        if is_caller_capable(user):
+            return restrict_apostille(queryset.filter(assigned_caller=user), user)
+
         return Lead.objects.none()
+
+
+class Lead360TimelineAPIView(APIView):
+    """Read-only Lead 360° profile summary and cursor-paginated timeline for Web/Admin CRM."""
+    from rest_framework.authentication import SessionAuthentication
+    from apps.accounts.api.authentication import VerifiedSessionAuthentication
+    authentication_classes = [SessionAuthentication, VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, id):
+        from apps.leads.lead360_service import build_lead_360_payload
+        payload = build_lead_360_payload(
+            request.user,
+            id,
+            allow_counselor=False,
+            category_raw=request.query_params.get("category", "ALL"),
+            limit_raw=request.query_params.get("limit"),
+            cursor_raw=request.query_params.get("cursor"),
+        )
+        response = Response(payload, status=status.HTTP_200_OK)
+        response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response

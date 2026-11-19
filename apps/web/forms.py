@@ -100,6 +100,7 @@ class ImportForm(forms.Form):
     import_method = forms.CharField(widget=forms.HiddenInput(), required=False, initial='paste')
     idempotency_key = forms.CharField(widget=forms.HiddenInput(), required=False)
     import_token = forms.CharField(widget=forms.HiddenInput(), required=False)
+    duplicate_policy = forms.CharField(widget=forms.HiddenInput(), required=False)
     preferred_course = forms.ChoiceField(choices=[('', 'Select a course'), *Course.choices], widget=forms.RadioSelect)
     preferred_course_custom = forms.CharField(max_length=150, required=False, label='Enter Course Name (Others)')
 

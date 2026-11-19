@@ -84,6 +84,27 @@ class MobileLeadUpdateView(UpdateAPIView):
         return restrict_apostille(Lead.objects.filter(assigned_caller=user), user)
 
 
+class MobileLead360TimelineView(APIView):
+    """Read-only mobile Lead 360° timeline for assigned callers, dual-role callers, and active assigned counselors."""
+    authentication_classes = [VerifiedSessionAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, id):
+        from apps.leads.lead360_service import build_lead_360_payload
+        payload = build_lead_360_payload(
+            request.user,
+            id,
+            allow_counselor=True,
+            category_raw=request.query_params.get("category", "ALL"),
+            limit_raw=request.query_params.get("limit"),
+            cursor_raw=request.query_params.get("cursor"),
+        )
+        response = Response(payload, status=status.HTTP_200_OK)
+        response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response["Pragma"] = "no-cache"
+        return response
+
+
 class MobileAdmissionsView(APIView):
     authentication_classes = [VerifiedSessionAuthentication]
     permission_classes = [IsAuthenticated]

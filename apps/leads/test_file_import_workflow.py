@@ -417,3 +417,110 @@ class FileLeadImportWorkflowTests(TestCase):
         commit_data = commit_res.json()
         self.assertEqual(commit_data["created_count"], 1)
         self.assertEqual(Lead.objects.filter(phone="9876543290").count(), 1)
+
+    def test_file_import_duplicate_alert_and_three_resolution_choices(self):
+        """
+        Verify batch file upload duplicate alert flow and the 3 resolution options:
+        1. Submitting with check_duplicates='1' when duplicates exist shows the duplicate alert modal
+           and stages the file token without creating leads yet.
+        2. Choosing 'assign_new_only' imports and assigns only the unique new rows.
+        3. Choosing 'confirm_assign_duplicate' imports and assigns all rows (including duplicates).
+        4. Choosing 'reject_duplicate' cancels the staged import and creates 0 leads.
+        """
+        Lead.objects.create(
+            name="Existing File Student",
+            phone="9876543210",
+            assigned_caller=self.caller1,
+            preferred_course="MBBS",
+        )
+        csv_data = (
+            b"name,phone\n"
+            b"Duplicate Student,9876543210\n"
+            b"New Student One,9876543291\n"
+            b"New Student Two,9876543292\n"
+        )
+        upload = SimpleUploadedFile("batch_dupes.csv", csv_data, content_type="text/csv")
+
+        # 1. Direct import with check_duplicates='1' triggers the duplicate alert gate
+        gate_resp = self.client.post("/leads/import/", {
+            "action": "import",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "caller": self.caller2.pk,
+            "check_duplicates": "1",
+            "file": upload,
+        })
+        self.assertEqual(gate_resp.status_code, 200)
+        self.assertIn("duplicate_alert", gate_resp.context)
+        alert = gate_resp.context["duplicate_alert"]
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert["duplicate_count"], 1)
+        self.assertEqual(alert["new_unique_count"], 2)
+        self.assertEqual(alert["total_count"], 3)
+        token = alert["import_token"]
+        self.assertTrue(bool(token))
+        self.assertContains(gate_resp, 'id="duplicate-lead-alert-dialog"')
+        self.assertEqual(Lead.objects.count(), 1)
+
+        # 2. Choose "Assign New Only" using the staged token
+        assign_new_resp = self.client.post("/leads/import/", {
+            "action": "assign_new_only",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "caller": self.caller2.pk,
+            "import_token": token,
+        })
+        self.assertEqual(assign_new_resp.status_code, 302)
+        self.assertEqual(Lead.objects.count(), 3)
+        self.assertEqual(Lead.objects.filter(phone="9876543210").count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="9876543291", assigned_caller=self.caller2).count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="9876543292", assigned_caller=self.caller2).count(), 1)
+
+        # 3. Upload again and choose "Reject"
+        upload2 = SimpleUploadedFile("batch_dupes2.csv", csv_data, content_type="text/csv")
+        gate_resp2 = self.client.post("/leads/import/", {
+            "action": "import",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "caller": self.caller2.pk,
+            "check_duplicates": "1",
+            "file": upload2,
+        })
+        token2 = gate_resp2.context["duplicate_alert"]["import_token"]
+        reject_resp = self.client.post("/leads/import/", {
+            "action": "reject_duplicate",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "caller": self.caller2.pk,
+            "import_token": token2,
+        })
+        self.assertEqual(reject_resp.status_code, 200)
+        self.assertEqual(Lead.objects.count(), 3)
+
+        # 4. Upload again and choose "Confirm Assign Duplicate"
+        csv_data3 = (
+            b"name,phone\n"
+            b"Confirmed Dupe,9876543210\n"
+            b"Brand New Three,9876543293\n"
+        )
+        upload3 = SimpleUploadedFile("batch_dupes3.csv", csv_data3, content_type="text/csv")
+        gate_resp3 = self.client.post("/leads/import/", {
+            "action": "import",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "caller": self.caller2.pk,
+            "check_duplicates": "1",
+            "file": upload3,
+        })
+        token3 = gate_resp3.context["duplicate_alert"]["import_token"]
+        confirm_resp = self.client.post("/leads/import/", {
+            "action": "confirm_assign_duplicate",
+            "import_method": "file",
+            "preferred_course": "MBBS",
+            "caller": self.caller2.pk,
+            "import_token": token3,
+        })
+        self.assertEqual(confirm_resp.status_code, 302)
+        self.assertEqual(Lead.objects.count(), 5)
+        self.assertEqual(Lead.objects.filter(phone="9876543210").count(), 2)
+        self.assertEqual(Lead.objects.filter(phone="9876543293", assigned_caller=self.caller2).count(), 1)

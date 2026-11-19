@@ -19,7 +19,8 @@ class MobileLeadUpdateSerializer(serializers.ModelSerializer):
             )
 
         request = self.context.get("request")
-        if request and getattr(request.user, "role", None) == User.Role.CALLER and value == Lead.Status.ADMISSION_DONE:
+        from apps.accounts.capabilities import is_management_user
+        if request and not is_management_user(getattr(request, "user", None)) and value == Lead.Status.ADMISSION_DONE:
             raise serializers.ValidationError(
                 "Callers cannot mark leads as Admitted. Admission is an admin-only operation."
             )

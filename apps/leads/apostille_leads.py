@@ -49,7 +49,8 @@ def has_active_website_claim(lead):
 
 
 def restrict_apostille(queryset, user, prefix=''):
-    if user.role == 'CALLER' and not is_apostille_caller(user):
+    from apps.accounts.capabilities import is_caller_capable, is_management_user
+    if not is_management_user(user) and is_caller_capable(user) and not is_apostille_caller(user):
         return queryset.exclude(**{prefix + 'service_type__code': 'APOSTILLE'})
     return queryset
 

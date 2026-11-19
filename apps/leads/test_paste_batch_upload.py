@@ -726,3 +726,85 @@ class PasteBatchWebViewTests(TestCase):
         self.assertNotContains(resp, "Batch: None")
         self.assertNotContains(resp, "Batch: Should Not Be Created")
         self.assertNotContains(resp, ">Batch Name<")
+
+    def test_duplicate_alert_modal_and_three_resolution_choices_for_paste(self):
+        """
+        Verify that when check_duplicates='1' is submitted with duplicate pasted phone numbers:
+        1. No leads are created yet; the response renders the duplicate alert dialog & inline decision card.
+        2. Selecting 'assign_new_only' imports and assigns ONLY the new unique phone numbers.
+        3. Selecting 'confirm_assign_duplicate' imports and assigns ALL phone numbers (including duplicates).
+        4. Selecting 'reject_duplicate' cancels the import and creates 0 leads.
+        """
+        self.client.force_login(self.admin)
+        existing = Lead.objects.create(
+            name="Existing Student",
+            phone="9392130350",
+            assigned_caller=self.caller,
+            status=Lead.Status.INTERESTED,
+        )
+        pasted = "9392130350\n6304569634\n7989773522"
+
+        # Step 1: Initial submit from browser (check_duplicates='1') triggers duplicate alert
+        alert_resp = self.client.post("/leads/import/", {
+            "pasted_numbers": pasted,
+            "preferred_course": "MBBS",
+            "caller": self.caller.pk,
+            "action": "import",
+            "import_method": "paste",
+            "check_duplicates": "1",
+        })
+        self.assertEqual(alert_resp.status_code, 200)
+        self.assertIn("duplicate_alert", alert_resp.context)
+        alert = alert_resp.context["duplicate_alert"]
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert["duplicate_count"], 1)
+        self.assertEqual(alert["new_unique_count"], 2)
+        self.assertEqual(alert["total_count"], 3)
+        self.assertContains(alert_resp, 'id="duplicate-lead-alert-dialog"')
+        self.assertContains(alert_resp, "Confirm Assign Duplicate (3)")
+        self.assertContains(alert_resp, "Assign New Only (2)")
+        self.assertContains(alert_resp, "Reject &amp; Cancel Import")
+        # Nothing committed yet
+        self.assertEqual(Lead.objects.count(), 1)
+
+        # Step 2: User selects "Reject" -> 0 new leads created
+        reject_resp = self.client.post("/leads/import/", {
+            "pasted_numbers": pasted,
+            "preferred_course": "MBBS",
+            "caller": self.caller.pk,
+            "action": "reject_duplicate",
+            "import_method": "paste",
+        })
+        self.assertEqual(reject_resp.status_code, 200)
+        self.assertEqual(Lead.objects.count(), 1)
+
+        # Step 3: User selects "Assign New Only" -> only 2 new unique leads created and assigned
+        new_only_resp = self.client.post("/leads/import/", {
+            "pasted_numbers": pasted,
+            "preferred_course": "MBBS",
+            "caller": self.caller.pk,
+            "action": "assign_new_only",
+            "import_method": "paste",
+        })
+        self.assertEqual(new_only_resp.status_code, 200)
+        self.assertIn("paste_result", new_only_resp.context)
+        res_new = new_only_resp.context["paste_result"]
+        self.assertEqual(res_new["created_count"], 2)
+        self.assertEqual(res_new["skipped_duplicate_count"], 1)
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="6304569634", assigned_caller=self.caller).count(), 1)
+        self.assertEqual(Lead.objects.filter(phone="7989773522", assigned_caller=self.caller).count(), 1)
+
+        # Step 4: User selects "Confirm Assign Duplicate" -> all leads (including duplicates) created and assigned
+        confirm_resp = self.client.post("/leads/import/", {
+            "pasted_numbers": "9392130350\n8123456789",
+            "preferred_course": "MBBS",
+            "caller": self.caller.pk,
+            "action": "confirm_assign_duplicate",
+            "import_method": "paste",
+        })
+        self.assertEqual(confirm_resp.status_code, 200)
+        res_confirm = confirm_resp.context["paste_result"]
+        self.assertEqual(res_confirm["created_count"], 2)
+        self.assertEqual(Lead.objects.filter(phone="9392130350").count(), 2)
+        self.assertEqual(Lead.objects.filter(phone="8123456789", assigned_caller=self.caller).count(), 1)

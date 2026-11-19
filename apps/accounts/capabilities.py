@@ -109,3 +109,25 @@ def can_access_analytics_overview(user):
     """
     return is_management_user(user) or is_caller_capable(user)
 
+
+def can_access_calling_workspace(user):
+    """Check if a user is authorized to access the CRM Calling Workspace (leads, calls, follow-ups, recordings).
+
+    True for:
+    - Active, approved management users (SUPER_ADMIN, ADMIN, MANAGER).
+    - Active, approved caller-capable users (CALLER, or non-management users with can_act_as_caller=True).
+    False for:
+    - Anonymous, inactive, or registration-pending users.
+    - Pure COUNSELOR (without can_act_as_caller=True), pure EMPLOYEE, IT, VIDEO_EDITOR, ACCOUNTANT.
+    """
+    return is_management_user(user) or is_caller_capable(user)
+
+
+def can_access_lead_360_timeline(user):
+    """Check if a user has role/capability eligibility for Lead 360° timeline endpoints.
+
+    Object-level ownership (assigned_caller or active LeadCounselorAssignment) is enforced separately.
+    """
+    return is_management_user(user) or is_caller_capable(user) or is_counselor_capable(user)
+
+

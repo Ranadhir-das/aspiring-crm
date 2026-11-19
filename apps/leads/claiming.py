@@ -156,7 +156,8 @@ def mark_website_lead_call_started(lead_id, caller):
     Called when mobile caller reaches OFFHOOK.
     """
     caller = get_object_or_404(User.objects.select_for_update(no_key=True), pk=caller.pk)
-    if not caller.is_active or caller.role != User.Role.CALLER:
+    from apps.accounts.capabilities import is_caller_capable
+    if not is_caller_capable(caller):
         raise PermissionDenied('Only active callers can mark calls started.')
 
     lead = get_object_or_404(Lead.objects.select_for_update(), pk=lead_id)
@@ -196,7 +197,8 @@ def release_website_lead_claim(lead_id, caller, reason='Website lead claim relea
     Clears assigned_caller and claimed_at and returns lead to available queue.
     """
     caller = get_object_or_404(User.objects.select_for_update(no_key=True), pk=caller.pk)
-    if not caller.is_active or caller.role != User.Role.CALLER:
+    from apps.accounts.capabilities import is_caller_capable
+    if not is_caller_capable(caller):
         raise PermissionDenied('Only active callers can release website lead claims.')
 
     lead = get_object_or_404(Lead.objects.select_for_update(), pk=lead_id)

@@ -80,7 +80,43 @@
   const initialMethod = hasFilePreview ? 'file' : (methodInput?.value || (fileSection?.querySelector('.errorlist') ? 'file' : 'paste'));
   setMethod(initialMethod);
 
-  // 4. Double-click & in-flight submission prevention
+  // 4. Duplicate Lead Resolution Modal (<dialog>) & Policy Wiring
+  const dupDialog = document.getElementById('duplicate-lead-alert-dialog');
+  const dupPolicyInput = document.getElementById('id_duplicate_policy');
+  const checkDupInput = document.getElementById('id_check_duplicates');
+  const reopenDupBtn = document.getElementById('reopen-dup-modal-btn');
+
+  if (dupDialog && typeof dupDialog.showModal === 'function') {
+    if (dupDialog.dataset.autoOpen === 'true' && !dupDialog.open) {
+      dupDialog.showModal();
+    }
+    dupDialog.addEventListener('close', () => {
+      dupDialog.returnValue = '';
+    });
+  }
+
+  if (reopenDupBtn && dupDialog && typeof dupDialog.showModal === 'function') {
+    reopenDupBtn.addEventListener('click', () => {
+      if (!dupDialog.open) dupDialog.showModal();
+    });
+  }
+
+  // Reset check_duplicates gate to '1' whenever user edits pasted numbers or picks a new file
+  const pasteTextarea = form.querySelector('[name="pasted_numbers"]');
+  if (pasteTextarea && checkDupInput) {
+    pasteTextarea.addEventListener('input', () => {
+      checkDupInput.value = '1';
+      if (dupPolicyInput) dupPolicyInput.value = '';
+    });
+  }
+  if (fileInput && checkDupInput) {
+    fileInput.addEventListener('change', () => {
+      checkDupInput.value = '1';
+      if (dupPolicyInput) dupPolicyInput.value = '';
+    });
+  }
+
+  // 5. Double-click & in-flight submission prevention
   let isSubmitting = false;
   let clickedAction = 'import';
 
@@ -88,6 +124,14 @@
     if (btn.form === form || btn.closest('.course-import-form') || btn.getAttribute('form') === form.id) {
       btn.addEventListener('click', () => {
         clickedAction = btn.value || 'import';
+        const policy = btn.getAttribute('data-dup-policy');
+        if (policy && dupPolicyInput) {
+          dupPolicyInput.value = policy;
+          if (checkDupInput) checkDupInput.value = '0';
+        } else if (clickedAction === 'import' || clickedAction === 'preview') {
+          if (dupPolicyInput) dupPolicyInput.value = '';
+          if (checkDupInput) checkDupInput.value = '1';
+        }
       });
     }
   });
@@ -105,6 +149,8 @@
     if (clickedAction === 'preview') {
       if (submitBtn) submitBtn.textContent = 'Preparing preview...';
       if (previewBtn) previewBtn.textContent = 'Preparing preview...';
+    } else if (clickedAction === 'reject_duplicate') {
+      if (submitBtn) submitBtn.innerHTML = '<span>Cancelling import...</span>';
     } else {
       if (submitBtn) submitBtn.innerHTML = '<span>Importing leads...</span>';
       if (previewImportBtn) previewImportBtn.innerHTML = '<span>Importing leads...</span>';
@@ -113,6 +159,9 @@
     if (submitBtn) submitBtn.disabled = true;
     if (previewBtn) previewBtn.disabled = true;
     if (previewImportBtn) previewImportBtn.disabled = true;
+    document.querySelectorAll('.dup-action-btn, .dup-inline-btn').forEach(b => {
+      if (b.value !== clickedAction) b.disabled = true;
+    });
 
     // Safety timeout in case the submit is blocked by browser validation or aborted
     setTimeout(() => {

@@ -6,13 +6,20 @@ from .models import Call, CallRecording
 
 
 def permitted_call(user, call_id, lock=False):
-    query = Call.objects.select_for_update() if lock else Call.objects.all()
+    from apps.accounts.capabilities import is_caller_capable, is_management_user
+    query = (
+        Call.objects.select_related('lead').select_for_update(of=('self',))
+        if lock
+        else Call.objects.select_related('lead')
+    )
     call = get_object_or_404(query, pk=call_id)
-    if user.role not in {'ADMIN', 'MANAGER', 'SUPER_ADMIN'} and not (
-        user.role == 'CALLER' and call.caller_id == user.pk
+    if is_management_user(user):
+        return call
+    if is_caller_capable(user) and call.caller_id == user.pk and (
+        call.lead_id is None or call.lead.assigned_caller_id == user.pk
     ):
-        raise PermissionDenied('You cannot access this call recording.')
-    return call
+        return call
+    raise PermissionDenied('You cannot access this call recording.')
 
 
 def playback(call):

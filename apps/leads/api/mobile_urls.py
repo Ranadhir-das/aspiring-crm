@@ -15,6 +15,7 @@ from .mobile_views import (
     MobileAdmissionLeadSearchView,
     MobileAdmissionsView,
     MobileCounsellingView,
+    MobileLead360TimelineView,
     MobileLeadDetailView,
     MobileLeadListView,
     MobileLeadUpdateView,
@@ -76,6 +77,11 @@ urlpatterns = [
         "leads/<int:id>/",
         MobileLeadDetailView.as_view(),
         name="mobile-lead-detail",
+    ),
+    path(
+        "leads/<int:id>/timeline/",
+        MobileLead360TimelineView.as_view(),
+        name="mobile-lead-360-timeline",
     ),
     path(
         "leads/<int:id>/update/",

@@ -18,7 +18,8 @@ def recording_playback(request, call_id):
 @require_GET
 @workspace()
 def call_recordings_list(request):
-    is_management = request.user.role in MANAGEMENT
+    from apps.accounts.capabilities import eligible_callers_qs, is_management_user
+    is_management = is_management_user(request.user)
 
     # Base queryset: only recordings belonging to visible calls
     queryset = CallRecording.objects.select_related(
@@ -28,9 +29,12 @@ def call_recordings_list(request):
         'call__caller',
     ).order_by('-created_at')
 
-    # Security & Role Isolation: callers only see their own recordings
+    # Security & Role Isolation: callers and dual-role callers only see their own recordings
+    # on currently assigned leads or direct external calls.
     if not is_management:
-        queryset = queryset.filter(call__caller=request.user)
+        queryset = queryset.filter(call__caller=request.user).filter(
+            Q(call__lead__isnull=True) | Q(call__lead__assigned_caller=request.user)
+        )
 
     # Search filter: lead name, lead phone, or call phone_number
     search_query = request.GET.get('q', '').strip()

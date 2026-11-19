@@ -5,8 +5,8 @@
 {% block breadcrumb %}Import leads{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/course-intake.css' %}?v=2">
-<script src="{% static 'web/course-intake.js' %}" defer></script>
+<link rel="stylesheet" href="{% static 'web/course-intake.css' %}?v=3">
+<script src="{% static 'web/course-intake.js' %}?v=3" defer></script>
 
 <div class="page-heading import-header">
   <div>
@@ -89,6 +89,8 @@
         {{ form.import_method }}
         {{ form.idempotency_key }}
         <input type="hidden" name="import_token" id="id_import_token" value="{{ preview.import_token|default:form.import_token.value|default:'' }}">
+        <input type="hidden" name="duplicate_policy" id="id_duplicate_policy" value="">
+        <input type="hidden" name="check_duplicates" id="id_check_duplicates" value="{% if duplicate_alert %}0{% else %}1{% endif %}">
 
         <div class="import-method-tabs" role="tablist">
           <button type="button" class="method-tab active" data-method="paste" role="tab" id="tab-paste">
@@ -266,6 +268,163 @@
   </section>
 </div>
 
+{% if duplicate_alert %}
+<!-- Native Modal Dialog for Duplicate Lead Resolution (HTML5 <dialog>) -->
+<dialog id="duplicate-lead-alert-dialog" class="dup-alert-dialog" aria-labelledby="dup-dialog-title" data-auto-open="true">
+  <div class="dup-dialog-shell">
+    <div class="dup-dialog-header">
+      <div class="dup-alert-icon-wrap" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div class="dup-header-copy">
+        <div class="dup-eyebrow-row">
+          <span class="dup-eyebrow">DUPLICATE LEADS DETECTED</span>
+          <span class="dup-method-pill">{% if duplicate_alert.method == 'paste' %}Copy-Paste Intake{% else %}Batch File Upload ({{ duplicate_alert.filename }}){% endif %}</span>
+        </div>
+        <h2 id="dup-dialog-title">Resolve {{ duplicate_alert.duplicate_count }} duplicate lead{% if duplicate_alert.duplicate_count != 1 %}s{% endif %} before importing</h2>
+        <p class="dup-subtitle">
+          We found <strong>{{ duplicate_alert.duplicate_count }}</strong> duplicate phone number{% if duplicate_alert.duplicate_count != 1 %}s{% endif %} out of <strong>{{ duplicate_alert.total_count }}</strong> valid lead{% if duplicate_alert.total_count != 1 %}s{% endif %} for <strong>{{ duplicate_alert.course_label }}</strong>{% if duplicate_alert.caller_name %} (Target Caller: <strong>{{ duplicate_alert.caller_name }}</strong>){% endif %}. Choose how you want to proceed:
+        </p>
+      </div>
+      <form method="dialog" class="dup-close-form">
+        <button type="submit" value="dismiss" class="dup-close-btn" aria-label="Close duplicate resolution dialog">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- KPI Breakdown Strip -->
+    <div class="dup-kpi-strip">
+      <div class="dup-kpi-box">
+        <span class="dup-kpi-label">Total Valid Leads</span>
+        <strong class="dup-kpi-val">{{ duplicate_alert.total_count }}</strong>
+      </div>
+      <div class="dup-kpi-box is-new">
+        <span class="dup-kpi-label">Unique New Leads</span>
+        <strong class="dup-kpi-val">{{ duplicate_alert.new_unique_count }}</strong>
+      </div>
+      <div class="dup-kpi-box is-dup">
+        <span class="dup-kpi-label">Duplicate Leads</span>
+        <strong class="dup-kpi-val">{{ duplicate_alert.duplicate_count }}</strong>
+      </div>
+      <div class="dup-kpi-box">
+        <span class="dup-kpi-label">Target Caller</span>
+        <strong class="dup-kpi-val dup-kpi-caller">{{ duplicate_alert.caller_name|default:"Unassigned Pool" }}</strong>
+      </div>
+    </div>
+
+    <!-- Duplicate Details Table -->
+    {% if duplicate_alert.duplicate_entries %}
+    <div class="dup-table-wrap">
+      <div class="dup-table-caption">
+        <span>Duplicate Phone Numbers &amp; Existing CRM Match Details</span>
+        <span class="muted">Showing {{ duplicate_alert.duplicate_entries|length }} of {{ duplicate_alert.duplicate_count }}</span>
+      </div>
+      <div class="table-scroll dup-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" style="width: 56px;">#</th>
+              <th scope="col">Phone Number</th>
+              <th scope="col">Duplicate Reason</th>
+              <th scope="col">Existing Lead / Match</th>
+              <th scope="col">Current Owner</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in duplicate_alert.duplicate_entries %}
+            <tr>
+              <td>{{ item.row_number|default:forloop.counter }}</td>
+              <td><code>{{ item.phone }}</code>{% if item.name %}<div class="muted" style="font-size:11px;">{{ item.name }}</div>{% endif %}</td>
+              <td><span class="badge warning">{{ item.reason }}</span></td>
+              <td><strong>{{ item.existing_name|default:"—" }}</strong></td>
+              <td>{{ item.existing_caller|default:"Unassigned" }}</td>
+              <td><span class="badge">{{ item.existing_status|default:"—" }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- 3 Resolution Choice Cards -->
+    <div class="dup-decision-grid" role="group" aria-label="Duplicate resolution options">
+      <!-- Option 1: Assign New Only -->
+      <div class="dup-option-card is-new-only">
+        <div class="dup-option-top">
+          <span class="dup-option-badge success">Recommended · Clean Intake</span>
+          <h3>Assign New Only ({{ duplicate_alert.new_unique_count }})</h3>
+        </div>
+        <p>Skip all <strong>{{ duplicate_alert.duplicate_count }}</strong> duplicate number{% if duplicate_alert.duplicate_count != 1 %}s{% endif %} and import/assign only the <strong>{{ duplicate_alert.new_unique_count }}</strong> brand-new unique lead{% if duplicate_alert.new_unique_count != 1 %}s{% endif %}.</p>
+        <button type="submit" form="course-import-form" name="action" value="assign_new_only" class="button primary dup-action-btn is-green" autofocus data-dup-policy="assign_new_only">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Assign New Only ({{ duplicate_alert.new_unique_count }})</span>
+        </button>
+      </div>
+
+      <!-- Option 2: Confirm Assign Duplicate -->
+      <div class="dup-option-card is-confirm-dup">
+        <div class="dup-option-top">
+          <span class="dup-option-badge warning">Include Duplicates</span>
+          <h3>Confirm Assign Duplicate ({{ duplicate_alert.total_count }})</h3>
+        </div>
+        <p>Import and assign all <strong>{{ duplicate_alert.total_count }}</strong> leads (including the <strong>{{ duplicate_alert.duplicate_count }}</strong> duplicate{% if duplicate_alert.duplicate_count != 1 %}s{% endif %}) as separate leads{% if duplicate_alert.caller_name %} to <strong>{{ duplicate_alert.caller_name }}</strong>{% endif %}.</p>
+        <button type="submit" form="course-import-form" name="action" value="confirm_assign_duplicate" class="button primary dup-action-btn is-amber" data-dup-policy="confirm_assign_duplicate">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          <span>Confirm Assign Duplicate ({{ duplicate_alert.total_count }})</span>
+        </button>
+      </div>
+
+      <!-- Option 3: Reject -->
+      <div class="dup-option-card is-reject">
+        <div class="dup-option-top">
+          <span class="dup-option-badge danger">Abort Intake</span>
+          <h3>Reject Duplicate Upload</h3>
+        </div>
+        <p>Cancel this import completely. No batch will be created and zero leads will be imported or assigned.</p>
+        <button type="submit" form="course-import-form" name="action" value="reject_duplicate" class="button dup-action-btn is-red" data-dup-policy="reject">
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          <span>Reject &amp; Cancel Import</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Inline Fallback & Re-Open Decision Card on Page -->
+<section class="panel spaced dup-inline-alert-card" id="duplicate-inline-decision-panel" role="region" aria-labelledby="dup-inline-heading">
+  <div class="dup-inline-banner">
+    <div class="dup-inline-left">
+      <div class="dup-alert-icon-wrap" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div>
+        <h2 id="dup-inline-heading">Action Required: {{ duplicate_alert.duplicate_count }} Duplicate Lead{% if duplicate_alert.duplicate_count != 1 %}s{% endif %} Found</h2>
+        <p class="muted">
+          <strong>{{ duplicate_alert.new_unique_count }}</strong> new unique lead{% if duplicate_alert.new_unique_count != 1 %}s{% endif %} and <strong>{{ duplicate_alert.duplicate_count }}</strong> duplicate{% if duplicate_alert.duplicate_count != 1 %}s{% endif %} detected in your {% if duplicate_alert.method == 'paste' %}pasted numbers{% else %}uploaded file ({{ duplicate_alert.filename }}){% endif %}. Please select an action below to complete or reject the import:
+        </p>
+      </div>
+    </div>
+    <div class="dup-inline-actions">
+      <button type="button" class="button" id="reopen-dup-modal-btn">
+        Review Duplicates Modal ({{ duplicate_alert.duplicate_count }})
+      </button>
+      <button type="submit" form="course-import-form" name="action" value="assign_new_only" class="button primary dup-inline-btn is-green" data-dup-policy="assign_new_only">
+        ✓ Assign New Only ({{ duplicate_alert.new_unique_count }})
+      </button>
+      <button type="submit" form="course-import-form" name="action" value="confirm_assign_duplicate" class="button primary dup-inline-btn is-amber" data-dup-policy="confirm_assign_duplicate">
+        + Confirm Assign Duplicate ({{ duplicate_alert.total_count }})
+      </button>
+      <button type="submit" form="course-import-form" name="action" value="reject_duplicate" class="button dup-inline-btn is-red" data-dup-policy="reject">
+        ✕ Reject
+      </button>
+    </div>
+  </div>
+</section>
+{% endif %}
+
 {% if paste_result %}
 <section class="panel spaced paste-result-panel">
   <div class="panel-heading">
@@ -384,11 +543,23 @@
       <p>{{ preview.total_rows }} rows · {{ preview.duplicate_count|default:0 }} duplicates · {{ preview.error_count|default:0 }} invalid rows</p>
     </div>
     {% if preview.success %}
-    <div class="actions">
+    <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;">
+      {% if preview.duplicate_count > 0 %}
+      <button type="submit" form="course-import-form" name="action" value="assign_new_only" class="button primary dup-inline-btn is-green" data-dup-policy="assign_new_only">
+        <span>✓ Assign New Only ({{ preview.new_unique_count }})</span>
+      </button>
+      <button type="submit" form="course-import-form" name="action" value="confirm_assign_duplicate" class="button primary dup-inline-btn is-amber" data-dup-policy="confirm_assign_duplicate">
+        <span>+ Confirm Assign Duplicate ({{ preview.valid_count }})</span>
+      </button>
+      <button type="submit" form="course-import-form" name="action" value="reject_duplicate" class="button dup-inline-btn is-red" data-dup-policy="reject">
+        <span>✕ Reject</span>
+      </button>
+      {% else %}
       <button type="submit" form="course-import-form" name="action" value="import" class="button primary" id="preview-import-btn" style="display: inline-flex; align-items: center; gap: 8px;">
         <span>Import Leads Now</span>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+        <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
       </button>
+      {% endif %}
     </div>
     {% endif %}
   </div>

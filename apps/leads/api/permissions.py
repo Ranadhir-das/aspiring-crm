@@ -15,11 +15,9 @@ class CanManageLeads(BasePermission):
     }
 
     def has_permission(self, request, view):
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.role in self.allowed_roles
-        )
+        from apps.accounts.capabilities import is_management_user
+        return is_management_user(request.user)
+
 
 class CanAccessLeads(BasePermission):
     allowed_roles = {
@@ -30,8 +28,5 @@ class CanAccessLeads(BasePermission):
     }
 
     def has_permission(self, request, view):
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.role in self.allowed_roles
-        )
+        from apps.accounts.capabilities import can_access_calling_workspace
+        return can_access_calling_workspace(request.user)

@@ -260,7 +260,17 @@ def get_existing_phone_map():
 
     for lead in (
         Lead.objects
-        .only("id", "name", "phone")
+        .select_related("assigned_caller")
+        .only(
+            "id",
+            "name",
+            "phone",
+            "status",
+            "assigned_caller__id",
+            "assigned_caller__username",
+            "assigned_caller__first_name",
+            "assigned_caller__last_name",
+        )
         .iterator()
     ):
         if not lead.phone:
@@ -280,6 +290,44 @@ def get_existing_phone_map():
                 phone_map.setdefault(v_digits, lead)
 
     return phone_map
+
+
+VALID_DUPLICATE_POLICIES = (
+    "import_all",
+    "confirm_assign_duplicate",
+    "assign_new_only",
+    "reject",
+)
+
+
+def normalize_duplicate_policy(policy):
+    """Normalize a duplicate resolution policy token.
+
+    Supported values:
+      - 'import_all' (default for programmatic calls when unspecified)
+      - 'confirm_assign_duplicate' (explicit user confirmation to import & assign duplicates + new leads)
+      - 'assign_new_only' (import & assign only new/unique leads; skip all duplicate phone numbers)
+      - 'reject' (cancel/reject the import batch when duplicates are present)
+    """
+    if not policy:
+        return None
+    val = str(policy).strip().lower()
+    alias_map = {
+        "all": "import_all",
+        "import_all": "import_all",
+        "confirm": "confirm_assign_duplicate",
+        "confirm_duplicate": "confirm_assign_duplicate",
+        "confirm_assign_duplicate": "confirm_assign_duplicate",
+        "assign_duplicate": "confirm_assign_duplicate",
+        "new_only": "assign_new_only",
+        "assign_new": "assign_new_only",
+        "assign_new_only": "assign_new_only",
+        "skip_duplicates": "assign_new_only",
+        "reject": "reject",
+        "cancel": "reject",
+        "reject_batch": "reject",
+    }
+    return alias_map.get(val)
 
 
 def check_duplicate_from_map(phone, phone_map):
@@ -453,9 +501,14 @@ def preview_import(file):
             duplicate_count += 1
 
             if isinstance(duplicate, Lead):
+                caller_disp = (
+                    (duplicate.assigned_caller.get_full_name() or duplicate.assigned_caller.username)
+                    if getattr(duplicate, "assigned_caller", None)
+                    else "Unassigned"
+                )
                 validation["warnings"].append(
                     f"Duplicate lead already exists: "
-                    f"{duplicate.name} ({duplicate.phone})"
+                    f"{duplicate.name or 'Unnamed'} ({duplicate.phone}) · Caller: {caller_disp}"
                 )
 
         if validation["errors"]:
@@ -466,33 +519,78 @@ def preview_import(file):
         if validation["warnings"]:
             warning_count += 1
 
+        dup_info = None
+        if duplicate:
+            if isinstance(duplicate, Lead):
+                caller_disp = (
+                    (duplicate.assigned_caller.get_full_name() or duplicate.assigned_caller.username)
+                    if getattr(duplicate, "assigned_caller", None)
+                    else "Unassigned"
+                )
+                dup_info = {
+                    "type": "crm",
+                    "reason": "Already exists in CRM",
+                    "existing_lead_id": duplicate.id,
+                    "existing_name": duplicate.name or "Unnamed Lead",
+                    "existing_phone": duplicate.phone,
+                    "existing_status": duplicate.get_status_display() if hasattr(duplicate, "get_status_display") else duplicate.status,
+                    "existing_caller": caller_disp,
+                }
+            else:
+                dup_info = {
+                    "type": "file",
+                    "reason": "Duplicate phone number in uploaded file",
+                    "existing_lead_id": None,
+                    "existing_name": row.get("name") or "Earlier row in file",
+                    "existing_phone": validation["normalized_phone"] or row.get("phone", ""),
+                    "existing_status": "In-Batch",
+                    "existing_caller": "Current Upload",
+                }
+
         preview_rows.append({
             "row_number": index,
             "data": row,
             "errors": validation["errors"],
             "warnings": validation["warnings"],
             "duplicate": bool(duplicate),
+            "duplicate_info": dup_info,
             "normalized_phone": validation["normalized_phone"],
         })
+
+    new_unique_count = max(0, valid_count - duplicate_count)
+    duplicate_rows = [r for r in preview_rows if r.get("duplicate")]
 
     return {
         "success": True,
         "columns": column_result,
         "total_rows": len(rows),
         "valid_count": valid_count,
+        "new_unique_count": new_unique_count,
         "warning_count": warning_count,
         "duplicate_count": duplicate_count,
+        "duplicate_rows": duplicate_rows,
         "error_count": error_count,
         "rows": preview_rows,
     }
 
 
-def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=None, preferred_course_custom=""):
+def commit_import(
+    file,
+    imported_by,
+    assigned_caller=None,
+    *,
+    preferred_course=None,
+    preferred_course_custom="",
+    duplicate_policy=None,
+):
     """
     Import valid leads into the database from a CSV or XLSX file.
 
-    Duplicate phone numbers (both within the file and against existing CRM leads)
-    are permitted and imported as separate leads, with duplicates tracked in summary metrics.
+    Supports duplicate_policy:
+      - None / 'import_all' / 'confirm_assign_duplicate': import both new & duplicate leads.
+      - 'assign_new_only': skip duplicate rows (both CRM duplicates and in-file duplicates)
+        and import/assign only unique new leads.
+      - 'reject': cancel import and create 0 leads.
 
     Returns a summary of the import.
     """
@@ -500,6 +598,22 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
     from .courses import validate_course
     preferred_course, preferred_course_custom = validate_course(
         preferred_course, preferred_course_custom, required=False)
+
+    policy = normalize_duplicate_policy(duplicate_policy) or "import_all"
+    if policy == "reject":
+        return {
+            "success": False,
+            "rejected": True,
+            "duplicate_policy": "reject",
+            "batch_id": None,
+            "filename": getattr(file, "name", "leads.csv"),
+            "total_rows": 0,
+            "created_count": 0,
+            "duplicate_count": 0,
+            "skipped_duplicate_count": 0,
+            "warning_count": 0,
+            "skipped_count": 0,
+        }
 
     headers, rows = read_import_file(file)
 
@@ -514,22 +628,18 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
     created_ids = []
     created_count = 0
     duplicate_count = 0
+    skipped_duplicate_count = 0
     warning_count = 0
     skipped_count = 0
 
     with transaction.atomic():
-
-        batch = LeadImportBatch.objects.create(
-            filename=file.name,
-            imported_by=imported_by,
-            total_rows=len(rows),
-        )
 
         # Load existing database phones only once.
         existing_phone_map = get_existing_phone_map()
 
         # Track phones from the current upload.
         seen_phones = set()
+        staged_lead_models = []
 
         for index, row in enumerate(rows, start=2):
 
@@ -549,8 +659,9 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
                 normalized_phone,
                 existing_phone_map,
             )
+            is_dup = bool(duplicate or (normalized_phone and normalized_phone in seen_phones))
 
-            if duplicate or (normalized_phone and normalized_phone in seen_phones):
+            if is_dup:
                 duplicate_count += 1
 
             if normalized_phone:
@@ -565,10 +676,49 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
                     if v_digits:
                         existing_phone_map[v_digits] = True
 
+            if is_dup and policy == "assign_new_only":
+                skipped_duplicate_count += 1
+                continue
+
             pcb_percentage = prepare_pcb_percentage(
                 row.get("pcb_percentage")
             )
 
+            staged_lead_models.append({
+                "row": row,
+                "normalized_phone": normalized_phone,
+                "pcb_percentage": pcb_percentage,
+            })
+
+        if assigned_caller:
+            User = get_user_model()
+            from apps.accounts.capabilities import is_caller_capable
+            if not isinstance(assigned_caller, User) or not is_caller_capable(assigned_caller):
+                raise ValueError("Selected user is not an active caller.")
+
+        if not staged_lead_models and policy == "assign_new_only":
+            return {
+                "success": True,
+                "no_new_leads": True,
+                "duplicate_policy": policy,
+                "batch_id": None,
+                "filename": getattr(file, "name", "leads.csv"),
+                "total_rows": len(rows),
+                "created_count": 0,
+                "duplicate_count": duplicate_count,
+                "skipped_duplicate_count": skipped_duplicate_count,
+                "warning_count": warning_count,
+                "skipped_count": skipped_count,
+            }
+
+        batch = LeadImportBatch.objects.create(
+            filename=file.name,
+            imported_by=imported_by,
+            total_rows=len(rows),
+        )
+
+        for item in staged_lead_models:
+            row = item["row"]
             lead = Lead(
                 import_batch=batch,
                 preferred_course=preferred_course,
@@ -579,7 +729,7 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
                 location=str(row.get("location", "")).strip() if row.get("location") is not None else "",
                 college=str(row.get("college", "")).strip() if row.get("college") is not None else "",
                 neet_status=str(row.get("neet_status", "")).strip() if row.get("neet_status") is not None else "",
-                pcb_percentage=pcb_percentage,
+                pcb_percentage=item["pcb_percentage"],
                 preferred_intake=str(row.get("preferred_intake", "")).strip() if row.get("preferred_intake") is not None else "",
                 source=str(row.get("source", "")).strip() if row.get("source") is not None else "",
                 campaign=str(row.get("campaign", "")).strip() if row.get("campaign") is not None else "",
@@ -590,16 +740,6 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
 
             created_ids.append(lead.pk)
             created_count += 1
-
-            # Add the newly created lead to the map.
-            # This allows subsequent duplicate tracking in the same batch.
-            existing_phone_map[normalized_phone] = lead
-
-        if assigned_caller:
-            User = get_user_model()
-            from apps.accounts.capabilities import is_caller_capable
-            if not isinstance(assigned_caller, User) or not is_caller_capable(assigned_caller):
-                raise ValueError("Selected user is not an active caller.")
 
         if assigned_caller and created_ids:
             bulk_assign_leads(created_ids, assigned_caller, imported_by,
@@ -620,11 +760,13 @@ def commit_import(file, imported_by, assigned_caller=None, *, preferred_course=N
 
     return {
         "success": True,
+        "duplicate_policy": policy,
         "batch_id": batch.id,
         "filename": file.name,
         "total_rows": len(rows),
         "created_count": created_count,
         "duplicate_count": duplicate_count,
+        "skipped_duplicate_count": skipped_duplicate_count,
         "warning_count": warning_count,
         "skipped_count": skipped_count,
     }
@@ -769,6 +911,94 @@ def generate_paste_batch_name(preferred_course, preferred_course_custom=""):
     return batch_name
 
 
+def preview_paste_import(pasted_text):
+    """
+    Analyze pasted multiline phone numbers for duplicates and invalid lines
+    WITHOUT writing any leads or batches to the database.
+    """
+    from .phone_normalization import parse_pasted_phone_numbers, get_phone_lookup_variants
+
+    parsed = parse_pasted_phone_numbers(pasted_text)
+    valid_numbers = parsed["valid_numbers"]
+    invalid_entries = parsed["invalid_entries"]
+    submitted_count = parsed["total_submitted"]
+
+    existing_phone_map = get_existing_phone_map()
+    seen_in_paste = set()
+    new_numbers = []
+    duplicate_entries = []
+
+    for index, phone in enumerate(valid_numbers, start=1):
+        is_dup = False
+        if phone in seen_in_paste:
+            is_dup = True
+            duplicate_entries.append({
+                "row_number": index,
+                "phone": phone,
+                "type": "paste",
+                "reason": "Duplicate within pasted list",
+                "existing_lead_id": None,
+                "existing_name": "Earlier line in pasted list",
+                "existing_status": "In-Batch",
+                "existing_caller": "Current Paste",
+            })
+        else:
+            existing_lead = check_duplicate_from_map(phone, existing_phone_map)
+            if existing_lead:
+                is_dup = True
+                if isinstance(existing_lead, Lead):
+                    caller_disp = (
+                        (existing_lead.assigned_caller.get_full_name() or existing_lead.assigned_caller.username)
+                        if getattr(existing_lead, "assigned_caller", None)
+                        else "Unassigned"
+                    )
+                    duplicate_entries.append({
+                        "row_number": index,
+                        "phone": phone,
+                        "type": "crm",
+                        "reason": "Already exists in CRM",
+                        "existing_lead_id": existing_lead.id,
+                        "existing_name": existing_lead.name or "Unnamed Lead",
+                        "existing_status": existing_lead.get_status_display() if hasattr(existing_lead, "get_status_display") else existing_lead.status,
+                        "existing_caller": caller_disp,
+                    })
+                else:
+                    duplicate_entries.append({
+                        "row_number": index,
+                        "phone": phone,
+                        "type": "paste",
+                        "reason": "Duplicate within pasted list",
+                        "existing_lead_id": None,
+                        "existing_name": "Earlier line in pasted list",
+                        "existing_status": "In-Batch",
+                        "existing_caller": "Current Paste",
+                    })
+
+        if not is_dup:
+            new_numbers.append(phone)
+
+        seen_in_paste.add(phone)
+        existing_phone_map[phone] = True
+        for v in get_phone_lookup_variants(phone):
+            existing_phone_map[v] = True
+            v_digits = normalize_phone(v)
+            if v_digits:
+                existing_phone_map[v_digits] = True
+
+    return {
+        "success": len(valid_numbers) > 0,
+        "submitted_count": submitted_count,
+        "valid_count": len(valid_numbers),
+        "new_unique_count": len(new_numbers),
+        "duplicate_count": len(duplicate_entries),
+        "skipped_count": len(invalid_entries),
+        "duplicate_entries": duplicate_entries,
+        "invalid_entries": invalid_entries,
+        "valid_numbers": valid_numbers,
+        "new_numbers": new_numbers,
+    }
+
+
 def commit_paste_import(
     pasted_text,
     imported_by,
@@ -778,18 +1008,16 @@ def commit_paste_import(
     preferred_course_custom="",
     idempotency_key=None,
     batch_name=None,
+    duplicate_policy=None,
 ):
     """
     Import leads from multiline pasted phone numbers.
 
-    - Duplicate phone numbers (both within the pasted list and against existing CRM leads)
-      are permitted and imported as separate leads.
-    - Tracks and reports duplicate entries and invalid numbers in summary metrics.
-    - Supports request-level idempotency via idempotency_key.
-    - Validates assigned caller server-side.
-    - Accepts an optional manual batch_name (whitespace-trimmed). If blank or omitted,
-      falls back to generate_paste_batch_name (format: <Selected Course> - YYYY-MM-DD HH:mm:ss).
-    - Names are left blank (name="").
+    Supports duplicate_policy:
+      - None / 'import_all' / 'confirm_assign_duplicate': import both new & duplicate numbers.
+      - 'assign_new_only': skip duplicate phone numbers (both CRM duplicates and in-paste duplicates)
+        and import/assign only unique new phone numbers.
+      - 'reject': cancel import and create 0 leads.
     """
     from django.core.cache import cache
     from .courses import course_label, validate_course
@@ -797,13 +1025,14 @@ def commit_paste_import(
 
     import hashlib
     user_id = getattr(imported_by, 'pk', None) or 'anon'
+    policy = normalize_duplicate_policy(duplicate_policy) or "import_all"
     cache_key = f"paste_import:idempotency:{user_id}:{idempotency_key}" if idempotency_key else None
     payload_hash = None
     custom_batch_name = str(batch_name).strip() if batch_name is not None else ""
 
     if idempotency_key:
         caller_id = getattr(assigned_caller, 'pk', '') if assigned_caller else ''
-        payload_signature = f"{str(pasted_text).strip()}|{preferred_course}|{preferred_course_custom}|{caller_id}|{custom_batch_name}"
+        payload_signature = f"{str(pasted_text).strip()}|{preferred_course}|{preferred_course_custom}|{caller_id}|{custom_batch_name}|{policy}"
         payload_hash = hashlib.sha256(payload_signature.encode('utf-8')).hexdigest()
 
         cached_entry = cache.get(cache_key)
@@ -826,6 +1055,26 @@ def commit_paste_import(
         preferred_course, preferred_course_custom, required=True
     )
     label = course_label(preferred_course, preferred_course_custom)
+
+    if policy == "reject":
+        parsed = parse_pasted_phone_numbers(pasted_text)
+        return {
+            "success": False,
+            "rejected": True,
+            "duplicate_policy": "reject",
+            "batch_id": None,
+            "batch_name": None,
+            "course_label": label,
+            "submitted_count": parsed["total_submitted"],
+            "created_count": 0,
+            "duplicate_count": 0,
+            "skipped_duplicate_count": 0,
+            "skipped_count": len(parsed["invalid_entries"]),
+            "invalid_entries": parsed["invalid_entries"],
+            "duplicate_entries": [],
+            "created_ids": [],
+        }
+
     parsed = parse_pasted_phone_numbers(pasted_text)
     valid_numbers = parsed["valid_numbers"]
     invalid_entries = parsed["invalid_entries"]
@@ -834,12 +1083,14 @@ def commit_paste_import(
     if not valid_numbers:
         return {
             "success": False,
+            "duplicate_policy": policy,
             "batch_id": None,
             "batch_name": None,
             "course_label": label,
             "submitted_count": submitted_count,
             "created_count": 0,
             "duplicate_count": 0,
+            "skipped_duplicate_count": 0,
             "skipped_count": len(invalid_entries),
             "invalid_entries": invalid_entries,
             "duplicate_entries": [],
@@ -850,23 +1101,47 @@ def commit_paste_import(
     seen_in_paste = set()
     leads_to_create = []
     duplicate_entries = []
+    skipped_duplicate_count = 0
 
     for phone in valid_numbers:
+        is_dup = False
         if phone in seen_in_paste:
+            is_dup = True
             duplicate_entries.append({
                 "phone": phone,
                 "reason": "Duplicate within pasted list",
+                "existing_name": "Earlier line in pasted list",
+                "existing_caller": "Current Paste",
+                "existing_status": "In-Batch",
             })
         else:
             existing_lead = check_duplicate_from_map(phone, existing_phone_map)
             if existing_lead:
-                duplicate_entries.append({
-                    "phone": phone,
-                    "reason": "Already exists in CRM",
-                })
+                is_dup = True
+                if isinstance(existing_lead, Lead):
+                    caller_disp = (
+                        (existing_lead.assigned_caller.get_full_name() or existing_lead.assigned_caller.username)
+                        if getattr(existing_lead, "assigned_caller", None)
+                        else "Unassigned"
+                    )
+                    duplicate_entries.append({
+                        "phone": phone,
+                        "reason": "Already exists in CRM",
+                        "existing_lead_id": existing_lead.id,
+                        "existing_name": existing_lead.name or "Unnamed Lead",
+                        "existing_caller": caller_disp,
+                        "existing_status": existing_lead.get_status_display() if hasattr(existing_lead, "get_status_display") else existing_lead.status,
+                    })
+                else:
+                    duplicate_entries.append({
+                        "phone": phone,
+                        "reason": "Duplicate within pasted list",
+                        "existing_name": "Earlier line in pasted list",
+                        "existing_caller": "Current Paste",
+                        "existing_status": "In-Batch",
+                    })
 
         seen_in_paste.add(phone)
-        leads_to_create.append(phone)
         existing_phone_map[phone] = True
         from .phone_normalization import get_phone_lookup_variants
         for v in get_phone_lookup_variants(phone):
@@ -875,15 +1150,24 @@ def commit_paste_import(
             if v_digits:
                 existing_phone_map[v_digits] = True
 
+        if is_dup and policy == "assign_new_only":
+            skipped_duplicate_count += 1
+            continue
+
+        leads_to_create.append(phone)
+
     if not leads_to_create:
         result = {
             "success": True,
+            "no_new_leads": policy == "assign_new_only",
+            "duplicate_policy": policy,
             "batch_id": None,
             "batch_name": None,
             "course_label": label,
             "submitted_count": submitted_count,
             "created_count": 0,
             "duplicate_count": len(duplicate_entries),
+            "skipped_duplicate_count": skipped_duplicate_count,
             "skipped_count": len(invalid_entries),
             "duplicate_entries": duplicate_entries,
             "invalid_entries": invalid_entries,
@@ -904,7 +1188,7 @@ def commit_paste_import(
             imported_by=imported_by,
             total_rows=len(leads_to_create),
             created_count=0,
-            duplicate_count=len(duplicate_entries),
+            duplicate_count=0 if policy == "assign_new_only" else len(duplicate_entries),
             warning_count=len(invalid_entries),
         )
         created_ids = []
@@ -935,12 +1219,14 @@ def commit_paste_import(
 
     result = {
         "success": True,
+        "duplicate_policy": policy,
         "batch_id": batch.id,
         "batch_name": batch.filename,
         "course_label": label,
         "submitted_count": submitted_count,
         "created_count": len(created_ids),
         "duplicate_count": len(duplicate_entries),
+        "skipped_duplicate_count": skipped_duplicate_count,
         "skipped_count": len(invalid_entries),
         "duplicate_entries": duplicate_entries,
         "invalid_entries": invalid_entries,
