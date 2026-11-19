@@ -560,7 +560,8 @@ def lead_import(request):
             raw_policy = 'reject' if action == 'reject_duplicate' else action
             action = 'import'
         duplicate_policy = normalize_duplicate_policy(raw_policy)
-        check_duplicates = request.POST.get('check_duplicates') == '1'
+        # Default to checking duplicates unless explicitly disabled via check_duplicates='0'
+        check_duplicates = request.POST.get('check_duplicates', '1') != '0'
 
         import_method = request.POST.get('import_method') or form.cleaned_data.get('import_method')
         is_paste_action = (action in ('import_paste', 'preview_paste')) or (
@@ -651,7 +652,7 @@ def lead_import(request):
                         messages.warning(request, "Batch import rejected due to duplicate leads. No leads were created or assigned.")
                         form = ImportForm(initial={'import_method': 'file'})
                     elif action == 'import':
-                        # Check if browser requested interactive duplicate alert gate before committing
+                        # Check if duplicate alert gate should run before committing
                         file_preview_check = preview_import(upload) if (check_duplicates and not duplicate_policy) else None
                         if hasattr(upload, 'seek'):
                             upload.seek(0)
@@ -752,23 +753,53 @@ def lead_import(request):
                 except (ValueError, UnicodeError, BadZipFile) as exc:
                     form.add_error('file', f'This file could not be read: {exc}. Check its format and required name/phone columns.')
         elif pasted_text:
-            result = commit_paste_import(
-                pasted_text,
-                request.user,
-                assigned_caller=caller_obj,
-                preferred_course=form.cleaned_data['preferred_course'],
-                preferred_course_custom=form.cleaned_data['preferred_course_custom'],
-                batch_name=form.cleaned_data.get('batch_name'),
-                duplicate_policy=duplicate_policy,
-            )
-            paste_result = result
-            if result['success']:
-                if caller_obj and result['created_count'] > 0:
-                    messages.success(request, f"Assigned {result['created_count']} new leads to {caller_display}.")
-                messages.success(request, f"Created batch \"{result['batch_name']}\" with {result['created_count']} leads." +
-                                 (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else ""))
+            from apps.leads.courses import course_label
+            c_label = course_label(form.cleaned_data['preferred_course'], form.cleaned_data['preferred_course_custom'])
+            paste_preview = preview_paste_import(pasted_text)
+
+            if check_duplicates and not duplicate_policy and paste_preview['duplicate_count'] > 0:
+                duplicate_alert = {
+                    'method': 'paste',
+                    'course_label': c_label,
+                    'batch_name': form.cleaned_data.get('batch_name') or '',
+                    'caller_name': caller_display,
+                    'total_count': paste_preview['valid_count'],
+                    'new_unique_count': paste_preview['new_unique_count'],
+                    'duplicate_count': paste_preview['duplicate_count'],
+                    'skipped_count': paste_preview['skipped_count'],
+                    'duplicate_entries': paste_preview['duplicate_entries'][:50],
+                }
+            elif duplicate_policy == 'reject':
+                messages.warning(
+                    request,
+                    f"Duplicate lead import rejected. {paste_preview['duplicate_count']} duplicate number(s) were not imported or assigned."
+                )
+                form = ImportForm()
             else:
-                messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
+                result = commit_paste_import(
+                    pasted_text,
+                    request.user,
+                    assigned_caller=caller_obj,
+                    preferred_course=form.cleaned_data['preferred_course'],
+                    preferred_course_custom=form.cleaned_data['preferred_course_custom'],
+                    batch_name=form.cleaned_data.get('batch_name'),
+                    duplicate_policy=duplicate_policy,
+                )
+                paste_result = result
+                if result.get('no_new_leads'):
+                    messages.warning(
+                        request,
+                        f"All {result['duplicate_count']} valid phone number(s) were already duplicates. 0 new leads were created or assigned."
+                    )
+                    form = ImportForm()
+                elif result['success']:
+                    if caller_obj and result['created_count'] > 0:
+                        messages.success(request, f"Assigned {result['created_count']} new leads to {caller_display}.")
+                    messages.success(request, f"Created batch \"{result['batch_name']}\" with {result['created_count']} leads." +
+                                     (f" {result['skipped_count']} invalid entries skipped." if result['skipped_count'] else ""))
+                    form = ImportForm()
+                else:
+                    messages.error(request, "No valid phone numbers found to import. Check the error list below and try again.")
         elif upload or import_token:
             if not upload and import_token:
                 upload = get_import_preview_file(import_token, request.user.id)

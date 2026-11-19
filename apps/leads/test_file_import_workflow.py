@@ -69,6 +69,7 @@ class FileLeadImportWorkflowTests(TestCase):
             "import_method": "file",
             "preferred_course": "MBBS",
             "import_token": import_token,
+            "duplicate_policy": "confirm_assign_duplicate",
         })
         self.assertEqual(import_resp.status_code, 302)
         self.assertIn("/leads/distribute/?batch=", import_resp.url)
@@ -154,6 +155,7 @@ class FileLeadImportWorkflowTests(TestCase):
             "import_method": "file",
             "preferred_course": "MBBS",
             "import_token": import_token,
+            "duplicate_policy": "confirm_assign_duplicate",
         })
         self.assertEqual(import_resp.status_code, 302)
 

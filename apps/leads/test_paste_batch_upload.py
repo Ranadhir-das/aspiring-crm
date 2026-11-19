@@ -744,14 +744,13 @@ class PasteBatchWebViewTests(TestCase):
         )
         pasted = "9392130350\n6304569634\n7989773522"
 
-        # Step 1: Initial submit from browser (check_duplicates='1') triggers duplicate alert
+        # Step 1: Initial submit from browser (even WITHOUT check_duplicates in POST, e.g. cached HTML or disabled JS) triggers duplicate alert
         alert_resp = self.client.post("/leads/import/", {
             "pasted_numbers": pasted,
             "preferred_course": "MBBS",
             "caller": self.caller.pk,
             "action": "import",
             "import_method": "paste",
-            "check_duplicates": "1",
         })
         self.assertEqual(alert_resp.status_code, 200)
         self.assertIn("duplicate_alert", alert_resp.context)
@@ -765,6 +764,17 @@ class PasteBatchWebViewTests(TestCase):
         self.assertContains(alert_resp, "Assign New Only (2)")
         self.assertContains(alert_resp, "Reject &amp; Cancel Import")
         # Nothing committed yet
+        self.assertEqual(Lead.objects.count(), 1)
+
+        # Also test when button action is missing (form submitted via JS form.submit())
+        no_action_resp = self.client.post("/leads/import/", {
+            "pasted_numbers": pasted,
+            "preferred_course": "MBBS",
+            "caller": self.caller.pk,
+            "import_method": "paste",
+        })
+        self.assertEqual(no_action_resp.status_code, 200)
+        self.assertIsNotNone(no_action_resp.context["duplicate_alert"])
         self.assertEqual(Lead.objects.count(), 1)
 
         # Step 2: User selects "Reject" -> 0 new leads created
