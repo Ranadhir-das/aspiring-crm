@@ -5,8 +5,8 @@
 {% block breadcrumb %}Import leads{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/course-intake.css' %}?v=3">
-<script src="{% static 'web/course-intake.js' %}?v=3" defer></script>
+<link rel="stylesheet" href="{% static 'web/course-intake.css' %}?v=4">
+<script src="{% static 'web/course-intake.js' %}?v=4" defer></script>
 
 <div class="page-heading import-header">
   <div>
@@ -316,15 +316,15 @@
     <!-- Duplicate Details Table -->
     {% if duplicate_alert.duplicate_entries %}
     <div class="dup-table-wrap">
-      <div class="dup-table-caption">
+      <div class="dup-table-caption" id="dup-table-caption-title">
         <span>Duplicate Phone Numbers &amp; Existing CRM Match Details</span>
         <span class="muted">Showing {{ duplicate_alert.duplicate_entries|length }} of {{ duplicate_alert.duplicate_count }}</span>
       </div>
-      <div class="table-scroll dup-scroll">
-        <table>
+      <div class="table-scroll dup-scroll" tabindex="0" role="region" aria-labelledby="dup-table-caption-title">
+        <table class="dup-match-table">
           <thead>
             <tr>
-              <th scope="col" style="width: 56px;">#</th>
+              <th scope="col" style="width: 52px;">#</th>
               <th scope="col">Phone Number</th>
               <th scope="col">Duplicate Reason</th>
               <th scope="col">Existing Lead / Match</th>
@@ -335,8 +335,8 @@
           <tbody>
             {% for item in duplicate_alert.duplicate_entries %}
             <tr>
-              <td>{{ item.row_number|default:forloop.counter }}</td>
-              <td><code>{{ item.phone }}</code>{% if item.name %}<div class="muted" style="font-size:11px;">{{ item.name }}</div>{% endif %}</td>
+              <th scope="row" class="dup-row-idx">{{ item.row_number|default:forloop.counter }}</th>
+              <td><code class="dup-phone-code">{{ item.phone }}</code>{% if item.name %}<div class="muted" style="font-size:11px;">{{ item.name }}</div>{% endif %}</td>
               <td><span class="badge warning">{{ item.reason }}</span></td>
               <td><strong>{{ item.existing_name|default:"—" }}</strong></td>
               <td>{{ item.existing_caller|default:"Unassigned" }}</td>
