@@ -60,7 +60,12 @@ class CallCreateView(APIView):
                 canonical[field] = str(value.pk if field == 'whatsapp_template' else value)
         fingerprint = hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
         if event_id:
-            existing = Call.objects.filter(caller=request.user, client_event_id=event_id).first()
+            existing = (
+                Call.objects.select_related('lead', 'caller', 'followup')
+                .prefetch_related('points_entries')
+                .filter(caller=request.user, client_event_id=event_id)
+                .first()
+            )
             if existing:
                 if existing.submission_fingerprint:
                     same = existing.submission_fingerprint == fingerprint
@@ -71,7 +76,12 @@ class CallCreateView(APIView):
                     return Response({'detail': 'This client_event_id was already used with different call data.'}, status=409)
                 return Response(CallSerializer(existing).data, status=200)
         elif fingerprint:
-            existing = Call.objects.filter(caller=request.user, submission_fingerprint=fingerprint).first()
+            existing = (
+                Call.objects.select_related('lead', 'caller', 'followup')
+                .prefetch_related('points_entries')
+                .filter(caller=request.user, submission_fingerprint=fingerprint)
+                .first()
+            )
             if existing:
                 return Response(CallSerializer(existing).data, status=status.HTTP_200_OK)
 
@@ -193,9 +203,16 @@ class CallCreateView(APIView):
         new_status = outcome_to_status.get(call.outcome)
 
         if new_status and lead:
+            prev_status = lead.status
+            should_eval_workload = (
+                prev_status != new_status
+                and (prev_status == Lead.Status.PENDING or new_status == Lead.Status.PENDING)
+            )
             lead.status = new_status
             lead.notes = data.get('notes', lead.notes)
             lead._changed_by = request.user
+            lead._workload_should_evaluate = False
+            lead._workload_callers_to_eval = set()
             lead.save(
                 update_fields=[
                     "status",
@@ -203,10 +220,15 @@ class CallCreateView(APIView):
                     "updated_at",
                 ]
             )
-            if lead.assigned_caller_id:
+            if lead.assigned_caller_id and should_eval_workload:
                 try:
                     from apps.leads.workload import evaluate_caller_workload
-                    evaluate_caller_workload(lead.assigned_caller)
+                    assigned_caller = (
+                        request.user
+                        if lead.assigned_caller_id == request.user.pk
+                        else lead.assigned_caller
+                    )
+                    evaluate_caller_workload(assigned_caller)
                 except Exception as exc:
                     logger.exception(
                         "Failed to evaluate caller workload after call logging for caller_id=%s lead_id=%s: %s",
@@ -220,14 +242,20 @@ class CallCreateView(APIView):
         apply_website_outcome(lead, call, callback_at=callback_at)
 
         # If Call Back → create FollowUp
+        created_followup = None
         if callback_at:
-            FollowUp.objects.create(
+            created_followup = FollowUp.objects.create(
                 lead=lead,
-                caller=(lead.assigned_caller if lead else None) or request.user,
+                caller=(
+                    request.user
+                    if (lead and lead.assigned_caller_id == request.user.pk)
+                    else ((lead.assigned_caller if lead else None) or request.user)
+                ),
                 call=call, phone_number=phone,
                 scheduled_at=callback_at,
                 notes=call.notes,
             )
+        call._state.fields_cache['followup'] = created_followup
 
         return Response(
             {**CallSerializer(call).data, "completed_followup_ids": completed_followup_ids, "lead_created": lead_created},
@@ -245,7 +273,8 @@ class LeadCallHistoryView(ListAPIView):
 
         queryset = (
             Call.objects
-            .select_related("lead", "caller")
+            .select_related("lead", "caller", "followup")
+            .prefetch_related("points_entries")
             .filter(lead_id=lead_id)
             .order_by("-started_at")
         )
@@ -272,9 +301,21 @@ class MyCallHistoryView(ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        return Call.objects.select_related('lead', 'caller', 'followup').filter(
-            caller=self.request.user
-        ).order_by('-started_at', '-pk')
+        qs = (
+            Call.objects.select_related('lead', 'caller', 'followup')
+            .prefetch_related('points_entries')
+            .filter(caller=self.request.user)
+            .order_by('-started_at', '-pk')
+        )
+        limit_param = self.request.query_params.get('limit')
+        if limit_param:
+            try:
+                limit = int(limit_param)
+                if 0 < limit <= 5000:
+                    return qs[:limit]
+            except (TypeError, ValueError):
+                pass
+        return qs
 
 
 class ResolvePhoneView(APIView):

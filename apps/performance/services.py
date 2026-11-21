@@ -72,7 +72,7 @@ def daily_call_tier(call_count: int) -> int:
 
 
 @transaction.atomic
-def reconcile_daily_calls(caller_id, target_date=None):
+def reconcile_daily_calls(caller_id, target_date=None, *, locked_caller=None):
     """
     Calculates and reconciles the daily call count bonus for an employee on a given calendar day.
     Uses the project's timezone.
@@ -81,7 +81,10 @@ def reconcile_daily_calls(caller_id, target_date=None):
     """
     if not caller_id:
         return None
-    caller = User.objects.select_for_update().filter(pk=caller_id).first()
+    if locked_caller is not None and getattr(locked_caller, 'pk', None) == caller_id:
+        caller = locked_caller
+    else:
+        caller = User.objects.select_for_update().filter(pk=caller_id).first()
     if not caller or not is_caller_capable(caller):
         return None
 
@@ -107,12 +110,6 @@ def reconcile_daily_calls(caller_id, target_date=None):
     entry = PointsEntry.objects.filter(event_key=event_key).first()
     if entry and entry.rules_version != 2:
         return entry  # Preserve the pre-upgrade daily award, including the transition day.
-    first_call = Call.objects.filter(
-        caller_id=caller_id,
-        started_at__gte=day_start,
-        started_at__lt=day_end
-    ).order_by('started_at').first()
-    call_time = first_call.started_at if first_call else day_start
 
     if target_points > 0:
         reason = f'Daily call count bonus: {call_count} calls on {target_date.isoformat()} ({target_points:+d} points)'
@@ -122,6 +119,12 @@ def reconcile_daily_calls(caller_id, target_date=None):
                 entry.refresh_from_db()
             return entry
         else:
+            first_call = Call.objects.filter(
+                caller_id=caller_id,
+                started_at__gte=day_start,
+                started_at__lt=day_end
+            ).order_by('started_at').first()
+            call_time = first_call.started_at if first_call else day_start
             return PointsEntry.objects.create(
                 caller=caller,
                 rules_version=2,
@@ -144,37 +147,59 @@ def reconcile_daily_calls(caller_id, target_date=None):
 
 
 @transaction.atomic
-def score_call(call_id):
+def score_call(call_id, *, call_instance=None):
     """
     Evaluates call records for points:
     1. Daily dial volume (25 per 50, maximum 100)
     2. Course-qualified interested outcome
     """
-    call = Call.objects.select_for_update().get(pk=call_id)
-    if not call.caller_id or not is_caller_capable(call.caller):
+    if call_instance is not None and getattr(call_instance, 'pk', None) == call_id:
+        call = call_instance
+        caller = getattr(call, 'caller', None) if call.caller_id else None
+        locked_caller = caller if getattr(call, '_caller_locked', False) else None
+    else:
+        call = Call.objects.select_for_update().get(pk=call_id)
+        caller = call.caller if call.caller_id else None
+        locked_caller = None
+    if not call.caller_id or not is_caller_capable(caller):
         return
 
     # 1. Reconcile daily calls bonus for the call's calendar day in project timezone
     call_date = timezone.localtime(call.started_at).date()
-    reconcile_daily_calls(call.caller_id, call_date)
+    reconcile_daily_calls(call.caller_id, call_date, locked_caller=locked_caller)
 
     # 2. Course-qualified interested outcome
+    awarded_entries = []
     if call.outcome == 'INTERESTED':
-        score_interested_lead(
+        lead_obj = getattr(call, 'lead', None) if getattr(call, '_lead_locked', False) else None
+        entry = score_interested_lead(
             lead_id=call.lead_id,
             caller_id=call.caller_id,
             call=call,
-            occurred_at=call.started_at
+            occurred_at=call.started_at,
+            locked_lead=lead_obj,
         )
+        if entry is not None and entry.call_id == call.pk:
+            call._awarded_points_entry = entry
+            awarded_entries.append(entry)
+    if call_instance is not None:
+        cache = getattr(call, '_prefetched_objects_cache', None)
+        if cache is None:
+            cache = {}
+            call._prefetched_objects_cache = cache
+        cache['points_entries'] = awarded_entries
 
 
 @transaction.atomic
-def score_interested_lead(lead_id, caller_id, call=None, occurred_at=None):
+def score_interested_lead(lead_id, caller_id, call=None, occurred_at=None, *, locked_lead=None):
     """Course-based award once per lead. Unknown preferences earn no course points."""
     if not caller_id or not lead_id or call is None:
         return None
     from apps.leads.courses import classify_course
-    lead = Lead.objects.select_for_update().get(pk=lead_id)
+    if locked_lead is not None and getattr(locked_lead, 'pk', None) == lead_id:
+        lead = locked_lead
+    else:
+        lead = Lead.objects.select_for_update().get(pk=lead_id)
     classification = call.course_classification or classify_course(lead, call.selected_course, call.selected_course_custom)
     if classification == 'UNKNOWN':
         return None

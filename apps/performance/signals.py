@@ -23,9 +23,9 @@ def apostille_points_reversal(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Call)
-def call_points(sender, instance, raw=False, **kwargs):
+def call_points(sender, instance, created=False, raw=False, **kwargs):
     if not raw:
-        score_call(instance.pk)
+        score_call(instance.pk, call_instance=instance if created else None)
 
 
 @receiver(post_save, sender=FollowUp)
@@ -36,10 +36,12 @@ def followup_points(sender, instance, raw=False, **kwargs):
 
 @receiver(post_save, sender=Lead)
 def lead_points(sender, instance, raw=False, **kwargs):
-    if not raw and instance.status == 'INTERESTED' and instance.assigned_caller_id:
+    call = getattr(instance, '_scoring_call', None)
+    if not raw and call is not None and instance.status == 'INTERESTED' and instance.assigned_caller_id:
         score_interested_lead(
             lead_id=instance.pk,
             caller_id=instance.assigned_caller_id,
+            call=call,
             occurred_at=instance.updated_at
         )
 
