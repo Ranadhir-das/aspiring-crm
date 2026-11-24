@@ -237,17 +237,25 @@ def get_counselor_assignment_or_404(user, lead_id):
 
 
 def visible_counselor_notes(user, lead):
-    """Notes privacy: Management, assigned caller of the lead, and author counselor."""
+    """Notes visibility: Management, assigned caller of the lead, and author counselor."""
     if not user or not user.is_authenticated:
         return CounselorNote.objects.none()
     notes = CounselorNote.objects.filter(lead=lead).select_related('counselor')
-    if getattr(user, 'role', None) in MANAGEMENT_ROLES:
+    from apps.accounts.capabilities import is_management_user
+    if getattr(user, 'role', None) in MANAGEMENT_ROLES or is_management_user(user):
         return notes
     if getattr(lead, 'assigned_caller_id', None) == user.pk:
         return notes
     if is_counselor(user):
         return notes.filter(counselor=user)
     return notes.none()
+
+
+CONTACT_STATUS_LABELS = {
+    'PENDING': 'Pending Counselling',
+    'CONTACTED': 'Contacted by Call',
+    'CONTACTED_BY_MESSAGE': 'Contacted via Message',
+}
 
 
 def add_counselor_note(*, user, lead_id, body, client_event_id=None, call=None, kind=None):

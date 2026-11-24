@@ -158,16 +158,19 @@ class CounselorDirectoryView(APIView):
 
 
 class LeadCounselorView(APIView):
-    """Current counselor assignment and counselor notes for a caller-owned lead."""
+    """Current counselor assignment, progress statuses, and counselor notes for a caller-owned lead."""
     authentication_classes = [VerifiedSessionAuthentication]
     permission_classes = [IsAuthenticated, IsCaller]
 
     def get(self, request, id):
+        from apps.leads.counselor_services import CONTACT_STATUS_LABELS
+
         lead = Lead.objects.filter(pk=id, assigned_caller=request.user).first()
         if lead is None:
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         can_forward, reason = forward_eligibility(lead, request.user)
-        notes = visible_counselor_notes(request.user, lead)
+        current_assignment = active_assignment(lead)
+        notes = list(visible_counselor_notes(request.user, lead).order_by('-created_at', '-id')[:100])
         counselor_notes_data = [{
             'id': note.pk,
             'content': note.body,
@@ -177,13 +180,75 @@ class LeadCounselorView(APIView):
             'kind': note.kind,
             'kind_display': note.get_kind_display(),
             'duration_seconds': note.duration_seconds,
+            'call_started_at': iso(note.call_started_at),
             'created_at': iso(note.created_at),
         } for note in notes]
+
+        contact_info = {
+            'counselor_contact_status': 'PENDING',
+            'last_contacted_at': None,
+            'last_call_duration': None,
+            'counselor_call_count': 0,
+            'counselor_message_count': 0,
+        }
+        if current_assignment:
+            summary_map = counselor_contact_summary_for_leads(current_assignment.counselor, [lead.pk])
+            if lead.pk in summary_map:
+                contact_info = summary_map[lead.pk]
+        elif notes:
+            for note in notes:
+                if contact_info['counselor_contact_status'] == 'PENDING':
+                    if note.kind == 'CALL':
+                        contact_info['counselor_contact_status'] = 'CONTACTED'
+                        contact_dt = note.call_ended_at or note.call_started_at or note.created_at
+                        contact_info['last_contacted_at'] = iso(contact_dt)
+                        contact_info['last_call_duration'] = note.duration_seconds
+                    elif note.kind == 'MESSAGE':
+                        contact_info['counselor_contact_status'] = 'CONTACTED_BY_MESSAGE'
+                        contact_info['last_contacted_at'] = iso(note.created_at)
+                if note.kind == 'CALL':
+                    contact_info['counselor_call_count'] += 1
+                elif note.kind == 'MESSAGE':
+                    contact_info['counselor_message_count'] += 1
+
+        adm_requests = list(
+            AdmissionRequest.objects.filter(lead=lead)
+            .select_related('counselor')
+            .order_by('-created_at', '-id')[:20]
+        )
+        caller_adm_requests_data = [{
+            'id': req.pk,
+            'status': req.status,
+            'status_display': req.get_status_display(),
+            'message': req.message,
+            'counselor_name': display_name(req.counselor),
+            'reviewed_at': iso(req.reviewed_at),
+            'created_at': iso(req.created_at),
+        } for req in adm_requests]
+        contact_status_code = contact_info['counselor_contact_status']
+        contact_status_display = CONTACT_STATUS_LABELS.get(contact_status_code, 'Pending Counselling')
+
         return Response({
             'lead_id': lead.pk,
-            'assignment': assignment_data(active_assignment(lead)),
+            'lead_status': lead.status,
+            'lead_status_display': lead.get_status_display(),
+            'assignment': assignment_data(current_assignment),
             'can_forward': can_forward,
             'reason': reason,
+            'counselor_contact_status': contact_status_code,
+            'counselor_contact_status_display': contact_status_display,
+            'last_contacted_at': contact_info['last_contacted_at'],
+            'last_call_duration': contact_info['last_call_duration'],
+            'counselor_call_count': contact_info['counselor_call_count'],
+            'counselor_message_count': contact_info.get('counselor_message_count', 0),
+            'has_pending_admission_request': any(
+                req.status == AdmissionRequest.Status.PENDING for req in adm_requests
+            ),
+            'latest_admission_request_status': adm_requests[0].status if adm_requests else None,
+            'latest_admission_request_status_display': (
+                adm_requests[0].get_status_display() if adm_requests else None
+            ),
+            'admission_requests': caller_adm_requests_data,
             'counselor_notes': counselor_notes_data,
         })
 

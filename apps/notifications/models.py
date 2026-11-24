@@ -14,6 +14,7 @@ class Notification(models.Model):
         LEAVE_REQUEST = 'LEAVE_REQUEST', 'Leave request'
         PENDING_LEADS = 'PENDING_LEADS', 'Pending leads alert'
         ATTENDANCE_CORRECTION = 'ATTENDANCE_CORRECTION', 'Attendance correction request'
+        WORK_REPORT_REMINDER = 'WORK_REPORT_REMINDER', 'Work report reminder'
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                   related_name='notifications')

@@ -51,15 +51,21 @@ class EmployeeView(APIView):
 
 class EmployeeHomeView(EmployeeView):
     def get(self, request):
+        from apps.web.attendance_services import build_employee_attendance_overview
+
         user = request.user
-        today = timezone.localdate()
+        now = timezone.now()
+        today = timezone.localdate(now)
+        attendance_overview = build_employee_attendance_overview(user=user, now=now)
+        shift_attendance = attendance_overview.get('daily_records', [])
         return Response({
             'enrolled': AttendancePhotoRequest.objects.filter(employee=user, action='ENROLL', status='APPROVED').exists(),
             'photo_requests': list(AttendancePhotoRequest.objects.filter(employee=user).order_by('-created_at').values('id', 'action', 'status', 'created_at', 'review_note')[:20]),
             'sessions': list(user.app_sessions.order_by('-logged_in_at').values('id', 'logged_in_at', 'logged_out_at', 'expires_at', 'end_reason', 'active_seconds')[:30]),
             'role': user.role, 'role_label': user.get_role_display(),
             'date': today,
-            'attendance': list(Attendance.objects.filter(employee=user).order_by('-date').values('id', 'date', 'status', 'checked_in', 'checked_out')[:30]),
+            'attendance': shift_attendance,
+            'attendance_overview': attendance_overview,
             'attendance_requests': [
                 serialize_attendance_request(r)
                 for r in AttendanceCorrectionRequest.objects.filter(employee=user)
@@ -71,8 +77,18 @@ class EmployeeHomeView(EmployeeView):
             'reports': list(WorkReport.objects.filter(employee=user).order_by('-date')
                              .annotate(has_photo=Case(When(photo__isnull=False, then=Value(True)), default=Value(False), output_field=BooleanField()))
                              .values('id', 'date', 'notes', 'work_link', 'work_links', 'project_reports', 'has_photo')[:30]),
-            'holidays': list(Holiday.objects.filter(date__gte=today).order_by('date').values('id', 'name', 'date')[:10]),
+            'holidays': list(Holiday.objects.filter(date__gte=today.replace(month=1, day=1)).order_by('date').values('id', 'name', 'date')[:50]),
         })
+
+
+class EmployeeAttendanceOverviewView(EmployeeView):
+    """Returns month-specific or all-months shift attendance overview for the authenticated employee."""
+    def get(self, request):
+        from apps.web.attendance_services import build_employee_attendance_overview
+
+        month = (request.query_params.get('month') or '').strip() or None
+        overview = build_employee_attendance_overview(user=request.user, selected_month=month)
+        return Response(overview)
 
 
 class EmployeeLeaveView(EmployeeView):

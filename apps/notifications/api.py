@@ -39,6 +39,11 @@ class NotificationListView(OwnedNotifications, ListAPIView):
         if getattr(self.request.user, 'role', None) == 'CALLER':
             from apps.followups.notifications import check_and_notify_due_followups
             check_and_notify_due_followups(caller=self.request.user)
+        try:
+            from apps.notifications.attendance_reminders import check_and_send_work_report_reminder_for_user
+            check_and_send_work_report_reminder_for_user(self.request.user)
+        except Exception:
+            pass
         return super().get_queryset()
 
 
@@ -47,6 +52,11 @@ class UnreadCountView(OwnedNotifications, APIView):
         if getattr(request.user, 'role', None) == 'CALLER':
             from apps.followups.notifications import check_and_notify_due_followups
             check_and_notify_due_followups(caller=request.user)
+        try:
+            from apps.notifications.attendance_reminders import check_and_send_work_report_reminder_for_user
+            check_and_send_work_report_reminder_for_user(request.user)
+        except Exception:
+            pass
         return Response({'unread_count': self.get_queryset().filter(is_read=False).count()})
 
 

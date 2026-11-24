@@ -1,6 +1,7 @@
 from .employee_views import PhotoChallengeView, PhotoAttendanceView, AdminEmployeeCapabilityView
 from .employee_views import (
     EmployeeHomeView,
+    EmployeeAttendanceOverviewView,
     EmployeeLeaveView,
     EmployeeProjectListView,
     EmployeeProjectView,
@@ -38,6 +39,7 @@ urlpatterns = [
     path('employee/photo-challenge/', PhotoChallengeView.as_view()),
     path('employee/photo-attendance/', PhotoAttendanceView.as_view()),
     path('employee/', EmployeeHomeView.as_view()),
+    path('employee/attendance-overview/', EmployeeAttendanceOverviewView.as_view(), name='mobile-employee-attendance-overview'),
     path('employee/leaves/', EmployeeLeaveView.as_view()),
     path('employee/leaves/<int:pk>/', EmployeeLeaveView.as_view()),
     path('employee/attendance-requests/', EmployeeAttendanceRequestView.as_view(), name='mobile-employee-attendance-requests'),

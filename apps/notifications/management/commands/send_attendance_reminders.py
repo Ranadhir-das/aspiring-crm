@@ -12,14 +12,15 @@ from django.core.management.base import BaseCommand, CommandError
 from apps.notifications.attendance_reminders import (
     REMINDER_LOGIN,
     REMINDER_LOGOUT,
+    REMINDER_WORK_REPORT,
     send_attendance_reminders,
 )
 
 
 class Command(BaseCommand):
     help = (
-        "Idempotently dispatches employee shift login and logout reminder notifications "
-        "based on current Asia/Kolkata shift states, weekly off, holidays, and leaves."
+        "Idempotently dispatches employee shift login, logout, and 7h45m work report reminder "
+        "notifications based on current Asia/Kolkata shift states, weekly off, holidays, and leaves."
     )
 
     def add_arguments(self, parser):
@@ -28,8 +29,8 @@ class Command(BaseCommand):
             dest="reminder_type",
             type=str,
             default="AUTO",
-            choices=["AUTO", "LOGIN", "LOGOUT"],
-            help="Type of reminder to dispatch: LOGIN (shift start), LOGOUT (shift end), or AUTO (inferred from time).",
+            choices=["AUTO", "LOGIN", "LOGOUT", "WORK_REPORT"],
+            help="Type of reminder to dispatch: LOGIN, LOGOUT, WORK_REPORT (7h45m net work), or AUTO.",
         )
         parser.add_argument(
             "--dry-run",

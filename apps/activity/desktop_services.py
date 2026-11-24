@@ -627,6 +627,13 @@ def ingest_activity_buckets(
                 else:
                     ts.save(update_fields=["total_active_seconds", "total_idle_seconds", "updated_at"])
 
+    if ingested_count > 0:
+        try:
+            from apps.notifications.attendance_reminders import check_and_send_work_report_reminder_for_user
+            check_and_send_work_report_reminder_for_user(user, now=now)
+        except Exception:
+            logger.exception("Work report reminder check failed after desktop bucket ingestion")
+
     return {
         "status": "SUCCESS",
         "ingested_count": ingested_count,

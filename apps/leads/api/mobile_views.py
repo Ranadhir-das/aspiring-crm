@@ -37,12 +37,28 @@ class MobileLeadListView(ListAPIView):
         if not is_caller_capable(user):
             return Lead.objects.none()
         from apps.calls.models import Call
+        from apps.leads.counselor import AdmissionRequest, CounselorNote, LeadCounselorAssignment
         from django.db.models import Prefetch
         qs = (
             Lead.objects
             .select_related("import_batch", "service_type")
             .prefetch_related(
                 Prefetch("calls", queryset=Call.objects.prefetch_related("points_entries").order_by("-started_at", "-pk")),
+                Prefetch(
+                    "counselor_assignments",
+                    queryset=LeadCounselorAssignment.objects.filter(is_active=True).select_related("counselor", "forwarded_by"),
+                    to_attr="_prefetched_active_assignments",
+                ),
+                Prefetch(
+                    "counselor_notes",
+                    queryset=CounselorNote.objects.select_related("counselor").order_by("-created_at", "-id"),
+                    to_attr="_prefetched_counselor_notes",
+                ),
+                Prefetch(
+                    "admission_requests",
+                    queryset=AdmissionRequest.objects.order_by("-created_at", "-id"),
+                    to_attr="_prefetched_admission_requests",
+                ),
             )
             .filter(assigned_caller=user)
             .order_by("-created_at")
@@ -67,7 +83,31 @@ class MobileLeadDetailView(RetrieveAPIView):
         from apps.accounts.capabilities import is_caller_capable
         if not is_caller_capable(user):
             return Lead.objects.none()
-        return restrict_apostille(Lead.objects.filter(assigned_caller=user), user)
+        from apps.leads.counselor import AdmissionRequest, CounselorNote, LeadCounselorAssignment
+        from django.db.models import Prefetch
+        qs = (
+            Lead.objects
+            .select_related("import_batch", "service_type")
+            .prefetch_related(
+                Prefetch(
+                    "counselor_assignments",
+                    queryset=LeadCounselorAssignment.objects.filter(is_active=True).select_related("counselor", "forwarded_by"),
+                    to_attr="_prefetched_active_assignments",
+                ),
+                Prefetch(
+                    "counselor_notes",
+                    queryset=CounselorNote.objects.select_related("counselor").order_by("-created_at", "-id"),
+                    to_attr="_prefetched_counselor_notes",
+                ),
+                Prefetch(
+                    "admission_requests",
+                    queryset=AdmissionRequest.objects.order_by("-created_at", "-id"),
+                    to_attr="_prefetched_admission_requests",
+                ),
+            )
+            .filter(assigned_caller=user)
+        )
+        return restrict_apostille(qs, user)
 
 
 class MobileLeadUpdateView(UpdateAPIView):

@@ -100,11 +100,22 @@
 
 
 <section class="panel spaced" aria-label="Counsellor Notes">
-  <div class="panel-heading">
+  <div class="panel-heading" style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
     <div>
       <h2>Counsellor Notes</h2>
-      <p>Conversation and counselling notes recorded by the assigned counsellor</p>
+      <p>Conversation, message contact, and counselling progress recorded by the assigned counsellor</p>
     </div>
+    {% if caller_counselor_summary %}
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+      <span class="badge">Counsellor: {{ caller_counselor_summary.counselor_name }}</span>
+      <span class="badge {% if caller_counselor_summary.contact_status == 'CONTACTED' %}interested{% elif caller_counselor_summary.contact_status == 'CONTACTED_BY_MESSAGE' %}call_back{% else %}pending{% endif %}">
+        {{ caller_counselor_summary.contact_status_display }}
+      </span>
+      {% if caller_counselor_summary.call_count %}<span class="badge">Calls: {{ caller_counselor_summary.call_count }}</span>{% endif %}
+      {% if caller_counselor_summary.message_count %}<span class="badge">Messages: {{ caller_counselor_summary.message_count }}</span>{% endif %}
+      {% if caller_counselor_summary.admission_request_status_display %}<span class="badge">Admission Req: {{ caller_counselor_summary.admission_request_status_display }}</span>{% endif %}
+    </div>
+    {% endif %}
   </div>
   {% if counselor_notes %}
   <div class="table-scroll">

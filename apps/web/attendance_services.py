@@ -1053,3 +1053,228 @@ def get_attendance_leaderboard(
         top_entries=entries[:top_n],
         all_entries=entries,
     )
+
+
+def _serialize_mobile_day_record(rec: AttendanceDayRecord, record_id: int) -> dict[str, Any]:
+    """Serializes an AttendanceDayRecord for the mobile Employee Workspace Attendance UI.
+
+    IN TIME and OUT TIME represent Shift Start (first_start_dt) and Shift End (final_end_dt),
+    and total_hours represents the shift span from Shift Start to Shift End (gross_seconds),
+    with net_work_seconds and break_seconds included for full transparency.
+    """
+    in_iso = rec.first_start_dt.isoformat() if rec.first_start_dt else None
+    out_iso = rec.final_end_dt.isoformat() if rec.final_end_dt else None
+    total_hours_formatted = rec.gross_formatted if rec.first_start_dt else "—"
+    return {
+        "id": record_id,
+        "date": rec.date.isoformat(),
+        "date_formatted": rec.date_formatted,
+        "weekday_short": rec.date.strftime("%a"),
+        "month": rec.date.strftime("%Y-%m"),
+        "status": rec.status_code,
+        "status_code": rec.status_code,
+        "status_label": rec.status_label,
+        "checked_in": in_iso,
+        "checked_out": out_iso,
+        "in_time": in_iso,
+        "out_time": out_iso,
+        "in_time_formatted": rec.first_start_formatted if rec.first_start_dt else "—",
+        "out_time_formatted": (
+            "Active"
+            if (rec.has_active_shift and not rec.final_end_dt)
+            else (rec.final_end_formatted if rec.final_end_dt else "—")
+        ),
+        "total_hours_seconds": rec.gross_seconds,
+        "total_hours": round(rec.gross_seconds / 3600.0, 2),
+        "total_hours_formatted": total_hours_formatted,
+        "net_work_seconds": rec.net_work_seconds,
+        "net_work_hours": rec.net_work_hours,
+        "net_work_formatted": rec.net_work_formatted,
+        "break_seconds": rec.break_seconds,
+        "break_formatted": rec.break_formatted,
+        "has_active_shift": rec.has_active_shift,
+        "is_today": rec.is_today,
+        "exception_status": rec.exception_status,
+        "notes": rec.notes,
+    }
+
+
+def _aggregate_summary_bucket(records: list[AttendanceDayRecord]) -> dict[str, Any]:
+    """Aggregates Present, Absent, Holiday, Sunday, Leave, and Shift Hours across daily records."""
+    full_shift = 0
+    short_shift = 0
+    active_shift = 0
+    missing_checkout = 0
+    absent = 0
+    holiday = 0
+    sunday = 0
+    leave = 0
+    not_started = 0
+    total_shift_seconds = 0
+    total_net_seconds = 0
+    total_break_seconds = 0
+
+    for rec in records:
+        if rec.is_future:
+            continue
+        code = rec.status_code
+        if code == "FULL_SHIFT":
+            full_shift += 1
+        elif code == "SHORT_SHIFT":
+            short_shift += 1
+        elif code in {"ACTIVE", "ACTIVE_SHIFT"}:
+            active_shift += 1
+        elif code == "MISSING_CHECKOUT":
+            missing_checkout += 1
+        elif code == "ABSENT":
+            absent += 1
+        elif code == "HOLIDAY":
+            holiday += 1
+        elif code == "WEEK_OFF":
+            sunday += 1
+        elif code in {"LEAVE", "ON_LEAVE"}:
+            leave += 1
+        elif code == "NOT_STARTED":
+            not_started += 1
+
+        total_shift_seconds += rec.gross_seconds
+        total_net_seconds += rec.net_work_seconds
+        total_break_seconds += rec.break_seconds
+
+    present = full_shift + short_shift + active_shift + missing_checkout
+    eligible_working_days = present + absent
+    attendance_pct = (
+        round((present / eligible_working_days) * 100.0, 1)
+        if eligible_working_days > 0
+        else 0.0
+    )
+
+    return {
+        "present": present,
+        "full_shift": full_shift,
+        "short_shift": short_shift,
+        "active_shift": active_shift,
+        "missing_checkout": missing_checkout,
+        "absent": absent,
+        "holiday": holiday,
+        "sunday": sunday,
+        "leave": leave,
+        "not_started": not_started,
+        "total_days": len([r for r in records if not r.is_future]),
+        "eligible_working_days": eligible_working_days,
+        "attendance_pct": attendance_pct,
+        "total_shift_seconds": total_shift_seconds,
+        "total_shift_hours": round(total_shift_seconds / 3600.0, 2),
+        "total_shift_formatted": format_seconds_to_hms(total_shift_seconds),
+        "total_net_seconds": total_net_seconds,
+        "total_net_hours": round(total_net_seconds / 3600.0, 2),
+        "total_net_formatted": format_seconds_to_hms(total_net_seconds),
+        "total_break_seconds": total_break_seconds,
+        "total_break_formatted": format_seconds_to_hms(total_break_seconds),
+    }
+
+
+def build_employee_attendance_overview(
+    user: User,
+    selected_month: str | None = None,
+    max_daily_days: int = 366,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """
+    Computes an employee's complete multi-month attendance overview and shift-based daily records:
+    - Evaluates every day from the employee's effective start date through today using
+      authoritative WorkSession (Shift Start / Shift End) + Holiday + Sunday + Leave rules.
+    - Returns all-months totals, month-by-month breakdown (all months), today's shift summary,
+      and daily shift records.
+    """
+    from django.db.models import Min
+
+    current_time = now or timezone.now()
+    today = timezone.localdate(current_time)
+
+    joined_dt = getattr(user, "date_joined", None)
+    join_date = (
+        timezone.localtime(joined_dt).date()
+        if (joined_dt and timezone.is_aware(joined_dt))
+        else (joined_dt.date() if joined_dt else today)
+    )
+    if join_date > today:
+        join_date = today
+
+    earliest_ws = WorkSession.objects.filter(user=user).aggregate(m=Min("date"))["m"]
+    earliest_att = Attendance.objects.filter(employee=user).aggregate(m=Min("date"))["m"]
+    earliest_lv = LeaveRequest.objects.filter(employee=user, status="APPROVED").aggregate(
+        m=Min("start_date")
+    )["m"]
+
+    candidates = [d for d in (join_date, earliest_ws, earliest_att, earliest_lv) if d is not None]
+    effective_start = min(candidates) if candidates else today
+
+    # Safety bound: 36 months max (~1095 days) so queries always stay instantaneous
+    min_bound = (today.replace(day=1) - timedelta(days=1095)).replace(day=1)
+    if effective_start < min_bound:
+        effective_start = min_bound
+    if effective_start > today:
+        effective_start = today
+
+    all_records = get_attendance_records(
+        user=user,
+        start_date=effective_start,
+        end_date=today,
+        employee_id=user.pk,
+        now=current_time,
+    )
+
+    # Group records by YYYY-MM (all_records is already sorted descending by date)
+    records_by_month: dict[str, list[AttendanceDayRecord]] = {}
+    month_order: list[str] = []
+    for rec in all_records:
+        m_key = rec.date.strftime("%Y-%m")
+        if m_key not in records_by_month:
+            records_by_month[m_key] = []
+            month_order.append(m_key)
+        records_by_month[m_key].append(rec)
+
+    current_month_key = today.strftime("%Y-%m")
+    if current_month_key not in records_by_month:
+        records_by_month[current_month_key] = []
+        month_order.insert(0, current_month_key)
+
+    monthly_summaries = []
+    for m_key in month_order:
+        m_recs = records_by_month[m_key]
+        y_str, m_str = m_key.split("-")
+        m_date = date(int(y_str), int(m_str), 1)
+        bucket = _aggregate_summary_bucket(m_recs)
+        monthly_summaries.append({
+            "month": m_key,
+            "label": m_date.strftime("%B %Y"),
+            "short_label": m_date.strftime("%b %Y"),
+            **bucket,
+        })
+
+    all_months_summary = _aggregate_summary_bucket(all_records)
+    all_months_summary["months_count"] = len(monthly_summaries)
+
+    today_rec = next((r for r in all_records if r.date == today), None)
+    today_shift = _serialize_mobile_day_record(today_rec, int(today.strftime("%Y%m%d"))) if today_rec else None
+
+    if selected_month and selected_month in records_by_month:
+        target_daily = records_by_month[selected_month]
+    else:
+        cutoff_daily = today - timedelta(days=max_daily_days)
+        target_daily = [r for r in all_records if r.date >= cutoff_daily]
+
+    serialized_daily = [
+        _serialize_mobile_day_record(rec, int(rec.date.strftime("%Y%m%d")))
+        for rec in target_daily
+    ]
+
+    return {
+        "effective_start_date": effective_start.isoformat(),
+        "current_month": current_month_key,
+        "today_shift": today_shift,
+        "all_months": all_months_summary,
+        "months": monthly_summaries,
+        "daily_records": serialized_daily,
+    }

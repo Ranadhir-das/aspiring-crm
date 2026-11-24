@@ -492,7 +492,38 @@ def lead_detail(request, pk):
     collaboration_notes = list(lead.collaboration_notes.select_related('author').order_by('-created_at')[:20])
     activity_qs = ActivityLog.objects.filter(lead=lead).select_related('actor').order_by('-created_at')
     if not is_mgmt:
-        activity_qs = activity_qs.filter(Q(actor=request.user) | Q(verb=ActivityLog.Verb.LEAD_CREATED))
+        activity_qs = activity_qs.filter(
+            Q(actor=request.user)
+            | Q(verb__in=[
+                ActivityLog.Verb.LEAD_CREATED,
+                ActivityLog.Verb.COUNSELOR_FORWARDED,
+                ActivityLog.Verb.COUNSELOR_REASSIGNED,
+                ActivityLog.Verb.ADMISSION_REQUESTED,
+                ActivityLog.Verb.WHATSAPP_INITIATED,
+            ])
+        )
+    from apps.leads.counselor_services import (
+        CONTACT_STATUS_LABELS,
+        active_assignment,
+        counselor_contact_summary_for_leads,
+        display_name,
+    )
+    current_counselor_assign = active_assignment(lead)
+    caller_counselor_summary = None
+    if current_counselor_assign:
+        c_summary = counselor_contact_summary_for_leads(current_counselor_assign.counselor, [lead.pk]).get(lead.pk, {})
+        c_status = c_summary.get('counselor_contact_status', 'PENDING')
+        latest_adm_req = lead.admission_requests.order_by('-created_at', '-id').first()
+        caller_counselor_summary = {
+            'counselor_name': display_name(current_counselor_assign.counselor),
+            'forwarded_at': current_counselor_assign.forwarded_at,
+            'contact_status': c_status,
+            'contact_status_display': CONTACT_STATUS_LABELS.get(c_status, 'Pending Counselling'),
+            'call_count': c_summary.get('counselor_call_count', 0),
+            'message_count': c_summary.get('counselor_message_count', 0),
+            'last_contacted_at': c_summary.get('last_contacted_at'),
+            'admission_request_status_display': latest_adm_req.get_status_display() if latest_adm_req else None,
+        }
     counselor_panel = None
     if is_mgmt:
         counselor_panel = {
@@ -508,6 +539,7 @@ def lead_detail(request, pk):
                 activity_log=activity_qs[:50],
                 website_submissions=website_submissions,
                 whatsapp_templates=whatsapp_templates, counselor_panel=counselor_panel,
+                caller_counselor_summary=caller_counselor_summary,
                 counselor_notes=counselor_notes)
 
 

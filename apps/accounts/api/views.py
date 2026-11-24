@@ -250,4 +250,10 @@ class MobileSessionView(APIView):
             session.last_seen = now
             session.foreground = event['active']
             session.save()
+            try:
+                from apps.notifications.attendance_reminders import check_and_send_work_report_reminder_for_user
+                check_and_send_work_report_reminder_for_user(request.user, now=now)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("Work report reminder check failed during heartbeat")
         return Response({'active_seconds': int(session.active_seconds)})

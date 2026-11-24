@@ -163,6 +163,20 @@ class CurrentActivityView(BaseActivityView):
         ).prefetch_related("segments__category", "breaks__reason_config").first()
 
         data = serialize_current_session(session, now)
+        if session:
+            try:
+                from apps.notifications.attendance_reminders import (
+                    WORK_REPORT_REMINDER_NET_SECONDS,
+                    check_and_send_work_report_reminder_for_user,
+                )
+                session_net = (data.get("session") or {}).get("elapsed_net_seconds") or 0
+                if session_net >= WORK_REPORT_REMINDER_NET_SECONDS or WorkSession.objects.filter(
+                    user=request.user, date=timezone.localdate(now)
+                ).count() > 1:
+                    check_and_send_work_report_reminder_for_user(request.user, now=now)
+            except Exception:
+                import logging
+                logging.getLogger(__name__).exception("Work report reminder check failed in CurrentActivityView")
         return Response(data)
 
 
