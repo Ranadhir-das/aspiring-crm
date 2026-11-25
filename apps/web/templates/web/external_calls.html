@@ -67,6 +67,15 @@
       </select>
     </div>
 
+    <!-- Direction Filter -->
+    <div class="external-select-field">
+      <select name="direction" aria-label="Direction" onchange="this.form.submit()">
+        {% for val, label in form.fields.direction.choices %}
+        <option value="{{ val }}" {% if form.direction.value == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
     <!-- Followup Status Filter -->
     <div class="external-select-field">
       <select name="followup_status" aria-label="Follow-up" onchange="this.form.submit()">
@@ -196,7 +205,14 @@
             <span class="duration-pill">{{ call.duration_seconds }}s</span>
           </td>
           <td>
-            <span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display|default:'Recorded' }}</span>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+              {% if call.direction == 'INBOUND' %}
+              <span class="badge interested">↙ Incoming</span>
+              {% else %}
+              <span class="badge">↗ Outgoing</span>
+              {% endif %}
+              <span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display|default:'Recorded' }}</span>
+            </div>
           </td>
           <td class="notes-cell" style="max-width: 250px; font-size: 12px;">
             {{ call.notes|truncatechars:120|default:'—' }}

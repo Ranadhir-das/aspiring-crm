@@ -8,6 +8,8 @@ class CallAdmin(admin.ModelAdmin):
 
     list_display = (
         "lead",
+        "phone_number",
+        "direction",
         "caller",
         "started_at",
         "duration_seconds",
@@ -16,6 +18,7 @@ class CallAdmin(admin.ModelAdmin):
     )
 
     list_filter = (
+        "direction",
         "outcome",
         "caller",
         "started_at",

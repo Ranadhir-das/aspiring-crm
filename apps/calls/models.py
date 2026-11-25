@@ -29,8 +29,15 @@ class Call(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["caller", "client_event_id"], condition=models.Q(client_event_id__isnull=False), name="unique_caller_call_event")]
-        indexes = [models.Index(fields=["caller", "started_at"])]
+        indexes = [
+            models.Index(fields=["caller", "started_at"]),
+            models.Index(fields=["caller", "direction", "started_at"]),
+        ]
 
+
+    class Direction(models.TextChoices):
+        OUTBOUND = "OUTBOUND", "Outgoing"
+        INBOUND = "INBOUND", "Incoming"
 
     class Outcome(models.TextChoices):
         INTERESTED = "INTERESTED", "Interested"
@@ -52,6 +59,12 @@ class Call(models.Model):
         FOLLOW_UP_REQUIRED = "FOLLOW_UP_REQUIRED", "Follow-up Required"
 
     phone_number = models.CharField(max_length=30, blank=True, db_index=True)
+    direction = models.CharField(
+        max_length=10,
+        choices=Direction.choices,
+        default=Direction.OUTBOUND,
+        db_index=True,
+    )
     submission_fingerprint = models.CharField(max_length=64, blank=True, editable=False)
 
     lead = models.ForeignKey(

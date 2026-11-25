@@ -27,7 +27,7 @@ def call_recordings_list(request):
         'call__lead',
         'call__lead__import_batch',
         'call__caller',
-    ).order_by('-created_at')
+    ).order_by('-call__started_at', '-created_at')
 
     # Security & Role Isolation: callers and dual-role callers only see their own recordings
     # on currently assigned leads or direct external calls.
@@ -71,6 +71,21 @@ def call_recordings_list(request):
         except (ValueError, TypeError):
             pass
 
+    # Pre-direction counts for quick Outgoing / Incoming tabs
+    direction_counts = dict(
+        queryset.order_by().values('call__direction').annotate(n=Count('id')).values_list('call__direction', 'n')
+    )
+    outbound_count = direction_counts.get(Call.Direction.OUTBOUND, 0)
+    inbound_count = direction_counts.get(Call.Direction.INBOUND, 0)
+    all_directions_count = outbound_count + inbound_count
+
+    # Direction filter (OUTBOUND / INBOUND)
+    direction = request.GET.get('direction', '').strip().upper()
+    if direction in Call.Direction.values:
+        queryset = queryset.filter(call__direction=direction)
+    else:
+        direction = ''
+
     # Aggregations & Metrics for dashboard header
     today = timezone.localtime().date()
     stats = queryset.aggregate(
@@ -95,7 +110,11 @@ def call_recordings_list(request):
     today_count = queryset.filter(call__started_at__date=today).count()
 
     metrics = [
-        {'label': 'Total Recordings', 'value': f"{total_count:,}", 'pill': f"{size_formatted} stored"},
+        {
+            'label': 'Total Recordings',
+            'value': f"{total_count:,}",
+            'pill': f"{outbound_count} out · {inbound_count} in · {size_formatted}",
+        },
         {'label': 'Total Audio Time', 'value': duration_formatted, 'pill': 'Accumulated call duration'},
         {'label': 'Average Duration', 'value': f"{avg_seconds // 60:02d}:{avg_seconds % 60:02d}", 'pill': 'Per recorded call'},
         {'label': "Today's Recordings", 'value': f"{today_count:,}", 'pill': 'Recorded today'},
@@ -103,7 +122,7 @@ def call_recordings_list(request):
 
     callers = eligible_callers_qs().order_by('first_name', 'username') if is_management else []
 
-    active_filters_count = sum(1 for v in [search_query, caller_id, outcome, date_from, date_to] if v)
+    active_filters_count = sum(1 for v in [search_query, caller_id, outcome, direction, date_from, date_to] if v)
 
     page_obj = paginate(request, queryset)
 
@@ -114,13 +133,18 @@ def call_recordings_list(request):
         records=page_obj,
         metrics=metrics,
         total_count=total_count,
+        all_directions_count=all_directions_count,
+        outbound_count=outbound_count,
+        inbound_count=inbound_count,
         search=search_query,
         selected_caller=caller_id,
         selected_outcome=outcome,
+        selected_direction=direction,
         selected_date_from=date_from,
         selected_date_to=date_to,
         callers=callers,
         outcomes=Call.Outcome.choices,
+        directions=Call.Direction.choices,
         is_management=is_management,
         active_filters_count=active_filters_count,
     )

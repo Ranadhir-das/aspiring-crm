@@ -121,17 +121,26 @@
     </div>
 
     <!-- Collapsible Advanced Filters -->
-    <details class="advanced-filters-section" style="margin-top: 14px;" {% if start_date or end_date or selected_source or duration_min or duration_max or has_recording or has_followup %}open{% endif %}>
+    <details class="advanced-filters-section" style="margin-top: 14px;" {% if start_date or end_date or selected_source or duration_min or duration_max or has_recording or has_followup or selected_direction %}open{% endif %}>
       <summary class="advanced-filters-toggle">
         <span>
           ⚡ Advanced Filters
-          {% if start_date or end_date or selected_source or duration_min or duration_max or has_recording or has_followup %}
+          {% if start_date or end_date or selected_source or duration_min or duration_max or has_recording or has_followup or selected_direction %}
           <span class="advanced-filters-badge">Active</span>
           {% endif %}
         </span>
         <span style="font-size:11px;color:var(--muted)">▼</span>
       </summary>
       <div class="advanced-filters-grid">
+        <div class="filter-group">
+          <label>Call Direction</label>
+          <select name="direction" class="filter-select" aria-label="Call direction">
+            <option value="">All directions (Out &amp; In)</option>
+            {% for val, label in directions %}
+            <option value="{{ val }}" {% if selected_direction == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <div class="filter-group">
           <label>Call Date Range</label>
           <div class="date-range-row">
@@ -247,6 +256,9 @@
       {% if selected_outcome_display %}
         <span class="filter-indicator">Outcome: <strong>{{ selected_outcome_display }}</strong></span>
       {% endif %}
+      {% if selected_direction %}
+        <span class="filter-indicator">Direction: <strong>{% if selected_direction == 'INBOUND' %}Incoming{% else %}Outgoing{% endif %}</strong></span>
+      {% endif %}
       {% if selected_caller_user %}
         <span class="filter-indicator">Caller: <strong>{% employee_link selected_caller_user %}</strong></span>
       {% endif %}
@@ -328,13 +340,20 @@
             {% endif %}
           </td>
           <td>
-            {% if call.outcome %}
-            <a href="{% querystring outcome=call.outcome page=None %}" title="Filter by {{ call.get_outcome_display }}" style="text-decoration:none">
-              <span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display }}</span>
-            </a>
-            {% else %}
-            <span class="badge">Recorded</span>
-            {% endif %}
+            <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+              {% if call.direction == 'INBOUND' %}
+              <span class="badge interested" title="Incoming callback">↙ Incoming</span>
+              {% else %}
+              <span class="badge" title="Outgoing call">↗ Outgoing</span>
+              {% endif %}
+              {% if call.outcome %}
+              <a href="{% querystring outcome=call.outcome page=None %}" title="Filter by {{ call.get_outcome_display }}" style="text-decoration:none">
+                <span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display }}</span>
+              </a>
+              {% else %}
+              <span class="badge">Recorded</span>
+              {% endif %}
+            </div>
           </td>
           <td>{% include "web/call_course.html" %}</td>
           <td>

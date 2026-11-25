@@ -224,6 +224,7 @@ def export_leads_excel(queryset):
 
 CALL_EXPORT_COLUMNS = [
     ("Call ID", "id"),
+    ("Direction", "direction"),
     ("Started At", "started_at"),
     ("Ended At", "ended_at"),
     ("Duration (sec)", "duration_seconds"),
@@ -278,6 +279,7 @@ def call_to_row(call):
 
     return [
         call.pk,
+        sanitize_cell(call.get_direction_display() if hasattr(call, "get_direction_display") else getattr(call, "direction", "Outgoing")),
         format_dt(call.started_at),
         format_dt(call.ended_at),
         call.duration_seconds,
@@ -371,7 +373,7 @@ def export_calls_excel(queryset):
             cell = ws.cell(row=row_idx, column=col_num)
             cell.font = regular_font
             cell.border = thin_border
-            if col_num in (1, 4, 13):
+            if col_num in (1, 5, 14):
                 cell.alignment = Alignment(horizontal="right", vertical="center")
             else:
                 cell.alignment = Alignment(horizontal="left", vertical="center")

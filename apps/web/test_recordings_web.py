@@ -154,14 +154,67 @@ class CallRecordingsWebTests(TestCase):
         self.client.force_login(self.manager)
         response = self.client.get('/recordings/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'call-recordings.css?v=2')
+        self.assertContains(response, 'call-recordings.css?v=3')
         self.assertContains(response, 'audio-visualizer.js?v=2')
         self.assertContains(response, 'recordings-filter-form has-caller-filter')
         self.assertContains(response, 'role="region"')
         self.assertContains(response, 'aria-labelledby="recordings-table-heading"')
         self.assertContains(response, 'role="slider"')
+        self.assertContains(response, 'recordings-direction-tabs')
 
         self.client.force_login(self.caller1)
         caller_resp = self.client.get('/recordings/')
         self.assertEqual(caller_resp.status_code, 200)
         self.assertNotContains(caller_resp, 'has-caller-filter')
+
+    def test_recordings_shows_and_filters_both_outbound_and_inbound(self):
+        now = timezone.now()
+        inbound_call = Call.objects.create(
+            caller=self.caller1,
+            lead=self.lead1,
+            phone_number=self.lead1.phone,
+            direction=Call.Direction.INBOUND,
+            started_at=now - timedelta(minutes=15),
+            ended_at=now - timedelta(minutes=13),
+            duration_seconds=120,
+            outcome='',
+            notes='Lead called back later.',
+        )
+        CallRecording.objects.create(
+            call=inbound_call,
+            duration_seconds=120,
+            file_size=len(self.data),
+            sha256='dummy-inbound-1',
+            file=SimpleUploadedFile('inbound1.m4a', self.data, content_type='audio/mp4'),
+        )
+
+        self.client.force_login(self.manager)
+        # Default view shows BOTH outgoing and incoming recordings
+        all_resp = self.client.get('/recordings/')
+        self.assertEqual(all_resp.status_code, 200)
+        self.assertEqual(all_resp.context['outbound_count'], 3)
+        self.assertEqual(all_resp.context['inbound_count'], 1)
+        self.assertContains(all_resp, '↗ Outgoing')
+        self.assertContains(all_resp, '↙ Incoming')
+        self.assertContains(all_resp, f'/calls/{self.call1.pk}/recording/')
+        self.assertContains(all_resp, f'/calls/{inbound_call.pk}/recording/')
+
+        # Filter INBOUND only
+        in_resp = self.client.get('/recordings/?direction=INBOUND')
+        self.assertEqual(in_resp.status_code, 200)
+        self.assertEqual(in_resp.context['total_count'], 1)
+        self.assertContains(in_resp, 'Lead called back later.')
+        self.assertNotContains(in_resp, 'Rahul Verma')
+
+        # Filter OUTBOUND only
+        out_resp = self.client.get('/recordings/?direction=OUTBOUND')
+        self.assertEqual(out_resp.status_code, 200)
+        self.assertEqual(out_resp.context['total_count'], 3)
+        self.assertNotContains(out_resp, 'Lead called back later.')
+
+        # Searching the lead phone returns BOTH outbound and incoming recordings together
+        pair_resp = self.client.get(f'/recordings/?q={self.lead1.phone}')
+        self.assertEqual(pair_resp.status_code, 200)
+        self.assertEqual(pair_resp.context['total_count'], 2)
+        self.assertContains(pair_resp, f'/calls/{self.call1.pk}/recording/')
+        self.assertContains(pair_resp, f'/calls/{inbound_call.pk}/recording/')

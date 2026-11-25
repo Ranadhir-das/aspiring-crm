@@ -348,12 +348,12 @@
   }
 }
 
-@container recordings-page (inline-size >= 940px) {
+@container recordings-page (inline-size >= 980px) {
   .recordings-filter-form {
-    grid-template-columns: minmax(210px, 1.8fr) repeat(3, minmax(130px, 1fr)) auto;
+    grid-template-columns: minmax(190px, 1.6fr) repeat(4, minmax(120px, 1fr)) auto;
   }
   .recordings-filter-form.has-caller-filter {
-    grid-template-columns: minmax(210px, 1.8fr) repeat(4, minmax(130px, 1fr)) auto;
+    grid-template-columns: minmax(180px, 1.5fr) repeat(5, minmax(112px, 1fr)) auto;
   }
   .filter-search {
     grid-column: auto;
@@ -464,7 +464,7 @@
   background: var(--rec-subtle-bg);
 }
 
-@container recordings-page (inline-size < 940px) {
+@container recordings-page (inline-size < 980px) {
   .btn-filter-submit,
   .btn-filter-clear {
     flex: 1 1 0;
@@ -522,6 +522,123 @@
   color: var(--accent);
   border: 1px solid rgba(99, 102, 241, 0.25);
   white-space: nowrap;
+}
+
+/* Direction Quick Filter Tabs (All / Outgoing / Incoming) */
+.recordings-direction-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-inline-size: 100%;
+}
+
+.rec-dir-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-block-size: var(--rec-target-size);
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--rec-subtle-bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.rec-dir-tab:hover {
+  border-color: var(--rec-accent-a);
+  color: var(--text);
+}
+
+.rec-dir-tab.is-active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.45);
+  color: var(--rec-accent-a);
+}
+
+.rec-dir-tab.inbound.is-active {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #10b981;
+}
+
+[data-theme="light"] .rec-dir-tab.inbound.is-active {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #047857;
+}
+
+.rec-dir-count {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inline Direction Badge & All-Calls Thread Link */
+.rec-contact-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.rec-dir-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.rec-dir-badge.outbound {
+  background: rgba(99, 102, 241, 0.14);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.28);
+}
+
+[data-theme="light"] .rec-dir-badge.outbound {
+  background: #eef2ff;
+  color: #4338ca;
+  border-color: #c7d2fe;
+}
+
+.rec-dir-badge.inbound {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.32);
+}
+
+[data-theme="light"] .rec-dir-badge.inbound {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.rec-thread-link {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.rec-thread-link:hover {
+  text-decoration: underline;
+  background: var(--rec-subtle-bg);
 }
 
 .recordings-table-scroll {

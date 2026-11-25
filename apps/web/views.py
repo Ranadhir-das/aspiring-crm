@@ -946,6 +946,13 @@ def calls(request):
     elif has_recording == 'no':
         base_query = base_query.filter(recording__isnull=True)
 
+    # Call Direction Filter (OUTBOUND / INBOUND)
+    direction = request.GET.get('direction', '').strip().upper()
+    if direction in Call.Direction.values:
+        base_query = base_query.filter(direction=direction)
+    else:
+        direction = ''
+
     # Follow-up Status Filter
     has_followup = request.GET.get('has_followup', '').strip()
     if has_followup == 'yes':
@@ -1008,7 +1015,7 @@ def calls(request):
     callers = User.objects.filter(role=User.Role.CALLER, is_active=True).order_by('first_name', 'username') if request.user.role in MANAGEMENT else []
 
     active_filters_count = sum(1 for v in [
-        search, outcome, caller, batch, source, start_date_str, end_date_str,
+        search, outcome, direction, caller, batch, source, start_date_str, end_date_str,
         duration_min, duration_max, duration_preset, has_recording, has_followup
     ] if v)
 
@@ -1016,6 +1023,8 @@ def calls(request):
                 records=paginate(request, query),
                 search=search,
                 selected_outcome=outcome, selected_outcome_display=selected_outcome_display,
+                selected_direction=direction,
+                directions=Call.Direction.choices,
                 selected_caller=caller, selected_caller_user=selected_caller_user,
                 selected_batch=batch, batches=batches,
                 selected_source=source, sources=sources,

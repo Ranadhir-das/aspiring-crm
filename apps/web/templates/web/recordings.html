@@ -5,7 +5,7 @@
 {% block breadcrumb %}Call Recordings{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=2">
+<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=3">
 
 <div class="recordings-page">
   <!-- Hero Page Header -->
@@ -99,6 +99,16 @@
       {% endif %}
 
       <div class="filter-field">
+        <label class="filter-mini-label" for="rec-direction">Direction</label>
+        <select id="rec-direction" name="direction" class="filter-control">
+          <option value="">All Calls (Out &amp; In)</option>
+          {% for val, label in directions %}
+          <option value="{{ val }}" {% if selected_direction == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="filter-field">
         <label class="filter-mini-label" for="rec-outcome">Outcome</label>
         <select id="rec-outcome" name="outcome" class="filter-control">
           <option value="">All Outcomes</option>
@@ -133,11 +143,36 @@
     <div class="recordings-panel-head">
       <div class="recordings-panel-title-wrap">
         <h2 id="recordings-table-heading">Recorded Conversations</h2>
-        <p>Click play to stream immediately, drag or use arrow keys on the timeline to scrub.</p>
+        <p>Listen to both outgoing calls and incoming callbacks. Drag or use arrow keys on the timeline to scrub.</p>
       </div>
-      <span class="count-pill">
-        {{ records.paginator.count|default:records|length }} recording{% if records.paginator.count != 1 %}s{% endif %}
-      </span>
+      <div class="recordings-direction-tabs" role="navigation" aria-label="Filter recordings by call direction">
+        <a
+          href="{% querystring direction=None page=None %}"
+          class="rec-dir-tab{% if not selected_direction %} is-active{% endif %}"
+          {% if not selected_direction %}aria-current="page"{% endif %}
+        >
+          <span>All</span>
+          <span class="rec-dir-count">{{ all_directions_count }}</span>
+        </a>
+        <a
+          href="{% querystring direction='OUTBOUND' page=None %}"
+          class="rec-dir-tab{% if selected_direction == 'OUTBOUND' %} is-active{% endif %}"
+          {% if selected_direction == 'OUTBOUND' %}aria-current="page"{% endif %}
+        >
+          <span aria-hidden="true">↗</span>
+          <span>Outgoing</span>
+          <span class="rec-dir-count">{{ outbound_count }}</span>
+        </a>
+        <a
+          href="{% querystring direction='INBOUND' page=None %}"
+          class="rec-dir-tab inbound{% if selected_direction == 'INBOUND' %} is-active{% endif %}"
+          {% if selected_direction == 'INBOUND' %}aria-current="page"{% endif %}
+        >
+          <span aria-hidden="true">↙</span>
+          <span>Incoming</span>
+          <span class="rec-dir-count">{{ inbound_count }}</span>
+        </a>
+      </div>
     </div>
 
     <div
@@ -179,6 +214,18 @@
                 </span>
               </div>
               {% endif %}
+              <div class="rec-contact-badges">
+                {% if rec.call.direction == 'INBOUND' %}
+                <span class="rec-dir-badge inbound" title="Incoming callback from contact">↙ Incoming</span>
+                {% else %}
+                <span class="rec-dir-badge outbound" title="Outgoing call placed by caller">↗ Outgoing</span>
+                {% endif %}
+                {% if rec.call.lead_id %}
+                <a class="rec-thread-link" href="{% querystring q=rec.call.lead.phone direction=None page=None %}" title="Show all outgoing &amp; incoming recordings for this contact">All calls ↗</a>
+                {% elif rec.call.phone_number %}
+                <a class="rec-thread-link" href="{% querystring q=rec.call.phone_number direction=None page=None %}" title="Show all outgoing &amp; incoming recordings for this number">All calls ↗</a>
+                {% endif %}
+              </div>
               {% if rec.call.notes %}
               <p class="rec-note-preview" title="{{ rec.call.notes }}">{{ rec.call.notes|truncatechars:90 }}</p>
               {% endif %}

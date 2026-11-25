@@ -64,10 +64,14 @@ def _log_lead_activity(sender, instance, created, **kwargs):
 def _log_call_activity(sender, instance, created, **kwargs):
     if not created:
         return
-    outcome = instance.get_outcome_display() if instance.outcome else "logged"
+    outcome = instance.get_outcome_display() if instance.outcome else "recorded"
+    if instance.direction == Call.Direction.INBOUND:
+        verb_phrase = "received an incoming call"
+    else:
+        verb_phrase = "logged a call"
     ActivityLog.objects.create(
         lead=instance.lead, actor=instance.caller, verb=ActivityLog.Verb.CALL_LOGGED,
-        description=f"{_display_name(instance.caller)} logged a call — {outcome}",
+        description=f"{_display_name(instance.caller)} {verb_phrase} — {outcome}",
     )
 
 

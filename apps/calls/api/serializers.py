@@ -40,6 +40,15 @@ class CallSerializer(serializers.ModelSerializer):
         source="get_outcome_display",
         read_only=True,
     )
+    direction = serializers.ChoiceField(
+        choices=Call.Direction.choices,
+        required=False,
+        default=Call.Direction.OUTBOUND,
+    )
+    direction_display = serializers.CharField(
+        source="get_direction_display",
+        read_only=True,
+    )
 
     callback_at = serializers.DateTimeField(
         required=False,
@@ -59,6 +68,8 @@ class CallSerializer(serializers.ModelSerializer):
             "create_lead", "student_name", "preferred_course", "preferred_course_custom", "lead_source",
             "lead",
             "phone_number",
+            "direction",
+            "direction_display",
             "is_external",
             "followup",
             "lead_name",
@@ -81,6 +92,7 @@ class CallSerializer(serializers.ModelSerializer):
             "id",
             "caller",
             "caller_name",
+            "direction_display",
             "outcome_display",
             "has_recording",
             "recording_duration_seconds",
@@ -221,3 +233,39 @@ class CallSerializer(serializers.ModelSerializer):
     def get_recording_duration_seconds(self, obj):
         rec = self._cached_recording(obj)
         return rec.duration_seconds if rec is not None else None
+
+
+class IncomingCallSyncItemSerializer(serializers.Serializer):
+    phone_number = serializers.CharField(max_length=30)
+    started_at = serializers.DateTimeField()
+    ended_at = serializers.DateTimeField(required=False, allow_null=True)
+    duration_seconds = serializers.IntegerField(min_value=0, max_value=86400, default=0)
+    client_event_id = serializers.UUIDField(required=False, allow_null=True)
+    source = serializers.ChoiceField(
+        choices=[
+            ('CALL_LOG', 'Android Call Log'),
+            ('MEDIASTORE_RECORDING', 'Recording Filename Discovery'),
+            ('CALL_STATE', 'Live Call State'),
+        ],
+        required=False,
+        default='CALL_LOG',
+    )
+
+    def validate_phone_number(self, value):
+        return normalize_phone(value)
+
+    def validate(self, attrs):
+        started_at = attrs['started_at']
+        ended_at = attrs.get('ended_at')
+        if ended_at and ended_at < started_at:
+            attrs['ended_at'] = started_at
+        return attrs
+
+
+class IncomingCallsSyncRequestSerializer(serializers.Serializer):
+    calls = IncomingCallSyncItemSerializer(many=True, allow_empty=True)
+
+    def validate_calls(self, value):
+        if len(value) > 50:
+            raise serializers.ValidationError('A maximum of 50 incoming calls can be synced per request.')
+        return value

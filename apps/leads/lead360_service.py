@@ -436,12 +436,14 @@ def build_lead_360_payload(
 
         if category in ('ALL', 'CALL'):
             outcome_label = call.get_outcome_display() if call.outcome else 'Recorded'
+            is_inbound = getattr(call, 'direction', Call.Direction.OUTBOUND) == Call.Direction.INBOUND
+            direction_label = 'Incoming' if is_inbound else 'Outgoing'
             course_str = call.selected_course_label
             year_str = str(call.expected_admission_year) if call.expected_admission_year else ''
-            sub_parts = [f'Duration: {_format_duration_brief(dur)}']
+            sub_parts = [f'{direction_label} · Duration: {_format_duration_brief(dur)}']
             if course_str:
                 sub_parts.append(f"Course: {course_str}{f' ({year_str})' if year_str else ''}")
-            badges = [outcome_label]
+            badges = [direction_label, outcome_label]
             if course_str:
                 badges.append(course_str)
             if can_play_recording:
@@ -449,6 +451,11 @@ def build_lead_360_payload(
 
             recording_url = reverse('web:call-recording', args=[call.pk]) if can_play_recording else None
             api_recording_url = f'/api/v1/calls/{call.pk}/recording/' if can_play_recording else None
+            event_title = (
+                f'Incoming Call — {outcome_label}'
+                if is_inbound
+                else f'Call Logged — {outcome_label}'
+            )
 
             all_events.append(_make_event(
                 event_id=f'call:{call.pk}',
@@ -457,7 +464,7 @@ def build_lead_360_payload(
                 timestamp_dt=call.started_at,
                 source_order=SOURCE_RANK_CALL,
                 record_pk=call.pk,
-                title=f'Call Logged — {outcome_label}',
+                title=event_title,
                 subtitle=' · '.join(sub_parts),
                 body='' if is_pure_counselor_view else (call.notes or ''),
                 actor=call.caller,
@@ -465,6 +472,8 @@ def build_lead_360_payload(
                 badges=badges,
                 metadata={
                     'call_id': call.pk,
+                    'direction': getattr(call, 'direction', Call.Direction.OUTBOUND),
+                    'direction_display': direction_label,
                     'outcome': call.outcome,
                     'outcome_display': outcome_label,
                     'duration_seconds': dur,

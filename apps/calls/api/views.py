@@ -1,8 +1,11 @@
+from datetime import timedelta
 import hashlib
 import json
 import logging
-from apps.calls.phone import matching_lead
+from uuid import NAMESPACE_DNS, UUID, uuid5
+from apps.calls.phone import matching_lead, phone_identity, phone_variants
 from django.db import transaction
+from django.db.models import Q
 
 logger = logging.getLogger('apps.calls')
 
@@ -19,7 +22,7 @@ from apps.leads.outcomes import apply_website_outcome
 from apps.leads.apostille_leads import is_apostille_lead, is_apostille_caller, restrict_apostille, has_active_website_claim
 
 from .permissions import CanCreateCall
-from .serializers import CallSerializer, ResolvePhoneSerializer
+from .serializers import CallSerializer, IncomingCallsSyncRequestSerializer, ResolvePhoneSerializer
 
 
 class CallCreateView(APIView):
@@ -54,6 +57,8 @@ class CallCreateView(APIView):
                      ['lead', 'phone_number', 'started_at', 'ended_at', 'duration_seconds', 'outcome', 'notes', 'callback_at']}
         canonical['lead'] = data['lead'].pk if data.get('lead') else None
         # Keep legacy fingerprints identical when new optional fields are absent.
+        if data.get('direction') and data['direction'] != Call.Direction.OUTBOUND:
+            canonical['direction'] = str(data['direction'])
         for field in ('selected_course', 'selected_course_custom', 'expected_admission_year', 'whatsapp_message', 'whatsapp_template', 'create_lead', 'student_name', 'preferred_course', 'preferred_course_custom', 'lead_source'):
             if data.get(field):
                 value = data[field]
@@ -339,3 +344,202 @@ class ResolvePhoneView(APIView):
         return Response({'phone_number': phone, 'lead': lead.pk if lead else None,
                          'lead_name': lead.name if lead else None, 'service_code': lead.service_type.code if lead and lead.service_type_id else '',
                          'is_claimed': has_active_website_claim(lead) if lead else False})
+
+
+def _phone_regex_pattern(phone):
+    variants = phone_variants(phone)
+    separators = r'[ +().\-]*'
+    return '^' + separators + '(' + '|'.join(separators.join(v) for v in sorted(variants)) + ')' + separators + '$'
+
+
+def _resolve_inbound_target(phone, user):
+    """Authoritatively match an incoming caller phone number to this user's CRM scope.
+
+    Privacy & isolation guarantee:
+    - Personal numbers (never assigned as a lead and never dialed by this user) return ('personal', None)
+      and are NEVER persisted to the CRM database or synced for recordings.
+    - Leads owned by another caller return ('other_owner', None) without leaking lead metadata.
+    """
+    from apps.accounts.capabilities import is_caller_capable
+
+    pattern = _phone_regex_pattern(phone)
+    matches = list(Lead.objects.filter(phone__regex=pattern).order_by('pk')[:5])
+    caller_scoped = is_caller_capable(user)
+
+    if matches:
+        permitted = [
+            item for item in matches
+            if (
+                not caller_scoped
+                or (
+                    item.assigned_caller_id == user.pk
+                    and (not is_apostille_lead(item) or is_apostille_caller(user))
+                )
+            )
+        ]
+        if permitted:
+            return ('lead', permitted[0])
+        return ('other_owner', None)
+
+    # Secondary check: did this caller previously dial this external/direct number via Vaani?
+    prior = (
+        Call.objects.select_related('lead')
+        .filter(caller=user)
+        .filter(Q(phone_number__regex=pattern) | Q(lead__phone__regex=pattern))
+        .order_by('-started_at', '-pk')
+        .first()
+    )
+    if prior:
+        if prior.lead_id:
+            if not caller_scoped or (
+                prior.lead.assigned_caller_id == user.pk
+                and (not is_apostille_lead(prior.lead) or is_apostille_caller(user))
+            ):
+                return ('lead', prior.lead)
+            return ('other_owner', None)
+        return ('external_contact', None)
+
+    return ('personal', None)
+
+
+class IncomingCallsSyncView(APIView):
+    """Batch-sync device incoming calls (callbacks) that belong to this caller's CRM contacts.
+
+    Returns created/existing INBOUND Call records (with `has_recording`) so the mobile app
+    can immediately upload matching OEM call recordings without touching personal calls.
+    """
+    permission_classes = (CanCreateCall,)
+
+    @transaction.atomic
+    def post(self, request):
+        serializer = IncomingCallsSyncRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Serialize concurrent sync triggers per user to eliminate duplicate rows.
+        User.objects.select_for_update().get(pk=request.user.pk)
+
+        synced = []
+        created_count = 0
+        existing_count = 0
+        ignored_count = 0
+
+        for item in serializer.validated_data['calls']:
+            phone = item['phone_number']
+            started_at = item['started_at']
+            duration_seconds = int(item.get('duration_seconds') or 0)
+            ended_at = item.get('ended_at') or (started_at + timedelta(seconds=duration_seconds))
+            source = item.get('source', 'CALL_LOG')
+            supplied_event_id = item.get('client_event_id')
+
+            match_kind, matched_lead = _resolve_inbound_target(phone, request.user)
+            if match_kind not in ('lead', 'external_contact'):
+                ignored_count += 1
+                continue
+
+            pattern = _phone_regex_pattern(phone)
+            identity = phone_identity(phone)
+            phone_match_q = Q(phone_number__regex=pattern)
+            if matched_lead is not None:
+                phone_match_q |= Q(lead=matched_lead)
+
+            # Guard against misclassifying an already-logged outbound call's recording
+            # when incoming discovery runs via filename fallback without CallLog permission.
+            if source == 'MEDIASTORE_RECORDING':
+                overlapping_any = (
+                    Call.objects.select_related('lead', 'caller', 'followup', 'recording')
+                    .prefetch_related('points_entries')
+                    .filter(caller=request.user)
+                    .filter(phone_match_q)
+                    .filter(
+                        started_at__gte=started_at - timedelta(seconds=180),
+                        started_at__lte=ended_at + timedelta(seconds=180),
+                    )
+                    .order_by('-started_at')
+                    .first()
+                )
+                if overlapping_any is not None:
+                    if overlapping_any.direction == Call.Direction.INBOUND:
+                        existing_count += 1
+                        synced.append({**CallSerializer(overlapping_any).data, 'created': False})
+                    else:
+                        ignored_count += 1
+                    continue
+
+            # Idempotency check against existing INBOUND calls for this caller & contact
+            existing = None
+            if supplied_event_id:
+                existing = (
+                    Call.objects.select_related('lead', 'caller', 'followup', 'recording')
+                    .prefetch_related('points_entries')
+                    .filter(caller=request.user, client_event_id=supplied_event_id)
+                    .first()
+                )
+            if existing is None:
+                existing = (
+                    Call.objects.select_related('lead', 'caller', 'followup', 'recording')
+                    .prefetch_related('points_entries')
+                    .filter(
+                        caller=request.user,
+                        direction=Call.Direction.INBOUND,
+                        started_at__gte=started_at - timedelta(seconds=90),
+                        started_at__lte=started_at + timedelta(seconds=90),
+                    )
+                    .filter(phone_match_q)
+                    .order_by('-started_at')
+                    .first()
+                )
+
+            if existing is not None:
+                updated_fields = []
+                if existing.duration_seconds == 0 and duration_seconds > 0:
+                    existing.duration_seconds = duration_seconds
+                    existing.ended_at = ended_at
+                    updated_fields.extend(['duration_seconds', 'ended_at'])
+                if existing.lead_id is None and matched_lead is not None:
+                    existing.lead = matched_lead
+                    updated_fields.append('lead')
+                if updated_fields:
+                    existing.save(update_fields=updated_fields)
+                existing_count += 1
+                synced.append({**CallSerializer(existing).data, 'created': False})
+                continue
+
+            event_id = supplied_event_id
+            if event_id is None:
+                bucket = int(started_at.timestamp()) // 30
+                candidate_uuid = uuid5(NAMESPACE_DNS, f'vaani-inbound:{request.user.pk}:{identity}:{bucket}')
+                if not Call.objects.filter(caller=request.user, client_event_id=candidate_uuid).exists():
+                    event_id = candidate_uuid
+
+            call = Call.objects.create(
+                caller=request.user,
+                lead=matched_lead,
+                phone_number=phone,
+                direction=Call.Direction.INBOUND,
+                started_at=started_at,
+                ended_at=ended_at,
+                duration_seconds=duration_seconds,
+                outcome='',
+                notes='Incoming callback auto-synced from device.',
+                client_event_id=event_id,
+            )
+            logger.info(
+                "INBOUND_CALL_SYNCED call_id=%s lead_id=%s caller_id=%s duration=%s source=%s",
+                call.pk,
+                matched_lead.pk if matched_lead else None,
+                request.user.pk,
+                duration_seconds,
+                source,
+            )
+            created_count += 1
+            synced.append({**CallSerializer(call).data, 'created': True})
+
+        return Response(
+            {
+                'synced': synced,
+                'created_count': created_count,
+                'existing_count': existing_count,
+                'ignored_count': ignored_count,
+            },
+            status=status.HTTP_200_OK,
+        )
