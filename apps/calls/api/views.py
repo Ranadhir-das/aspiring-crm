@@ -273,7 +273,7 @@ class LeadCallHistoryView(ListAPIView):
 
         queryset = (
             Call.objects
-            .select_related("lead", "caller", "followup")
+            .select_related("lead", "caller", "followup", "recording")
             .prefetch_related("points_entries")
             .filter(lead_id=lead_id)
             .order_by("-started_at")
@@ -302,7 +302,7 @@ class MyCallHistoryView(ListAPIView):
 
     def get_queryset(self):
         qs = (
-            Call.objects.select_related('lead', 'caller', 'followup')
+            Call.objects.select_related('lead', 'caller', 'followup', 'recording')
             .prefetch_related('points_entries')
             .filter(caller=self.request.user)
             .order_by('-started_at', '-pk')

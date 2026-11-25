@@ -12,7 +12,7 @@ from .views import MANAGEMENT, page, paginate, workspace
 @require_GET
 @workspace()
 def recording_playback(request, call_id):
-    return playback(permitted_call(request.user, call_id))
+    return playback(permitted_call(request.user, call_id), request=request)
 
 
 @require_GET
@@ -101,7 +101,7 @@ def call_recordings_list(request):
         {'label': "Today's Recordings", 'value': f"{today_count:,}", 'pill': 'Recorded today'},
     ]
 
-    callers = User.objects.filter(role=User.Role.CALLER).order_by('first_name', 'username') if is_management else []
+    callers = eligible_callers_qs().order_by('first_name', 'username') if is_management else []
 
     active_filters_count = sum(1 for v in [search_query, caller_id, outcome, date_from, date_to] if v)
 

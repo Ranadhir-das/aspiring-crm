@@ -238,7 +238,7 @@
                     <button type="button" class="speed-chip" data-speed="2">2x</button>
                   </div>
 
-                  <a href="{% url 'web:call-recording' rec.call_id %}" download="call-{{ rec.call_id }}-recording.m4a" class="btn-download-audio" title="Download audio recording">
+                  <a href="{% url 'web:call-recording' rec.call_id %}" download="call-{{ rec.call_id }}-recording{{ rec.download_extension }}" class="btn-download-audio" title="Download audio recording">
                     ⭳
                   </a>
                 </div>

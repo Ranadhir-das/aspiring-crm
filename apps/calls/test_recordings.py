@@ -150,3 +150,118 @@ class RecordingTests(TestCase):
         self.assertFalse(CallRecording.objects.exists())
         self.assertTrue(names)
         self.assertTrue(all(not self.storage.exists(name) for name in names))
+
+    def test_multi_format_oem_uploads_and_header_validation(self):
+        valid_samples = [
+            ('samsung.m4a', b'\x00\x00\x00\x18ftypM4A ' + b'\x00' * 32, 'audio/mp4'),
+            ('xiaomi.mp3', b'ID3\x03\x00\x00\x00\x00\x00\x00' + b'\x00' * 32, 'audio/mpeg'),
+            ('realme.amr', b'#!AMR\n' + b'\x00' * 32, 'audio/amr'),
+            ('vivo.awb', b'#!AMR-WB\n' + b'\x00' * 32, 'audio/amr-wb'),
+            ('oppo.3gp', b'\x00\x00\x00\x18ftyp3gp4' + b'\x00' * 32, 'audio/3gpp'),
+            ('audio.wav', b'RIFF\x24\x00\x00\x00WAVEfmt ' + b'\x00' * 24, 'audio/wav'),
+            ('voice.ogg', b'OggS\x00\x02' + b'\x00' * 32, 'audio/ogg'),
+            ('raw.aac', b'\xff\xf1\x50\x80\x02\x1f\xfc' + b'\x00' * 32, 'audio/aac'),
+        ]
+        for idx, (fname, blob, expected_mime) in enumerate(valid_samples):
+            with self.subTest(fname=fname):
+                c = Call.objects.create(caller=self.caller, lead=self.lead, started_at=timezone.now(), outcome='BUSY')
+                with patch('apps.calls.audio_processing.shutil.which', return_value=None):
+                    resp = self.api.post(
+                        self.url(c),
+                        {
+                            'recording': SimpleUploadedFile(fname, blob, content_type=expected_mime),
+                            'duration_seconds': 30 + idx,
+                            'source_type': CallRecording.SourceType.OEM_AUTO_SYNC,
+                            'original_filename': fname,
+                        },
+                        format='multipart',
+                    )
+                self.assertEqual(resp.status_code, 201, resp.data)
+                rec = CallRecording.objects.get(call=c)
+                self.assertEqual(rec.content_type, expected_mime)
+                self.assertEqual(rec.original_filename, fname)
+                self.assertEqual(rec.source_type, CallRecording.SourceType.OEM_AUTO_SYNC)
+                self.assertEqual(rec.transcript_status, CallRecording.TranscriptStatus.NONE)
+
+        # Spoofed AMR header must be rejected
+        bad = self.upload(data=b'NOT_AN_AMR_FILE_DATA', name='spoof.amr', duration=10)
+        self.assertEqual(bad.status_code, 400)
+
+    def test_ffmpeg_transcode_and_idempotent_retry_by_source_sha256(self):
+        amr_bytes = b'#!AMR\n' + b'\x11' * 40
+        m4a_out = b'\x00\x00\x00\x18ftypM4A ' + b'\x22' * 64
+
+        def fake_run(cmd, **kwargs):
+            from pathlib import Path
+            from types import SimpleNamespace
+            if 'ffprobe' in cmd[0]:
+                return SimpleNamespace(returncode=0, stdout='42.4\n', stderr='')
+            out_path = cmd[-1]
+            Path(out_path).write_bytes(m4a_out)
+            return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+        with patch('apps.calls.audio_processing.shutil.which', side_effect=lambda name: f'/usr/bin/{name}'), \
+             patch('apps.calls.audio_processing.subprocess.run', side_effect=fake_run):
+            resp1 = self.api.post(
+                self.url(),
+                {
+                    'recording': SimpleUploadedFile('9876543210_20261125.amr', amr_bytes, content_type='audio/amr'),
+                    'duration_seconds': 0,
+                    'source_type': CallRecording.SourceType.OEM_AUTO_SYNC,
+                    'original_filename': '9876543210_20261125.amr',
+                },
+                format='multipart',
+            )
+            self.assertEqual(resp1.status_code, 201, resp1.data)
+            self.assertTrue(resp1.data['transcoded'])
+            self.assertEqual(resp1.data['uploaded_file_size'], len(amr_bytes))
+            self.assertEqual(resp1.data['file_size'], len(m4a_out))
+            self.assertEqual(resp1.data['duration_seconds'], 42)
+            self.assertEqual(resp1.data['content_type'], 'audio/mp4')
+            rec = CallRecording.objects.get(call=self.call)
+            self.assertTrue(rec.file.name.endswith('.m4a'))
+            self.assertEqual(rec.source_sha256, hashlib.sha256(amr_bytes).hexdigest())
+            self.assertEqual(rec.sha256, hashlib.sha256(m4a_out).hexdigest())
+
+            # Retry identical AMR upload returns 200 idempotently without re-encoding
+            resp2 = self.api.post(
+                self.url(),
+                {
+                    'recording': SimpleUploadedFile('9876543210_20261125.amr', amr_bytes, content_type='audio/amr'),
+                    'duration_seconds': 0,
+                },
+                format='multipart',
+            )
+            self.assertEqual(resp2.status_code, 200, resp2.data)
+            self.assertEqual(resp2.data['uploaded_file_size'], len(amr_bytes))
+
+    def test_http_range_seekable_playback_and_has_recording_flag(self):
+        # Before upload, /calls/mine/ reports has_recording=False
+        mine_before = self.api.get('/api/v1/calls/mine/')
+        self.assertEqual(mine_before.status_code, 200)
+        self.assertFalse(mine_before.data[0]['has_recording'])
+
+        self.assertEqual(self.upload().status_code, 201)
+
+        # After upload, /calls/mine/ reports has_recording=True
+        mine_after = self.api.get('/api/v1/calls/mine/')
+        self.assertEqual(mine_after.status_code, 200)
+        self.assertTrue(mine_after.data[0]['has_recording'])
+        self.assertEqual(mine_after.data[0]['recording_duration_seconds'], 75)
+
+        # Full response advertises Accept-Ranges
+        full_resp = self.api.get(self.url())
+        self.assertEqual(full_resp.status_code, 200)
+        self.assertEqual(full_resp['Accept-Ranges'], 'bytes')
+        b''.join(full_resp.streaming_content)
+
+        # Partial byte range returns 206 Partial Content with exact slice
+        partial_resp = self.api.get(self.url(), HTTP_RANGE='bytes=4-15')
+        self.assertEqual(partial_resp.status_code, 206)
+        self.assertEqual(partial_resp['Content-Range'], f'bytes 4-15/{len(self.data)}')
+        self.assertEqual(partial_resp['Content-Length'], '12')
+        self.assertEqual(b''.join(partial_resp.streaming_content), self.data[4:16])
+
+        # Invalid range returns 416
+        invalid_resp = self.api.get(self.url(), HTTP_RANGE='bytes=9999-10050')
+        self.assertEqual(invalid_resp.status_code, 416)

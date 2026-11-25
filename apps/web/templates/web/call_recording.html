@@ -4,7 +4,7 @@
     <audio preload="none" src="{% url 'web:call-recording' call.pk %}"></audio>
     <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;">
       <strong style="color:var(--text);">{{ call.recording.duration_display }}</strong>
-      <a href="{% url 'web:call-recording' call.pk %}" download="call-{{ call.pk }}.m4a" class="btn-download-audio" title="Download audio" style="padding:2px 6px;font-size:10px;">⭳</a>
+      <a href="{% url 'web:call-recording' call.pk %}" download="call-{{ call.pk }}{{ call.recording.download_extension }}" class="btn-download-audio" title="Download audio" style="padding:2px 6px;font-size:10px;">⭳</a>
     </div>
     <div class="visualizer-box">
       <canvas class="visualizer-canvas" height="36"></canvas>

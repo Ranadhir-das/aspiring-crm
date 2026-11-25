@@ -33,6 +33,8 @@ class CallSerializer(serializers.ModelSerializer):
     is_external = serializers.SerializerMethodField()
     followup = serializers.SerializerMethodField()
     caller_name = serializers.SerializerMethodField()
+    has_recording = serializers.SerializerMethodField()
+    recording_duration_seconds = serializers.SerializerMethodField()
 
     outcome_display = serializers.CharField(
         source="get_outcome_display",
@@ -70,6 +72,8 @@ class CallSerializer(serializers.ModelSerializer):
             "outcome_display",
             "notes",
             "callback_at",
+            "has_recording",
+            "recording_duration_seconds",
             "created_at",
         ]
 
@@ -78,6 +82,8 @@ class CallSerializer(serializers.ModelSerializer):
             "caller",
             "caller_name",
             "outcome_display",
+            "has_recording",
+            "recording_duration_seconds",
             "created_at",
         ]
 
@@ -202,3 +208,16 @@ class CallSerializer(serializers.ModelSerializer):
             return None
 
         return obj.caller.get_full_name() or obj.caller.username
+
+    def _cached_recording(self, obj):
+        try:
+            return obj.recording
+        except Exception:
+            return None
+
+    def get_has_recording(self, obj):
+        return self._cached_recording(obj) is not None
+
+    def get_recording_duration_seconds(self, obj):
+        rec = self._cached_recording(obj)
+        return rec.duration_seconds if rec is not None else None

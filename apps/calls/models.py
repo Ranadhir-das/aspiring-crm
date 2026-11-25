@@ -101,14 +101,41 @@ class Call(models.Model):
 
 
 class CallRecording(models.Model):
+    class SourceType(models.TextChoices):
+        OEM_AUTO_SYNC = 'OEM_AUTO_SYNC', 'Auto-Synced (Device Recorder)'
+        MANUAL_ATTACH = 'MANUAL_ATTACH', 'Manual Attach / Share'
+        DEVICE_MIC = 'DEVICE_MIC', 'Legacy App Recorder'
+
+    class TranscriptStatus(models.TextChoices):
+        NONE = 'NONE', 'Not Requested'
+        PENDING = 'PENDING', 'Pending'
+        COMPLETED = 'COMPLETED', 'Completed'
+        FAILED = 'FAILED', 'Failed'
+
     call = models.OneToOneField(Call, on_delete=models.CASCADE, related_name='recording')
     file = models.FileField(storage=recording_storage, upload_to='call-recordings/%Y/%m/%d/')
     duration_seconds = models.PositiveIntegerField(default=0)
     file_size = models.PositiveBigIntegerField(default=0)
     # Distinguish an identical retry after a lost response from a replacement.
     sha256 = models.CharField(max_length=64, editable=False)
+    source_sha256 = models.CharField(max_length=64, blank=True, default='', db_index=True, editable=False)
+    source_type = models.CharField(max_length=24, choices=SourceType.choices, default=SourceType.OEM_AUTO_SYNC)
+    original_filename = models.CharField(max_length=255, blank=True, default='')
+    original_format = models.CharField(max_length=16, blank=True, default='')
+    content_type = models.CharField(max_length=64, default='audio/mp4')
+    # Future AI transcript & summary fields (populated by upcoming AI pipeline)
+    transcript_status = models.CharField(max_length=20, choices=TranscriptStatus.choices, default=TranscriptStatus.NONE)
+    transcript_text = models.TextField(blank=True, default='')
+    ai_summary = models.TextField(blank=True, default='')
+    transcribed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     @property
     def duration_display(self):
         return f'{self.duration_seconds // 60:02d}:{self.duration_seconds % 60:02d}'
+
+    @property
+    def download_extension(self):
+        from pathlib import Path
+        ext = Path(self.file.name).suffix.lower() if self.file and self.file.name else '.m4a'
+        return ext or '.m4a'
