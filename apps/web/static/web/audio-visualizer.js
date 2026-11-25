@@ -72,6 +72,9 @@
         if (this.timeDuration) {
           this.timeDuration.textContent = formatTime(this.audio.duration);
         }
+        if (this.progressTrack && !isNaN(this.audio.duration) && this.audio.duration > 0) {
+          this.progressTrack.setAttribute('aria-valuemax', String(Math.round(this.audio.duration)));
+        }
       });
 
       this.audio.addEventListener('timeupdate', () => {
@@ -114,20 +117,41 @@
         });
       }
 
-      // Seek timeline track
+      // Seek timeline track (supports mouse, touch pointer events, and keyboard arrows)
       if (this.progressTrack) {
-        this.progressTrack.addEventListener('click', (e) => {
+        this.progressTrack.addEventListener('pointerdown', (e) => {
+          this.isSeeking = true;
+          if (typeof this.progressTrack.setPointerCapture === 'function') {
+            try { this.progressTrack.setPointerCapture(e.pointerId); } catch (_) {}
+          }
           this.seekTo(e);
         });
 
-        const handleDrag = (e) => {
+        this.progressTrack.addEventListener('pointermove', (e) => {
           if (!this.isSeeking) return;
           this.seekTo(e);
-        };
+        });
 
-        this.progressTrack.addEventListener('mousedown', () => { this.isSeeking = true; });
-        window.addEventListener('mousemove', handleDrag);
-        window.addEventListener('mouseup', () => { this.isSeeking = false; });
+        const endSeek = (e) => {
+          if (!this.isSeeking) return;
+          this.isSeeking = false;
+          if (typeof this.progressTrack.releasePointerCapture === 'function') {
+            try { this.progressTrack.releasePointerCapture(e.pointerId); } catch (_) {}
+          }
+        };
+        this.progressTrack.addEventListener('pointerup', endSeek);
+        this.progressTrack.addEventListener('pointercancel', endSeek);
+
+        this.progressTrack.addEventListener('keydown', (e) => {
+          if (isNaN(this.audio.duration) || this.audio.duration <= 0) return;
+          const step = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 5
+            : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -5
+            : 0;
+          if (!step) return;
+          e.preventDefault();
+          this.audio.currentTime = Math.max(0, Math.min(this.audio.duration, this.audio.currentTime + step));
+          this.updateProgress();
+        });
       }
 
       // Playback speed chips
@@ -141,12 +165,19 @@
         });
       });
 
-      window.addEventListener('resize', () => {
+      const handleReflow = () => {
         this.resizeCanvas();
         if (!this.container.classList.contains('is-playing')) {
           this.drawIdleWaveform();
         }
-      });
+      };
+
+      if (typeof ResizeObserver === 'function' && this.canvas) {
+        this._ro = new ResizeObserver(handleReflow);
+        this._ro.observe(this.canvas);
+      } else {
+        window.addEventListener('resize', handleReflow);
+      }
     }
 
     setupWebAudio() {
@@ -203,17 +234,22 @@
       if (duration && !isNaN(duration) && this.progressBar) {
         const pct = Math.min(100, Math.max(0, (current / duration) * 100));
         this.progressBar.style.width = `${pct}%`;
+        if (this.progressTrack) {
+          this.progressTrack.setAttribute('aria-valuemax', String(Math.round(duration)));
+          this.progressTrack.setAttribute('aria-valuenow', String(Math.round(current)));
+        }
       }
     }
 
     resizeCanvas() {
       if (!this.canvas) return;
-      const dpr = window.devicePixelRatio || 1;
       const rect = this.canvas.getBoundingClientRect();
-      this.canvas.width = (rect.width || 340) * dpr;
-      this.canvas.height = (rect.height || 72) * dpr;
+      if (!rect.width || !rect.height) return;
+      const dpr = window.devicePixelRatio || 1;
+      this.canvas.width = Math.round(rect.width * dpr);
+      this.canvas.height = Math.round(rect.height * dpr);
       if (this.ctx) {
-        this.ctx.scale(dpr, dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
     }
 

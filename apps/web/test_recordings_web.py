@@ -149,3 +149,19 @@ class CallRecordingsWebTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.context['total_count'], 2)
             self.assertNotContains(response, 'Rahul Verma')
+
+    def test_responsive_layout_and_accessible_player_markup(self):
+        self.client.force_login(self.manager)
+        response = self.client.get('/recordings/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'call-recordings.css?v=2')
+        self.assertContains(response, 'audio-visualizer.js?v=2')
+        self.assertContains(response, 'recordings-filter-form has-caller-filter')
+        self.assertContains(response, 'role="region"')
+        self.assertContains(response, 'aria-labelledby="recordings-table-heading"')
+        self.assertContains(response, 'role="slider"')
+
+        self.client.force_login(self.caller1)
+        caller_resp = self.client.get('/recordings/')
+        self.assertEqual(caller_resp.status_code, 200)
+        self.assertNotContains(caller_resp, 'has-caller-filter')
