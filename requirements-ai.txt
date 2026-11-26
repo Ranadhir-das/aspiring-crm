@@ -1,3 +1,5 @@
 # Self-hosted zero-cost AI Call Transcription (Hindi, English, Hinglish)
 # Uses CTranslate2 INT8 CPU inference (no PyTorch GPU bloat; runs on 2 vCPU / 2 GB RAM)
 faster-whisper==1.2.1
+# Pin PyAV < 16 as fallback compatibility guard for faster-whisper's decode_audio()
+av>=11,<16

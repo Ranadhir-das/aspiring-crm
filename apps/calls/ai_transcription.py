@@ -26,6 +26,7 @@ import tempfile
 import threading
 import time
 from typing import Any
+import wave
 
 from django.conf import settings
 from django.utils import timezone
@@ -555,15 +556,34 @@ def _format_timestamped_transcript(segments: list[dict[str, Any]]) -> str:
     return '\n'.join(lines)
 
 
+def _load_wav_16k_float32(wav_path: str):
+    """Read a 16kHz mono PCM16 WAV into a normalized float32 numpy array.
+
+    Bypasses PyAV container decoding inside faster-whisper (which breaks on PyAV >= 17
+    due to removed `metadata_errors` kwarg) and avoids decoding twice on Urdu->Hindi retries.
+    """
+    try:
+        import numpy as np
+        with wave.open(wav_path, 'rb') as wf:
+            if wf.getnchannels() == 1 and wf.getframerate() == 16000 and wf.getsampwidth() == 2:
+                pcm = wf.readframes(wf.getnframes())
+                if pcm:
+                    return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+    except Exception as exc:
+        logger.debug('Falling back to file-path audio decode for %s: %s', wav_path, exc)
+    return wav_path
+
+
 def _transcribe_local_whisper(audio_path: str, call_context: dict[str, Any]) -> dict[str, Any]:
     wav_path = _prepare_wav_16k(audio_path)
     cleanup_wav = wav_path != audio_path
     try:
         model = _get_local_whisper_model()
+        audio_input = _load_wav_16k_float32(wav_path) if cleanup_wav else wav_path
 
         def _run_pass(language: str | None = None):
             seg_iter, info = model.transcribe(
-                wav_path,
+                audio_input,
                 language=language,
                 task='transcribe',
                 beam_size=3,
