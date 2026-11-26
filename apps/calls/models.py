@@ -122,8 +122,15 @@ class CallRecording(models.Model):
     class TranscriptStatus(models.TextChoices):
         NONE = 'NONE', 'Not Requested'
         PENDING = 'PENDING', 'Pending'
+        PROCESSING = 'PROCESSING', 'Processing'
         COMPLETED = 'COMPLETED', 'Completed'
         FAILED = 'FAILED', 'Failed'
+
+    class Sentiment(models.TextChoices):
+        POSITIVE = 'POSITIVE', 'Positive'
+        NEUTRAL = 'NEUTRAL', 'Neutral'
+        HESITANT = 'HESITANT', 'Hesitant'
+        NEGATIVE = 'NEGATIVE', 'Negative'
 
     call = models.OneToOneField(Call, on_delete=models.CASCADE, related_name='recording')
     file = models.FileField(storage=recording_storage, upload_to='call-recordings/%Y/%m/%d/')
@@ -136,10 +143,24 @@ class CallRecording(models.Model):
     original_filename = models.CharField(max_length=255, blank=True, default='')
     original_format = models.CharField(max_length=16, blank=True, default='')
     content_type = models.CharField(max_length=64, default='audio/mp4')
-    # Future AI transcript & summary fields (populated by upcoming AI pipeline)
-    transcript_status = models.CharField(max_length=20, choices=TranscriptStatus.choices, default=TranscriptStatus.NONE)
+    # AI transcript (Hindi, English, Hinglish) & structured summary (Key Points + Objections)
+    transcript_status = models.CharField(
+        max_length=20,
+        choices=TranscriptStatus.choices,
+        default=TranscriptStatus.NONE,
+        db_index=True,
+    )
     transcript_text = models.TextField(blank=True, default='')
+    transcript_segments = models.JSONField(default=list, blank=True)
     ai_summary = models.TextField(blank=True, default='')
+    ai_key_points = models.JSONField(default=list, blank=True)
+    ai_objections = models.JSONField(default=list, blank=True)
+    ai_language = models.CharField(max_length=24, blank=True, default='')
+    ai_sentiment = models.CharField(max_length=16, choices=Sentiment.choices, blank=True, default='')
+    ai_next_action = models.CharField(max_length=255, blank=True, default='')
+    ai_provider = models.CharField(max_length=64, blank=True, default='')
+    transcript_error = models.TextField(blank=True, default='')
+    transcript_attempts = models.PositiveSmallIntegerField(default=0)
     transcribed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -152,3 +173,13 @@ class CallRecording(models.Model):
         from pathlib import Path
         ext = Path(self.file.name).suffix.lower() if self.file and self.file.name else '.m4a'
         return ext or '.m4a'
+
+    @property
+    def has_ai_insights(self):
+        return self.transcript_status == self.TranscriptStatus.COMPLETED and bool(
+            self.ai_summary or self.transcript_text
+        )
+
+    @property
+    def objections_count(self):
+        return len(self.ai_objections) if isinstance(self.ai_objections, list) else 0

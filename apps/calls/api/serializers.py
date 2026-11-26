@@ -35,6 +35,11 @@ class CallSerializer(serializers.ModelSerializer):
     caller_name = serializers.SerializerMethodField()
     has_recording = serializers.SerializerMethodField()
     recording_duration_seconds = serializers.SerializerMethodField()
+    transcript_status = serializers.SerializerMethodField()
+    ai_summary = serializers.SerializerMethodField()
+    ai_language = serializers.SerializerMethodField()
+    ai_sentiment = serializers.SerializerMethodField()
+    ai_objections_count = serializers.SerializerMethodField()
 
     outcome_display = serializers.CharField(
         source="get_outcome_display",
@@ -85,6 +90,11 @@ class CallSerializer(serializers.ModelSerializer):
             "callback_at",
             "has_recording",
             "recording_duration_seconds",
+            "transcript_status",
+            "ai_summary",
+            "ai_language",
+            "ai_sentiment",
+            "ai_objections_count",
             "created_at",
         ]
 
@@ -96,6 +106,11 @@ class CallSerializer(serializers.ModelSerializer):
             "outcome_display",
             "has_recording",
             "recording_duration_seconds",
+            "transcript_status",
+            "ai_summary",
+            "ai_language",
+            "ai_sentiment",
+            "ai_objections_count",
             "created_at",
         ]
 
@@ -233,6 +248,26 @@ class CallSerializer(serializers.ModelSerializer):
     def get_recording_duration_seconds(self, obj):
         rec = self._cached_recording(obj)
         return rec.duration_seconds if rec is not None else None
+
+    def get_transcript_status(self, obj):
+        rec = self._cached_recording(obj)
+        return rec.transcript_status if rec is not None else None
+
+    def get_ai_summary(self, obj):
+        rec = self._cached_recording(obj)
+        return rec.ai_summary if rec is not None else ''
+
+    def get_ai_language(self, obj):
+        rec = self._cached_recording(obj)
+        return rec.ai_language if rec is not None else ''
+
+    def get_ai_sentiment(self, obj):
+        rec = self._cached_recording(obj)
+        return rec.ai_sentiment if rec is not None else ''
+
+    def get_ai_objections_count(self, obj):
+        rec = self._cached_recording(obj)
+        return rec.objections_count if rec is not None else 0
 
 
 class IncomingCallSyncItemSerializer(serializers.Serializer):

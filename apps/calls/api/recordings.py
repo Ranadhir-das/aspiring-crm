@@ -9,6 +9,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.calls.ai_transcription import should_auto_queue_recording
 from apps.calls.audio_processing import (
     ALLOWED_AUDIO_EXTENSIONS,
     MAX_RECORDING_SIZE,
@@ -17,6 +18,7 @@ from apps.calls.audio_processing import (
 )
 from apps.calls.models import CallRecording
 from apps.calls.recordings import permitted_call, playback
+from django.shortcuts import get_object_or_404
 from .permissions import CanCreateCall
 
 
@@ -51,6 +53,26 @@ class RecordingUploadSerializer(serializers.Serializer):
         return file
 
 
+def transcript_payload(recording):
+    return {
+        'call_id': recording.call_id,
+        'transcript_status': recording.transcript_status,
+        'transcript_status_display': recording.get_transcript_status_display(),
+        'ai_language': recording.ai_language,
+        'ai_sentiment': recording.ai_sentiment,
+        'ai_sentiment_display': recording.get_ai_sentiment_display() if recording.ai_sentiment else '',
+        'ai_summary': recording.ai_summary,
+        'ai_key_points': recording.ai_key_points or [],
+        'ai_objections': recording.ai_objections or [],
+        'ai_next_action': recording.ai_next_action,
+        'ai_provider': recording.ai_provider,
+        'transcript_text': recording.transcript_text,
+        'transcript_segments': recording.transcript_segments or [],
+        'transcript_error': recording.transcript_error,
+        'transcribed_at': recording.transcribed_at.isoformat() if recording.transcribed_at else None,
+    }
+
+
 def metadata(recording, *, uploaded_file_size=None, transcoded=False):
     payload = {
         'call_id': recording.call_id,
@@ -65,6 +87,10 @@ def metadata(recording, *, uploaded_file_size=None, transcoded=False):
         'original_format': recording.original_format,
         'transcoded': transcoded,
         'transcript_status': recording.transcript_status,
+        'ai_language': recording.ai_language,
+        'ai_sentiment': recording.ai_sentiment,
+        'ai_summary': recording.ai_summary,
+        'ai_objections_count': recording.objections_count,
     }
     return payload
 
@@ -159,6 +185,8 @@ class CallRecordingView(APIView):
                     original_format=processed.original_format,
                     content_type=processed.content_type,
                 )
+                if should_auto_queue_recording(recording):
+                    recording.transcript_status = CallRecording.TranscriptStatus.PENDING
                 recording.file.save(f'{uuid4().hex}{processed.extension}', ContentFile(stored_bytes), save=False)
                 saved_file = recording.file
                 recording.save()
@@ -170,3 +198,26 @@ class CallRecordingView(APIView):
             if saved_file:
                 saved_file.storage.delete(saved_file.name)
             raise
+
+
+class CallRecordingTranscriptView(APIView):
+    """Fetch AI transcript + summary/key points/objections or queue (re-)analysis."""
+    permission_classes = (CanCreateCall,)
+
+    def get(self, request, call_id):
+        call = permitted_call(request.user, call_id)
+        recording = get_object_or_404(CallRecording, call=call)
+        return Response(transcript_payload(recording), status=200)
+
+    def post(self, request, call_id):
+        call = permitted_call(request.user, call_id)
+        recording = get_object_or_404(CallRecording, call=call)
+        force = bool(request.data.get('force')) if isinstance(request.data, dict) else False
+        if recording.transcript_status == CallRecording.TranscriptStatus.PROCESSING:
+            return Response(transcript_payload(recording), status=202)
+        if recording.transcript_status != CallRecording.TranscriptStatus.COMPLETED or force:
+            recording.transcript_status = CallRecording.TranscriptStatus.PENDING
+            recording.transcript_attempts = 0
+            recording.transcript_error = ''
+            recording.save(update_fields=['transcript_status', 'transcript_attempts', 'transcript_error'])
+        return Response(transcript_payload(recording), status=202)

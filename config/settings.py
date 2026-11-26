@@ -310,3 +310,21 @@ EXPO_PUSH_ACCESS_TOKEN = env("EXPO_PUSH_ACCESS_TOKEN", default="")
 # Smart Caller Workload Monitoring
 CALLER_WORKLOAD_LOW_THRESHOLD = env.int("CALLER_WORKLOAD_LOW_THRESHOLD", default=10)
 CALLER_WORKLOAD_TARGET_PENDING = env.int("CALLER_WORKLOAD_TARGET_PENDING", default=30)
+
+# Call Recording AI Transcription (Hindi, English, Hinglish) & Summarization
+AI_TRANSCRIBE_AUTO_ENABLED = env.bool("AI_TRANSCRIBE_AUTO_ENABLED", default=True)
+AI_TRANSCRIBE_PROVIDER = env("AI_TRANSCRIBE_PROVIDER", default="auto")  # auto | gemini | groq | openai | local
+AI_TRANSCRIBE_MIN_DURATION_SECONDS = env.int("AI_TRANSCRIBE_MIN_DURATION_SECONDS", default=5)
+AI_LOCAL_WHISPER_MODEL = env("AI_LOCAL_WHISPER_MODEL", default="small")
+AI_LOCAL_WHISPER_COMPUTE_TYPE = env("AI_LOCAL_WHISPER_COMPUTE_TYPE", default="int8")
+AI_LOCAL_WHISPER_CPU_THREADS = env.int("AI_LOCAL_WHISPER_CPU_THREADS", default=2)
+AI_LOCAL_WHISPER_DIR = Path(env("AI_LOCAL_WHISPER_DIR", default=str(BASE_DIR / "whisper_models")))
+AI_LOCAL_MODEL_IDLE_SECONDS = env.int("AI_LOCAL_MODEL_IDLE_SECONDS", default=300)
+AI_GEMINI_API_KEY = env("GEMINI_API_KEY", default="")
+AI_GEMINI_MODEL = env("AI_GEMINI_MODEL", default="gemini-2.5-flash")
+AI_GROQ_API_KEY = env("GROQ_API_KEY", default="")
+AI_GROQ_WHISPER_MODEL = env("AI_GROQ_WHISPER_MODEL", default="whisper-large-v3-turbo")
+AI_GROQ_LLM_MODEL = env("AI_GROQ_LLM_MODEL", default="llama-3.3-70b-versatile")
+AI_OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+AI_OPENAI_WHISPER_MODEL = env("AI_OPENAI_WHISPER_MODEL", default="whisper-1")
+AI_OPENAI_LLM_MODEL = env("AI_OPENAI_LLM_MODEL", default="gpt-4o-mini")

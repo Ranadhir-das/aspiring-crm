@@ -16,6 +16,7 @@ staticfiles/
 media/
 private-call-recordings/
 face_models/
+whisper_models/
 *.log
 *.apk
  

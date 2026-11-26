@@ -5,20 +5,31 @@
 {% block breadcrumb %}Call Recordings{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=4">
+<script src="{% static 'web/recordings-ai.js' %}?v=1" defer></script>
 
-<div class="recordings-page">
+<div class="recordings-page" data-csrf-token="{{ csrf_token }}">
   <!-- Hero Page Header -->
   <header class="recordings-hero">
     <div class="recordings-hero-copy">
       <div class="recordings-eyebrow">
         <span class="eyebrow-pulse" aria-hidden="true"></span>
-        <span>VOICE INTELLIGENCE &amp; AUDIT</span>
+        <span>VOICE INTELLIGENCE, TRANSCRIPTS &amp; OBJECTIONS</span>
       </div>
       <h1>Call Recordings<span class="accent">.</span></h1>
-      <p class="heading-subtitle">Listen, seek, and audit recorded caller conversations with instant streaming playback, speed controls, and caller filters.</p>
+      <p class="heading-subtitle">Review AI summaries, key points, objections, and Hindi / English / Hinglish transcripts without listening to every call.</p>
     </div>
     <div class="header-actions">
+      {% if is_management and unanalyzed_count > 0 %}
+      <button
+        type="button"
+        class="button action-btn action-btn-ai"
+        data-analyze-pending-url="{% url 'web:call-recordings-analyze-pending' %}"
+      >
+        <span aria-hidden="true">✨</span>
+        <span>Analyze Pending ({{ unanalyzed_count }})</span>
+      </button>
+      {% endif %}
       <a class="button action-btn" href="{% url 'web:calls' %}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
         <span>All CRM Calls</span>
@@ -77,10 +88,10 @@
 
     <form method="get" class="recordings-filter-form{% if is_management and callers %} has-caller-filter{% endif %}" action="{% url 'web:call-recordings' %}">
       <div class="filter-field filter-search">
-        <label class="sr-only" for="rec-search">Search lead name or phone</label>
+        <label class="sr-only" for="rec-search">Search lead, phone, AI summary, or transcript</label>
         <div class="recordings-search-box">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="rec-search" type="search" name="q" value="{{ search|default:'' }}" placeholder="Search lead name or phone…">
+          <input id="rec-search" type="search" name="q" value="{{ search|default:'' }}" placeholder="Search lead, phone, summary or transcript…">
         </div>
       </div>
 
@@ -119,6 +130,18 @@
       </div>
 
       <div class="filter-field">
+        <label class="filter-mini-label" for="rec-ai-status">AI Insights</label>
+        <select id="rec-ai-status" name="ai_status" class="filter-control">
+          <option value="">All AI Status</option>
+          <option value="analyzed" {% if selected_ai_status == 'analyzed' %}selected{% endif %}>AI Summarized</option>
+          <option value="objections" {% if selected_ai_status == 'objections' %}selected{% endif %}>Has Objections</option>
+          <option value="pending" {% if selected_ai_status == 'pending' %}selected{% endif %}>Queued / Processing</option>
+          <option value="none" {% if selected_ai_status == 'none' %}selected{% endif %}>Not Analyzed</option>
+          <option value="failed" {% if selected_ai_status == 'failed' %}selected{% endif %}>Failed</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
         <label class="filter-mini-label" for="rec-from">From Date</label>
         <input id="rec-from" type="date" name="date_from" value="{{ selected_date_from }}" class="filter-control">
       </div>
@@ -137,6 +160,9 @@
       </div>
     </form>
   </section>
+
+  <!-- Live status feedback for AJAX AI actions -->
+  <div id="recordings-ai-live" class="rec-ai-live-banner" role="status" aria-live="polite" hidden></div>
 
   <!-- 3. Recorded Conversations Table (Auto-transforms to Cards on Narrow Containers) -->
   <section class="recordings-panel">
@@ -189,7 +215,7 @@
             <th scope="col">Caller</th>
             <th scope="col">Outcome</th>
             <th scope="col">Date &amp; Info</th>
-            <th scope="col" class="col-player">Audio Player</th>
+            <th scope="col" class="col-player">Audio &amp; AI Insights</th>
           </tr>
         </thead>
         <tbody>
@@ -334,6 +360,120 @@
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </a>
                   </div>
+                </div>
+              </div>
+
+              <!-- AI Transcription (Hindi/English/Hinglish) & Structured Summary Card -->
+              <div
+                class="rec-ai-panel status-{{ rec.transcript_status|lower }}"
+                data-call-id="{{ rec.call_id }}"
+                data-ai-status="{{ rec.transcript_status }}"
+                data-analyze-url="{% url 'web:call-recording-analyze' rec.call_id %}"
+                data-status-url="{% url 'web:call-recording-ai-status' rec.call_id %}"
+              >
+                <div class="rec-ai-header">
+                  <div class="rec-ai-badges">
+                    <span class="rec-ai-chip brand">
+                      <span aria-hidden="true">✨</span>
+                      <span>AI Brief</span>
+                    </span>
+                    {% if rec.transcript_status == 'COMPLETED' %}
+                      {% if rec.ai_language %}
+                      <span class="rec-ai-chip lang">{{ rec.ai_language }}</span>
+                      {% endif %}
+                      {% if rec.ai_sentiment %}
+                      <span class="rec-ai-chip sentiment-{{ rec.ai_sentiment|lower }}">{{ rec.get_ai_sentiment_display }}</span>
+                      {% endif %}
+                      {% if rec.objections_count > 0 %}
+                      <span class="rec-ai-chip objection-alert">⚠ {{ rec.objections_count }} Objection{% if rec.objections_count != 1 %}s{% endif %}</span>
+                      {% else %}
+                      <span class="rec-ai-chip clean">✓ No Objections</span>
+                      {% endif %}
+                    {% elif rec.transcript_status == 'PROCESSING' %}
+                      <span class="rec-ai-chip pending"><span class="rec-ai-spinner" aria-hidden="true"></span> Transcribing &amp; Summarizing…</span>
+                    {% elif rec.transcript_status == 'PENDING' %}
+                      <span class="rec-ai-chip pending"><span class="rec-ai-spinner" aria-hidden="true"></span> Queued for AI Analysis…</span>
+                    {% elif rec.transcript_status == 'FAILED' %}
+                      <span class="rec-ai-chip failed">⚠ AI Analysis Failed</span>
+                    {% else %}
+                      <span class="rec-ai-chip muted">Not Analyzed Yet</span>
+                    {% endif %}
+                  </div>
+
+                  <div class="rec-ai-actions">
+                    {% if rec.transcript_status == 'COMPLETED' %}
+                    <button type="button" class="rec-ai-btn subtle" data-ai-trigger="reanalyze" title="Re-run AI transcription &amp; summary">
+                      ↻ Re-analyze
+                    </button>
+                    {% elif rec.transcript_status == 'NONE' or rec.transcript_status == 'FAILED' %}
+                    <button type="button" class="rec-ai-btn primary" data-ai-trigger="analyze">
+                      ✨ Transcribe &amp; Summarize
+                    </button>
+                    {% endif %}
+                  </div>
+                </div>
+
+                <div class="rec-ai-body">
+                  {% if rec.transcript_status == 'COMPLETED' %}
+                    {% if rec.ai_summary %}
+                    <p class="rec-ai-summary">{{ rec.ai_summary }}</p>
+                    {% endif %}
+
+                    {% if rec.ai_key_points or rec.ai_objections %}
+                    <div class="rec-ai-grid">
+                      {% if rec.ai_key_points %}
+                      <div class="rec-ai-box">
+                        <span class="rec-ai-box-title">Key Points</span>
+                        <ul class="rec-ai-list">
+                          {% for pt in rec.ai_key_points %}
+                          <li>{{ pt }}</li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+                      {% endif %}
+
+                      {% if rec.ai_objections %}
+                      <div class="rec-ai-box objections">
+                        <span class="rec-ai-box-title">Objections Raised</span>
+                        <ul class="rec-objection-list">
+                          {% for obj in rec.ai_objections %}
+                          <li class="rec-objection-item">
+                            <strong class="rec-objection-label">{{ obj.label }}</strong>
+                            {% if obj.detail %}<span class="rec-objection-detail">{{ obj.detail }}</span>{% endif %}
+                            {% if obj.evidence %}<q class="rec-objection-quote">{{ obj.evidence }}</q>{% endif %}
+                          </li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+                      {% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if rec.ai_next_action %}
+                    <div class="rec-ai-next">
+                      <strong>Next Step:</strong> <span>{{ rec.ai_next_action }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if rec.transcript_text %}
+                    <details class="rec-transcript-details">
+                      <summary class="rec-transcript-summary">
+                        <span>Full Transcript ({{ rec.ai_language|default:"Hindi / English / Hinglish" }})</span>
+                      </summary>
+                      <div class="rec-transcript-content">
+                        <div class="rec-transcript-toolbar">
+                          <span class="rec-ai-provider-note">{{ rec.ai_provider|default:"AI Engine" }}</span>
+                          <button type="button" class="rec-ai-btn subtle" data-copy-transcript>Copy Transcript</button>
+                        </div>
+                        <pre class="rec-transcript-pre">{{ rec.transcript_text }}</pre>
+                      </div>
+                    </details>
+                    {% endif %}
+                  {% elif rec.transcript_status == 'FAILED' and rec.transcript_error %}
+                    <p class="rec-ai-error-note">{{ rec.transcript_error|truncatechars:180 }}</p>
+                  {% elif rec.transcript_status == 'PENDING' or rec.transcript_status == 'PROCESSING' %}
+                    <p class="rec-ai-pending-note">Automatically transcribing Hindi, English &amp; Hinglish speech and extracting key points &amp; objections…</p>
+                  {% endif %}
                 </div>
               </div>
             </td>

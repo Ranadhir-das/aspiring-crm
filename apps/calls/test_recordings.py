@@ -181,7 +181,7 @@ class RecordingTests(TestCase):
                 self.assertEqual(rec.content_type, expected_mime)
                 self.assertEqual(rec.original_filename, fname)
                 self.assertEqual(rec.source_type, CallRecording.SourceType.OEM_AUTO_SYNC)
-                self.assertEqual(rec.transcript_status, CallRecording.TranscriptStatus.NONE)
+                self.assertEqual(rec.transcript_status, CallRecording.TranscriptStatus.PENDING)
 
         # Spoofed AMR header must be rejected
         bad = self.upload(data=b'NOT_AN_AMR_FILE_DATA', name='spoof.amr', duration=10)

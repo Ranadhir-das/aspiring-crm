@@ -1,0 +1,24 @@
+[Unit]
+Description=Vaani Call Recording AI Transcription & Summarization Worker
+After=network.target postgresql.service vaani.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/vaani/aspiring-crm
+EnvironmentFile=/opt/vaani/aspiring-crm/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=HF_HOME=/opt/vaani/aspiring-crm/whisper_models
+Environment=HF_HUB_DISABLE_TELEMETRY=1
+Environment=OMP_NUM_THREADS=2
+ExecStart=/opt/vaani/venv/bin/python /opt/vaani/aspiring-crm/manage.py run_recording_ai_worker --poll-seconds 5
+Nice=15
+IOSchedulingClass=idle
+CPUQuota=140%
+MemoryMax=1600M
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
