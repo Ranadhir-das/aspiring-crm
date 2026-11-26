@@ -161,6 +161,7 @@ class CallRecording(models.Model):
     ai_provider = models.CharField(max_length=64, blank=True, default='')
     transcript_error = models.TextField(blank=True, default='')
     transcript_attempts = models.PositiveSmallIntegerField(default=0)
+    transcript_priority = models.PositiveSmallIntegerField(default=0, db_index=True)
     transcribed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

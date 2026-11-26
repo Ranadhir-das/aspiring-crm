@@ -42,7 +42,7 @@ class Command(BaseCommand):
         parser.add_argument('--once', action='store_true', help='Process available pending jobs and exit.')
         parser.add_argument('--backfill', action='store_true', help='Mark existing unanalyzed recordings as PENDING first.')
         parser.add_argument('--limit', type=int, default=0, help='Maximum recordings to process before exiting (0 = unlimited).')
-        parser.add_argument('--poll-seconds', type=float, default=5.0, help='Polling interval in daemon mode.')
+        parser.add_argument('--poll-seconds', type=float, default=1.5, help='Polling interval in daemon mode.')
         parser.add_argument('--recording-id', type=int, default=0, help='Process a single CallRecording by ID.')
         parser.add_argument('--call-id', type=int, default=0, help='Process a single CallRecording by Call ID.')
 
@@ -78,7 +78,7 @@ class Command(BaseCommand):
 
         limit = int(options['limit'] or 0)
         once = bool(options['once'])
-        poll_seconds = max(1.0, float(options['poll_seconds'] or 5.0))
+        poll_seconds = max(0.5, float(options['poll_seconds'] or 1.5))
         processed = 0
 
         # Recover any orphaned PROCESSING rows left behind by a prior crash/reboot on startup
@@ -126,7 +126,7 @@ class Command(BaseCommand):
                     transcript_status=CallRecording.TranscriptStatus.PENDING,
                     transcript_attempts__lt=MAX_ATTEMPTS,
                 )
-                .order_by('-call__started_at', '-pk')
+                .order_by('-transcript_priority', '-call__started_at', '-pk')
                 .first()
             )
             if rec is None:

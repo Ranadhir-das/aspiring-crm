@@ -5,19 +5,19 @@
 {% block breadcrumb %}Call Recordings{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=4">
-<script src="{% static 'web/recordings-ai.js' %}?v=1" defer></script>
+<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=5">
+<script src="{% static 'web/recordings-ai.js' %}?v=2" defer></script>
 
 <div class="recordings-page" data-csrf-token="{{ csrf_token }}">
-  <!-- Hero Page Header -->
+  <!-- 1. Vibrant Hero Header -->
   <header class="recordings-hero">
     <div class="recordings-hero-copy">
       <div class="recordings-eyebrow">
         <span class="eyebrow-pulse" aria-hidden="true"></span>
-        <span>VOICE INTELLIGENCE, TRANSCRIPTS &amp; OBJECTIONS</span>
+        <span>VAANI VOICE INTELLIGENCE</span>
       </div>
       <h1>Call Recordings<span class="accent">.</span></h1>
-      <p class="heading-subtitle">Review AI summaries, key points, objections, and Hindi / English / Hinglish transcripts without listening to every call.</p>
+      <p class="heading-subtitle">Instant English summaries, key takeaways, objections &amp; searchable conversations — scan every call in seconds.</p>
     </div>
     <div class="header-actions">
       {% if is_management and unanalyzed_count > 0 %}
@@ -32,33 +32,35 @@
       {% endif %}
       <a class="button action-btn" href="{% url 'web:calls' %}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-        <span>All CRM Calls</span>
-        <span class="action-arrow" aria-hidden="true">↗</span>
+        <span>All Calls</span>
       </a>
       <a class="button action-btn" href="{% url 'web:external-calls' %}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23 7 23 1 17 1"/><line x1="16" y1="8" x2="23" y2="1"/><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-        <span>External Calls</span>
-        <span class="action-arrow" aria-hidden="true">↗</span>
+        <span>External</span>
       </a>
     </div>
   </header>
 
-  <!-- 1. KPI Metric Cards -->
+  <!-- 2. Colour-Coded KPI Metric Cards -->
   {% if metrics %}
   <section class="recordings-metrics-grid" aria-label="Recording summary metrics">
     {% for metric in metrics %}
-    <article class="recording-metric-card metric-accent-{{ forloop.counter }}">
+    {% if metric.filter_query %}
+    <a href="{% url 'web:call-recordings' %}{{ metric.filter_query }}" class="recording-metric-card theme-{{ metric.theme }} is-clickable">
+    {% else %}
+    <article class="recording-metric-card theme-{{ metric.theme }}">
+    {% endif %}
       <div class="metric-top-bar">
         <span class="metric-label">{{ metric.label }}</span>
         <span class="metric-icon" aria-hidden="true">
-          {% if forloop.counter == 1 %}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          {% elif forloop.counter == 2 %}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          {% elif forloop.counter == 3 %}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          {% if metric.theme == 'indigo' %}
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          {% elif metric.theme == 'emerald' %}
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8l-6.2 4.5 2.4-7.4L2 9.4h7.6z"/></svg>
+          {% elif metric.theme == 'rose' %}
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           {% else %}
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           {% endif %}
         </span>
       </div>
@@ -66,438 +68,428 @@
       <div class="metric-bottom-bar">
         <span class="metric-pill">{{ metric.pill }}</span>
       </div>
+    {% if metric.filter_query %}
+    </a>
+    {% else %}
     </article>
+    {% endif %}
     {% endfor %}
   </section>
   {% endif %}
 
-  <!-- 2. Responsive Filter Toolbar -->
-  <section class="recordings-filter-card" aria-label="Filter call recordings">
-    <div class="recordings-filter-head">
-      <div class="recordings-filter-title">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-        <span>Filter &amp; Search</span>
-      </div>
-      {% if active_filters_count > 0 %}
-      <span class="recordings-active-pill">
-        <span class="dot" aria-hidden="true"></span>
-        {{ active_filters_count }} filter{% if active_filters_count > 1 %}s{% endif %} active
-      </span>
-      {% endif %}
-    </div>
-
+  <!-- 3. Clean Search + 1-Click Smart Pills + Collapsible Advanced Filters -->
+  <section class="recordings-toolbar-card" aria-label="Search and filter conversations">
     <form method="get" class="recordings-filter-form{% if is_management and callers %} has-caller-filter{% endif %}" action="{% url 'web:call-recordings' %}">
-      <div class="filter-field filter-search">
-        <label class="sr-only" for="rec-search">Search lead, phone, AI summary, or transcript</label>
+      {% if selected_direction %}<input type="hidden" name="direction" value="{{ selected_direction }}">{% endif %}
+      {% if selected_ai_status %}<input type="hidden" name="ai_status" value="{{ selected_ai_status }}">{% endif %}
+
+      <div class="rec-search-row">
         <div class="recordings-search-box">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="rec-search" type="search" name="q" value="{{ search|default:'' }}" placeholder="Search lead, phone, summary or transcript…">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <label class="sr-only" for="rec-search">Search lead, phone, summary, NEET score, city, or conversation</label>
+          <input id="rec-search" type="search" name="q" value="{{ search|default:'' }}" placeholder="Search lead, phone, NEET score, city, objection, or conversation…">
+        </div>
+        <button type="submit" class="btn-filter-submit">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Search</span>
+        </button>
+        {% if active_filters_count > 0 %}
+        <a href="{% url 'web:call-recordings' %}" class="btn-filter-clear">Reset All</a>
+        {% endif %}
+      </div>
+
+      <!-- 1-Click Smart Filter Pills -->
+      <div class="rec-smart-bar">
+        <div class="recordings-direction-tabs" role="navigation" aria-label="Quick conversation filters">
+          <a
+            href="{% querystring direction=None ai_status=None page=None %}"
+            class="rec-pill-tab theme-all{% if not selected_direction and not selected_ai_status %} is-active{% endif %}"
+            {% if not selected_direction and not selected_ai_status %}aria-current="page"{% endif %}
+          >
+            <span>All Calls</span>
+            <span class="rec-dir-count">{{ all_directions_count }}</span>
+          </a>
+          <a
+            href="{% querystring direction='OUTBOUND' page=None %}"
+            class="rec-pill-tab theme-outbound{% if selected_direction == 'OUTBOUND' %} is-active{% endif %}"
+            {% if selected_direction == 'OUTBOUND' %}aria-current="page"{% endif %}
+          >
+            <span aria-hidden="true">↗</span>
+            <span>Outgoing</span>
+            <span class="rec-dir-count">{{ outbound_count }}</span>
+          </a>
+          <a
+            href="{% querystring direction='INBOUND' page=None %}"
+            class="rec-pill-tab theme-inbound{% if selected_direction == 'INBOUND' %} is-active{% endif %}"
+            {% if selected_direction == 'INBOUND' %}aria-current="page"{% endif %}
+          >
+            <span aria-hidden="true">↙</span>
+            <span>Incoming</span>
+            <span class="rec-dir-count">{{ inbound_count }}</span>
+          </a>
+          <a
+            href="{% querystring ai_status='objections' page=None %}"
+            class="rec-pill-tab theme-rose{% if selected_ai_status == 'objections' %} is-active{% endif %}"
+            {% if selected_ai_status == 'objections' %}aria-current="page"{% endif %}
+          >
+            <span aria-hidden="true">⚠</span>
+            <span>Objections</span>
+            <span class="rec-dir-count">{{ pill_objections_count }}</span>
+          </a>
+          <a
+            href="{% querystring ai_status='positive' page=None %}"
+            class="rec-pill-tab theme-emerald{% if selected_ai_status == 'positive' %} is-active{% endif %}"
+            {% if selected_ai_status == 'positive' %}aria-current="page"{% endif %}
+          >
+            <span aria-hidden="true">★</span>
+            <span>Positive</span>
+            <span class="rec-dir-count">{{ pill_positive_count }}</span>
+          </a>
+          <a
+            href="{% querystring ai_status='analyzed' page=None %}"
+            class="rec-pill-tab theme-violet{% if selected_ai_status == 'analyzed' %} is-active{% endif %}"
+            {% if selected_ai_status == 'analyzed' %}aria-current="page"{% endif %}
+          >
+            <span aria-hidden="true">✨</span>
+            <span>AI Ready</span>
+            <span class="rec-dir-count">{{ pill_analyzed_count }}</span>
+          </a>
+          {% if pill_pending_count > 0 or selected_ai_status == 'pending' %}
+          <a
+            href="{% querystring ai_status='pending' page=None %}"
+            class="rec-pill-tab theme-amber{% if selected_ai_status == 'pending' %} is-active{% endif %}"
+            {% if selected_ai_status == 'pending' %}aria-current="page"{% endif %}
+          >
+            <span aria-hidden="true">⏳</span>
+            <span>Queued</span>
+            <span class="rec-dir-count">{{ pill_pending_count }}</span>
+          </a>
+          {% endif %}
         </div>
       </div>
 
-      {% if is_management and callers %}
-      <div class="filter-field">
-        <label class="filter-mini-label" for="rec-caller">Caller</label>
-        <select id="rec-caller" name="caller" class="filter-control">
-          <option value="">All Callers</option>
-          {% for caller in callers %}
-          <option value="{{ caller.pk }}" {% if selected_caller == caller.pk|stringformat:"s" %}selected{% endif %}>
-            {{ caller.get_full_name|default:caller.username }}
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
+      <!-- Collapsible Advanced Filters (Hidden by default to keep page clean!) -->
+      <details class="rec-adv-filters"{% if advanced_filters_count > 0 %} open{% endif %}>
+        <summary class="rec-adv-summary">
+          <span>More Filters (Caller, Outcome, Date Range)</span>
+          {% if advanced_filters_count > 0 %}
+          <span class="rec-adv-badge">{{ advanced_filters_count }} active</span>
+          {% endif %}
+        </summary>
+        <div class="rec-adv-grid">
+          {% if is_management and callers %}
+          <div class="filter-field">
+            <label class="filter-mini-label" for="rec-caller">Caller</label>
+            <select id="rec-caller" name="caller" class="filter-control">
+              <option value="">All Callers</option>
+              {% for caller in callers %}
+              <option value="{{ caller.pk }}" {% if selected_caller == caller.pk|stringformat:"s" %}selected{% endif %}>
+                {{ caller.get_full_name|default:caller.username }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
 
-      <div class="filter-field">
-        <label class="filter-mini-label" for="rec-direction">Direction</label>
-        <select id="rec-direction" name="direction" class="filter-control">
-          <option value="">All Calls (Out &amp; In)</option>
-          {% for val, label in directions %}
-          <option value="{{ val }}" {% if selected_direction == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
+          <div class="filter-field">
+            <label class="filter-mini-label" for="rec-outcome">Outcome</label>
+            <select id="rec-outcome" name="outcome" class="filter-control">
+              <option value="">All Outcomes</option>
+              {% for val, label in outcomes %}
+              <option value="{{ val }}" {% if selected_outcome == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
 
-      <div class="filter-field">
-        <label class="filter-mini-label" for="rec-outcome">Outcome</label>
-        <select id="rec-outcome" name="outcome" class="filter-control">
-          <option value="">All Outcomes</option>
-          {% for val, label in outcomes %}
-          <option value="{{ val }}" {% if selected_outcome == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
+          <div class="filter-field">
+            <label class="filter-mini-label" for="rec-from">From Date</label>
+            <input id="rec-from" type="date" name="date_from" value="{{ selected_date_from }}" class="filter-control">
+          </div>
 
-      <div class="filter-field">
-        <label class="filter-mini-label" for="rec-ai-status">AI Insights</label>
-        <select id="rec-ai-status" name="ai_status" class="filter-control">
-          <option value="">All AI Status</option>
-          <option value="analyzed" {% if selected_ai_status == 'analyzed' %}selected{% endif %}>AI Summarized</option>
-          <option value="objections" {% if selected_ai_status == 'objections' %}selected{% endif %}>Has Objections</option>
-          <option value="pending" {% if selected_ai_status == 'pending' %}selected{% endif %}>Queued / Processing</option>
-          <option value="none" {% if selected_ai_status == 'none' %}selected{% endif %}>Not Analyzed</option>
-          <option value="failed" {% if selected_ai_status == 'failed' %}selected{% endif %}>Failed</option>
-        </select>
-      </div>
+          <div class="filter-field">
+            <label class="filter-mini-label" for="rec-to">To Date</label>
+            <input id="rec-to" type="date" name="date_to" value="{{ selected_date_to }}" class="filter-control">
+          </div>
 
-      <div class="filter-field">
-        <label class="filter-mini-label" for="rec-from">From Date</label>
-        <input id="rec-from" type="date" name="date_from" value="{{ selected_date_from }}" class="filter-control">
-      </div>
-
-      <div class="filter-field">
-        <label class="filter-mini-label" for="rec-to">To Date</label>
-        <input id="rec-to" type="date" name="date_to" value="{{ selected_date_to }}" class="filter-control">
-      </div>
-
-      <div class="recordings-filter-actions">
-        <button type="submit" class="btn-filter-submit">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-          <span>Apply</span>
-        </button>
-        <a href="{% url 'web:call-recordings' %}" class="btn-filter-clear">Reset</a>
-      </div>
+          <div class="filter-field filter-field-btn">
+            <button type="submit" class="btn-filter-apply-sm">Apply Filters</button>
+          </div>
+        </div>
+      </details>
     </form>
   </section>
 
-  <!-- Live status feedback for AJAX AI actions -->
+  <!-- Live Status Announcements -->
   <div id="recordings-ai-live" class="rec-ai-live-banner" role="status" aria-live="polite" hidden></div>
 
-  <!-- 3. Recorded Conversations Table (Auto-transforms to Cards on Narrow Containers) -->
-  <section class="recordings-panel">
-    <div class="recordings-panel-head">
-      <div class="recordings-panel-title-wrap">
-        <h2 id="recordings-table-heading">Recorded Conversations</h2>
-        <p>Listen to both outgoing calls and incoming callbacks. Drag or use arrow keys on the timeline to scrub.</p>
+  <!-- 4. Clean, Scannable, Colourful Conversation Cards -->
+  <section class="recordings-feed-shell" role="region" aria-labelledby="recordings-table-heading">
+    <div class="recordings-feed-head">
+      <div>
+        <h2 id="recordings-table-heading">Conversations <span class="rec-feed-count">({{ total_count }})</span></h2>
+        <p>Scan English summaries &amp; key points at a glance, play audio inline, or open any call for full timestamped transcript.</p>
       </div>
-      <div class="recordings-direction-tabs" role="navigation" aria-label="Filter recordings by call direction">
-        <a
-          href="{% querystring direction=None page=None %}"
-          class="rec-dir-tab{% if not selected_direction %} is-active{% endif %}"
-          {% if not selected_direction %}aria-current="page"{% endif %}
-        >
-          <span>All</span>
-          <span class="rec-dir-count">{{ all_directions_count }}</span>
-        </a>
-        <a
-          href="{% querystring direction='OUTBOUND' page=None %}"
-          class="rec-dir-tab{% if selected_direction == 'OUTBOUND' %} is-active{% endif %}"
-          {% if selected_direction == 'OUTBOUND' %}aria-current="page"{% endif %}
-        >
-          <span aria-hidden="true">↗</span>
-          <span>Outgoing</span>
-          <span class="rec-dir-count">{{ outbound_count }}</span>
-        </a>
-        <a
-          href="{% querystring direction='INBOUND' page=None %}"
-          class="rec-dir-tab inbound{% if selected_direction == 'INBOUND' %} is-active{% endif %}"
-          {% if selected_direction == 'INBOUND' %}aria-current="page"{% endif %}
-        >
-          <span aria-hidden="true">↙</span>
-          <span>Incoming</span>
-          <span class="rec-dir-count">{{ inbound_count }}</span>
-        </a>
-      </div>
-    </div>
-
-    <div
-      class="recordings-table-scroll"
-      tabindex="0"
-      role="region"
-      aria-labelledby="recordings-table-heading"
-    >
-      <table class="recordings-table">
-        <caption class="sr-only">Recorded call conversations with caller, outcome, timestamp, duration, and audio player</caption>
-        <thead>
-          <tr>
-            <th scope="col">Lead / Contact</th>
-            <th scope="col">Caller</th>
-            <th scope="col">Outcome</th>
-            <th scope="col">Date &amp; Info</th>
-            <th scope="col" class="col-player">Audio &amp; AI Insights</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for rec in records %}
-          <tr class="recording-row">
-            <th scope="row" class="cell-contact">
-              {% if rec.call.lead_id %}
-              <a class="person rec-person" href="{% url 'web:lead-detail' rec.call.lead_id %}">
-                <span class="avatar subtle" aria-hidden="true">{{ rec.call.lead.name|first|upper }}</span>
-                <span class="rec-person-meta">
-                  <strong class="rec-person-name">{{ rec.call.lead.name }}</strong>
-                  <small class="rec-person-phone">{{ rec.call.lead.phone }}</small>
-                  <small class="rec-person-batch">{{ rec.call.lead.import_batch.filename|default:"Direct Lead" }}</small>
-                </span>
-              </a>
-              {% else %}
-              <div class="person rec-person">
-                <span class="avatar subtle" aria-hidden="true">☎</span>
-                <span class="rec-person-meta">
-                  <strong class="rec-person-name">{{ rec.call.phone_number }}</strong>
-                  <small class="rec-person-batch">External / Direct Call</small>
-                </span>
-              </div>
-              {% endif %}
-              <div class="rec-contact-badges">
-                {% if rec.call.direction == 'INBOUND' %}
-                <span class="rec-dir-badge inbound" title="Incoming callback from contact">↙ Incoming</span>
-                {% else %}
-                <span class="rec-dir-badge outbound" title="Outgoing call placed by caller">↗ Outgoing</span>
-                {% endif %}
-                {% if rec.call.lead_id %}
-                <a class="rec-thread-link" href="{% querystring q=rec.call.lead.phone direction=None page=None %}" title="Show all outgoing &amp; incoming recordings for this contact">All calls ↗</a>
-                {% elif rec.call.phone_number %}
-                <a class="rec-thread-link" href="{% querystring q=rec.call.phone_number direction=None page=None %}" title="Show all outgoing &amp; incoming recordings for this number">All calls ↗</a>
-                {% endif %}
-              </div>
-              {% if rec.call.notes %}
-              <p class="rec-note-preview" title="{{ rec.call.notes }}">{{ rec.call.notes|truncatechars:90 }}</p>
-              {% endif %}
-            </th>
-
-            <td class="cell-caller">
-              <div class="rec-caller-chip">
-                <span class="avatar small" aria-hidden="true">{{ rec.call.caller.first_name|default:rec.call.caller.username|first|upper }}</span>
-                <span class="rec-caller-name">{% employee_link rec.call.caller %}</span>
-              </div>
-            </td>
-
-            <td class="cell-outcome">
-              <span class="badge {{ rec.call.outcome|lower }}">{{ rec.call.get_outcome_display|default:'Recorded' }}</span>
-            </td>
-
-            <td class="cell-meta">
-              <div class="rec-meta-stack">
-                <span class="rec-date-val">{{ rec.call.started_at|date:'d M Y, h:i A' }}</span>
-                <div class="rec-meta-sub">
-                  <span class="rec-chip">{{ rec.duration_display }}</span>
-                  <span class="rec-chip muted">{{ rec.file_size|filesizeformat }}</span>
-                  {% if rec.original_format %}
-                  <span class="rec-chip format">{{ rec.original_format|upper }}</span>
-                  {% endif %}
-                </div>
-              </div>
-            </td>
-
-            <td class="cell-player">
-              <div class="vaani-audio-player rec-studio-player">
-                <audio preload="none" src="{% url 'web:call-recording' rec.call_id %}"></audio>
-
-                <div class="visualizer-box">
-                  <canvas class="visualizer-canvas" height="52"></canvas>
-                  <div class="freq-hud" aria-hidden="true">
-                    <div class="freq-band-item">
-                      <div class="freq-band-label">
-                        <span>Low</span>
-                        <span class="val-low">0%</span>
-                      </div>
-                      <div class="freq-meter-track">
-                        <div class="freq-meter-fill meter-low-fill"></div>
-                      </div>
-                    </div>
-                    <div class="freq-band-item">
-                      <div class="freq-band-label">
-                        <span>Voice</span>
-                        <span class="val-mid">0%</span>
-                      </div>
-                      <div class="freq-meter-track">
-                        <div class="freq-meter-fill meter-mid-fill"></div>
-                      </div>
-                    </div>
-                    <div class="freq-band-item">
-                      <div class="freq-band-label">
-                        <span>High</span>
-                        <span class="val-high">0%</span>
-                      </div>
-                      <div class="freq-meter-track">
-                        <div class="freq-meter-fill meter-high-fill"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="player-controls-row">
-                  <button type="button" class="btn-play" aria-label="Play recording for call {{ rec.call_id }}">
-                    <span class="play-icon" aria-hidden="true">▶</span>
-                  </button>
-
-                  <div class="timeline-container">
-                    <div
-                      class="timeline-track"
-                      role="slider"
-                      tabindex="0"
-                      aria-label="Audio seek timeline"
-                      aria-valuemin="0"
-                      aria-valuemax="{{ rec.duration_seconds|default:100 }}"
-                      aria-valuenow="0"
-                      title="Click, drag, or use arrow keys to seek"
-                    >
-                      <div class="timeline-fill"></div>
-                    </div>
-                    <div class="time-stamps">
-                      <span class="time-current">00:00</span>
-                      <span class="time-duration">{{ rec.duration_display }}</span>
-                    </div>
-                  </div>
-
-                  <div class="player-extras">
-                    <div class="speed-chips" role="group" aria-label="Playback speed">
-                      <button type="button" class="speed-chip active" data-speed="1">1x</button>
-                      <button type="button" class="speed-chip" data-speed="1.25">1.25x</button>
-                      <button type="button" class="speed-chip" data-speed="1.5">1.5x</button>
-                      <button type="button" class="speed-chip" data-speed="2">2x</button>
-                    </div>
-
-                    <a
-                      href="{% url 'web:call-recording' rec.call_id %}"
-                      download="call-{{ rec.call_id }}-recording{{ rec.download_extension }}"
-                      class="btn-download-audio"
-                      aria-label="Download audio recording for call {{ rec.call_id }}"
-                      title="Download audio recording"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              <!-- AI Transcription (Hindi/English/Hinglish) & Structured Summary Card -->
-              <div
-                class="rec-ai-panel status-{{ rec.transcript_status|lower }}"
-                data-call-id="{{ rec.call_id }}"
-                data-ai-status="{{ rec.transcript_status }}"
-                data-analyze-url="{% url 'web:call-recording-analyze' rec.call_id %}"
-                data-status-url="{% url 'web:call-recording-ai-status' rec.call_id %}"
-              >
-                <div class="rec-ai-header">
-                  <div class="rec-ai-badges">
-                    <span class="rec-ai-chip brand">
-                      <span aria-hidden="true">✨</span>
-                      <span>AI Brief</span>
-                    </span>
-                    {% if rec.transcript_status == 'COMPLETED' %}
-                      {% if rec.ai_language %}
-                      <span class="rec-ai-chip lang">{{ rec.ai_language }}</span>
-                      {% endif %}
-                      {% if rec.ai_sentiment %}
-                      <span class="rec-ai-chip sentiment-{{ rec.ai_sentiment|lower }}">{{ rec.get_ai_sentiment_display }}</span>
-                      {% endif %}
-                      {% if rec.objections_count > 0 %}
-                      <span class="rec-ai-chip objection-alert">⚠ {{ rec.objections_count }} Objection{% if rec.objections_count != 1 %}s{% endif %}</span>
-                      {% else %}
-                      <span class="rec-ai-chip clean">✓ No Objections</span>
-                      {% endif %}
-                    {% elif rec.transcript_status == 'PROCESSING' %}
-                      <span class="rec-ai-chip pending"><span class="rec-ai-spinner" aria-hidden="true"></span> Transcribing &amp; Summarizing…</span>
-                    {% elif rec.transcript_status == 'PENDING' %}
-                      <span class="rec-ai-chip pending"><span class="rec-ai-spinner" aria-hidden="true"></span> Queued for AI Analysis…</span>
-                    {% elif rec.transcript_status == 'FAILED' %}
-                      <span class="rec-ai-chip failed">⚠ AI Analysis Failed</span>
-                    {% else %}
-                      <span class="rec-ai-chip muted">Not Analyzed Yet</span>
-                    {% endif %}
-                  </div>
-
-                  <div class="rec-ai-actions">
-                    {% if rec.transcript_status == 'COMPLETED' %}
-                    <button type="button" class="rec-ai-btn subtle" data-ai-trigger="reanalyze" title="Re-run AI transcription &amp; summary">
-                      ↻ Re-analyze
-                    </button>
-                    {% elif rec.transcript_status == 'NONE' or rec.transcript_status == 'FAILED' %}
-                    <button type="button" class="rec-ai-btn primary" data-ai-trigger="analyze">
-                      ✨ Transcribe &amp; Summarize
-                    </button>
-                    {% endif %}
-                  </div>
-                </div>
-
-                <div class="rec-ai-body">
-                  {% if rec.transcript_status == 'COMPLETED' %}
-                    {% if rec.ai_summary %}
-                    <p class="rec-ai-summary">{{ rec.ai_summary }}</p>
-                    {% endif %}
-
-                    {% if rec.ai_key_points or rec.ai_objections %}
-                    <div class="rec-ai-grid">
-                      {% if rec.ai_key_points %}
-                      <div class="rec-ai-box">
-                        <span class="rec-ai-box-title">Key Points</span>
-                        <ul class="rec-ai-list">
-                          {% for pt in rec.ai_key_points %}
-                          <li>{{ pt }}</li>
-                          {% endfor %}
-                        </ul>
-                      </div>
-                      {% endif %}
-
-                      {% if rec.ai_objections %}
-                      <div class="rec-ai-box objections">
-                        <span class="rec-ai-box-title">Objections Raised</span>
-                        <ul class="rec-objection-list">
-                          {% for obj in rec.ai_objections %}
-                          <li class="rec-objection-item">
-                            <strong class="rec-objection-label">{{ obj.label }}</strong>
-                            {% if obj.detail %}<span class="rec-objection-detail">{{ obj.detail }}</span>{% endif %}
-                            {% if obj.evidence %}<q class="rec-objection-quote">{{ obj.evidence }}</q>{% endif %}
-                          </li>
-                          {% endfor %}
-                        </ul>
-                      </div>
-                      {% endif %}
-                    </div>
-                    {% endif %}
-
-                    {% if rec.ai_next_action %}
-                    <div class="rec-ai-next">
-                      <strong>Next Step:</strong> <span>{{ rec.ai_next_action }}</span>
-                    </div>
-                    {% endif %}
-
-                    {% if rec.transcript_text %}
-                    <details class="rec-transcript-details">
-                      <summary class="rec-transcript-summary">
-                        <span>Full Transcript ({{ rec.ai_language|default:"Hindi / English / Hinglish" }})</span>
-                      </summary>
-                      <div class="rec-transcript-content">
-                        <div class="rec-transcript-toolbar">
-                          <span class="rec-ai-provider-note">{{ rec.ai_provider|default:"AI Engine" }}</span>
-                          <button type="button" class="rec-ai-btn subtle" data-copy-transcript>Copy Transcript</button>
-                        </div>
-                        <pre class="rec-transcript-pre">{{ rec.transcript_text }}</pre>
-                      </div>
-                    </details>
-                    {% endif %}
-                  {% elif rec.transcript_status == 'FAILED' and rec.transcript_error %}
-                    <p class="rec-ai-error-note">{{ rec.transcript_error|truncatechars:180 }}</p>
-                  {% elif rec.transcript_status == 'PENDING' or rec.transcript_status == 'PROCESSING' %}
-                    <p class="rec-ai-pending-note">Automatically transcribing Hindi, English &amp; Hinglish speech and extracting key points &amp; objections…</p>
-                  {% endif %}
-                </div>
-              </div>
-            </td>
-          </tr>
-          {% empty %}
-          <tr class="empty-row">
-            <td colspan="5" class="empty">
-              <div class="rec-empty-state">
-                <div class="rec-empty-icon" aria-hidden="true">🎙</div>
-                <strong>No call recordings found</strong>
-                <p>Calls with audio synced from the Vaani mobile app will appear here for instant streaming and audit.</p>
-              </div>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
     </div>
 
     {% if records %}
+    <div class="rec-cards-list">
+      {% for rec in records %}
+      {% cycle 'a' 'b' 'c' 'd' 'e' 'f' as avatar_tone silent %}
+      <article
+        class="rec-card rec-ai-panel status-{{ rec.transcript_status|lower }}{% if rec.objections_count > 0 %} has-objections{% endif %}{% if rec.ai_sentiment %} card-sentiment-{{ rec.ai_sentiment|lower }}{% endif %}"
+        data-call-id="{{ rec.call_id }}"
+        data-ai-status="{{ rec.transcript_status }}"
+        data-analyze-url="{% url 'web:call-recording-analyze' rec.call_id %}"
+        data-status-url="{% url 'web:call-recording-ai-status' rec.call_id %}"
+      >
+        <!-- Top Row: Contact + Direction + Caller + Outcome + Timestamp -->
+        <div class="rec-card-top">
+          <div class="rec-card-identity">
+            {% if rec.call.lead_id %}
+            <a class="rec-person" href="{% url 'web:lead-detail' rec.call.lead_id %}">
+              <span class="rec-avatar tone-{{ avatar_tone }}" aria-hidden="true">{{ rec.call.lead.name|first|upper }}</span>
+              <span class="rec-person-meta">
+                <strong class="rec-person-name">{{ rec.call.lead.name }}</strong>
+                <small class="rec-person-sub">
+                  <span class="rec-person-phone">{{ rec.call.lead.phone }}</span>
+                  {% if rec.call.lead.import_batch %}
+                  <span aria-hidden="true">·</span>
+                  <span>{{ rec.call.lead.import_batch.filename|truncatechars:28 }}</span>
+                  {% endif %}
+                </small>
+              </span>
+            </a>
+            {% else %}
+            <div class="rec-person">
+              <span class="rec-avatar tone-{{ avatar_tone }}" aria-hidden="true">☎</span>
+              <span class="rec-person-meta">
+                <strong class="rec-person-name">{{ rec.call.phone_number }}</strong>
+                <small class="rec-person-sub">External / Direct Call</small>
+              </span>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="rec-card-meta-pills">
+            {% if rec.call.direction == 'INBOUND' %}
+            <span class="rec-dir-badge inbound" title="Incoming callback">↙ Incoming</span>
+            {% else %}
+            <span class="rec-dir-badge outbound" title="Outgoing call">↗ Outgoing</span>
+            {% endif %}
+            <span class="badge {{ rec.call.outcome|lower }}">{{ rec.call.get_outcome_display|default:'Recorded' }}</span>
+            <span class="rec-meta-pill caller" title="Caller">
+              <span class="rec-mini-dot" aria-hidden="true"></span>
+              {% employee_link rec.call.caller %}
+            </span>
+            <span class="rec-meta-pill time">{{ rec.call.started_at|date:'d M, h:i A' }}</span>
+            <span class="rec-meta-pill dur">{{ rec.duration_display }}</span>
+          </div>
+        </div>
+
+        <!-- Middle Row: Instant AI Summary & English Key Points -->
+        <div class="rec-card-intel">
+          <div class="rec-ai-header">
+            <div class="rec-ai-badges">
+              {% if rec.transcript_status == 'COMPLETED' %}
+                {% if rec.ai_language %}
+                <span class="rec-ai-chip lang">🌐 {{ rec.ai_language }}</span>
+                {% endif %}
+                {% if rec.ai_sentiment %}
+                <span class="rec-ai-chip sentiment-{{ rec.ai_sentiment|lower }}">
+                  {% if rec.ai_sentiment == 'POSITIVE' %}★{% elif rec.ai_sentiment == 'HESITANT' %}◐{% elif rec.ai_sentiment == 'NEGATIVE' %}✕{% else %}●{% endif %}
+                  {{ rec.get_ai_sentiment_display }}
+                </span>
+                {% endif %}
+                {% if rec.objections_count > 0 %}
+                  {% for obj in rec.ai_objections|slice:":2" %}
+                  <span class="rec-ai-chip objection-alert">⚠ {{ obj.label }}</span>
+                  {% endfor %}
+                  {% if rec.objections_count > 2 %}
+                  <span class="rec-ai-chip objection-alert">+{{ rec.objections_count|add:"-2" }} more</span>
+                  {% endif %}
+                {% else %}
+                <span class="rec-ai-chip clean">✓ No Objections</span>
+                {% endif %}
+              {% elif rec.transcript_status == 'PROCESSING' %}
+                <span class="rec-ai-chip pending"><span class="rec-ai-spinner" aria-hidden="true"></span> Analyzing call…</span>
+              {% elif rec.transcript_status == 'PENDING' %}
+                <span class="rec-ai-chip pending"><span class="rec-ai-spinner" aria-hidden="true"></span> Queued for AI…</span>
+              {% elif rec.transcript_status == 'FAILED' %}
+                <span class="rec-ai-chip failed">⚠ Analysis Failed</span>
+              {% else %}
+                <span class="rec-ai-chip muted">○ Not Analyzed</span>
+              {% endif %}
+            </div>
+
+            <div class="rec-ai-actions">
+              {% if rec.transcript_status == 'COMPLETED' %}
+              <button type="button" class="rec-btn-inspect" data-open-call-detail="{{ rec.call_id }}">
+                <span>View Conversation</span>
+                <span aria-hidden="true">→</span>
+              </button>
+              <button type="button" class="rec-ai-btn subtle" data-ai-trigger="reanalyze" title="Re-run AI analysis at top priority">↻</button>
+              {% elif rec.transcript_status == 'NONE' or rec.transcript_status == 'FAILED' %}
+              <button type="button" class="rec-ai-btn primary" data-ai-trigger="analyze">✨ Analyze Now</button>
+              <button type="button" class="rec-ai-btn subtle" data-open-call-detail="{{ rec.call_id }}">Details</button>
+              {% else %}
+              <button type="button" class="rec-ai-btn subtle" data-open-call-detail="{{ rec.call_id }}">View Details</button>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="rec-ai-body">
+            {% if rec.transcript_status == 'COMPLETED' %}
+              {% if rec.ai_summary %}
+              <p class="rec-ai-summary">{{ rec.ai_summary }}</p>
+              {% endif %}
+
+              {% if rec.ai_key_points %}
+              <ul class="rec-kp-strip">
+                {% for pt in rec.ai_key_points|slice:":3" %}
+                <li>{{ pt }}</li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+
+              {% if rec.ai_objections %}
+              <div class="rec-obj-inline">
+                {% for obj in rec.ai_objections|slice:":2" %}
+                <div class="rec-obj-inline-item">
+                  <strong>⚠ {{ obj.label }}:</strong>
+                  <span>{{ obj.detail }}</span>
+                  {% if obj.evidence %}<q>{{ obj.evidence }}</q>{% endif %}
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+
+              {% if rec.ai_next_action %}
+              <div class="rec-ai-next">
+                <strong>Next Step:</strong> <span>{{ rec.ai_next_action }}</span>
+              </div>
+              {% endif %}
+
+              {% if rec.transcript_text %}
+              <details class="rec-transcript-details">
+                <summary class="rec-transcript-summary">
+                  <span>Quick Transcript Preview</span>
+                </summary>
+                <div class="rec-transcript-content">
+                  <pre class="rec-transcript-pre">{{ rec.transcript_text }}</pre>
+                </div>
+              </details>
+              {% endif %}
+            {% elif rec.transcript_status == 'FAILED' and rec.transcript_error %}
+              <p class="rec-ai-error-note">{{ rec.transcript_error|truncatechars:180 }}</p>
+            {% elif rec.transcript_status == 'PENDING' or rec.transcript_status == 'PROCESSING' %}
+              <p class="rec-ai-pending-note">Fast AI worker is transcribing &amp; generating English key points and objections…</p>
+            {% else %}
+              {% if rec.call.notes %}
+              <p class="rec-caller-note-inline"><strong>Caller Note:</strong> {{ rec.call.notes|truncatechars:160 }}</p>
+              {% else %}
+              <p class="rec-ai-pending-note">Click <strong>Analyze Now</strong> to transcribe and summarize this call in seconds.</p>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Bottom Bar: Compact Sleek Audio Strip + Quick Links -->
+        <div class="rec-card-bottom">
+          <div class="vaani-audio-player rec-mini-player">
+            <audio preload="none" src="{% url 'web:call-recording' rec.call_id %}"></audio>
+            <button type="button" class="btn-play" aria-label="Play recording for call {{ rec.call_id }}">
+              <span class="play-icon" aria-hidden="true">▶</span>
+            </button>
+            <div class="timeline-container">
+              <div
+                class="timeline-track"
+                role="slider"
+                tabindex="0"
+                aria-label="Audio seek timeline"
+                aria-valuemin="0"
+                aria-valuemax="{{ rec.duration_seconds|default:100 }}"
+                aria-valuenow="0"
+              >
+                <div class="timeline-fill"></div>
+              </div>
+            </div>
+            <div class="time-stamps">
+              <span class="time-current">00:00</span>
+              <span aria-hidden="true">/</span>
+              <span class="time-duration">{{ rec.duration_display }}</span>
+            </div>
+            <div class="speed-chips" role="group" aria-label="Playback speed">
+              <button type="button" class="speed-chip active" data-speed="1">1x</button>
+              <button type="button" class="speed-chip" data-speed="1.5">1.5x</button>
+              <button type="button" class="speed-chip" data-speed="2">2x</button>
+            </div>
+            <a
+              href="{% url 'web:call-recording' rec.call_id %}"
+              download="call-{{ rec.call_id }}-recording{{ rec.download_extension }}"
+              class="btn-download-audio"
+              aria-label="Download audio recording for call {{ rec.call_id }}"
+              title="Download audio"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </a>
+          </div>
+
+          <div class="rec-card-links">
+            {% if rec.call.notes %}
+            <span class="rec-note-pill" title="{{ rec.call.notes }}">📝 Note</span>
+            {% endif %}
+            {% if rec.call.lead_id %}
+            <a class="rec-link-chip" href="{% querystring q=rec.call.lead.phone direction=None ai_status=None page=None %}">All calls</a>
+            <a class="rec-link-chip primary" href="{% url 'web:lead-detail' rec.call.lead_id %}">Lead ↗</a>
+            {% elif rec.call.phone_number %}
+            <a class="rec-link-chip" href="{% querystring q=rec.call.phone_number direction=None ai_status=None page=None %}">All calls</a>
+            {% endif %}
+          </div>
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+
     <div class="recordings-pagination-wrap">
       {% include 'web/pagination.html' %}
+    </div>
+    {% else %}
+    <div class="rec-empty-state">
+      <div class="rec-empty-icon" aria-hidden="true">🎙</div>
+      <strong>No call recordings match your filter</strong>
+      <p>Try clearing filters or syncing call recordings from the Vaani mobile app.</p>
+      {% if active_filters_count > 0 %}
+      <a href="{% url 'web:call-recordings' %}" class="btn-filter-submit rec-empty-reset">Show All Recordings</a>
+      {% endif %}
     </div>
     {% endif %}
   </section>
 </div>
+
+<!-- 5. Spacious Native <dialog> Call Detail & Interactive Conversation Inspector -->
+<dialog id="rec-detail-dialog" class="rec-detail-dialog" closedby="any" aria-labelledby="rec-dialog-title">
+  <div class="rec-dialog-shell">
+    <header class="rec-dialog-header">
+      <div class="rec-dialog-title-group">
+        <div class="rec-dialog-badges" id="rec-dialog-badges"></div>
+        <h1 id="rec-dialog-title" class="rec-dialog-title">Call Conversation</h1>
+        <p id="rec-dialog-subtitle" class="rec-dialog-subtitle"></p>
+      </div>
+      <div class="rec-dialog-header-actions">
+        <a id="rec-dialog-lead-link" class="rec-ai-btn subtle" href="#" hidden>Lead Profile ↗</a>
+        <button type="button" id="rec-dialog-reanalyze" class="rec-ai-btn subtle" hidden>↻ Re-analyze</button>
+        <form method="dialog">
+          <button type="submit" class="rec-dialog-close" aria-label="Close call details" autofocus>✕</button>
+        </form>
+      </div>
+    </header>
+
+    <div class="rec-dialog-audio-bar">
+      <audio id="rec-dialog-audio" controls preload="metadata"></audio>
+      <a id="rec-dialog-download" class="rec-ai-btn subtle" href="#" download>⬇ Download</a>
+    </div>
+
+    <div id="rec-dialog-body" class="rec-dialog-body"></div>
+  </div>
+</dialog>
 {% endblock %}

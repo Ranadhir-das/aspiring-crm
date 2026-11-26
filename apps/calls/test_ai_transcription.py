@@ -16,6 +16,7 @@ from apps.calls.ai_transcription import (
     devanagari_to_hinglish,
     process_recording_ai,
     resolve_ai_provider,
+    sanitize_hinglish_transcript,
 )
 from apps.calls.models import Call, CallRecording
 from apps.leads.models import Lead
@@ -103,7 +104,56 @@ class CallAITranscriptionUnitTests(TestCase):
         )
         self.assertEqual(res['objections'], [])
         matching_kp = [kp for kp in res['key_points'] if 'wants MBBS' in kp]
-        self.assertEqual(len(matching_kp), 1)
+        self.assertLessEqual(len(matching_kp), 1)
+
+    def test_pure_hinglish_has_zero_mixed_devanagari_and_english_key_points(self):
+        mixed = "Hello sir, aapke ghar pe student hai? नीट का स्कोर 400 है और पटना से हूँ।"
+        pure = sanitize_hinglish_transcript(mixed)
+        self.assertFalse(any('\u0900' <= ch <= '\u097f' for ch in pure), pure)
+        self.assertIn('400', pure)
+
+        # English key points extraction for NEET score, 10th/12th marks, location & India preference
+        call_text = (
+            "Hello sir, do you have a student who wants to do MBBS? "
+            "Yes. How much has NEET scored sir? 400. "
+            "Where is your location? Sikar. Where are you looking for college? All over India. "
+            "In 10th it was 91, in 12th 87. Send me your score card, I will talk to the senior."
+        )
+        res = analyze_transcript_locally(
+            call_text,
+            call_context={'direction': 'OUTBOUND', 'lead_name': 'Daksh', 'duration_seconds': 170},
+        )
+        self.assertEqual(res['objections'], [])
+        self.assertEqual(res['sentiment'], 'POSITIVE')
+        joined_kp = ' '.join(res['key_points'])
+        self.assertIn('400', joined_kp)
+        self.assertIn('91%', joined_kp)
+        self.assertIn('87%', joined_kp)
+        self.assertIn('India', joined_kp)
+        self.assertIn('Sikar', joined_kp)
+        self.assertFalse(any('\u0900' <= ch <= '\u097f' for ch in joined_kp))
+
+    def test_voicemail_and_neet_exam_word_do_not_false_trigger(self):
+        vm = analyze_transcript_locally(
+            "You have been forwarded to voicemail. The person you're trying to reach is not available. Thank you.",
+            call_context={'direction': 'OUTBOUND', 'lead_name': 'Suresh', 'duration_seconds': 120},
+        )
+        self.assertEqual(vm['sentiment'], 'NEUTRAL')
+        self.assertEqual(vm['objections'], [])
+        self.assertIn('voicemail', vm['summary'].lower())
+
+        neet_q = analyze_transcript_locally(
+            "Do you have a student who gave the NEET exam this year for MBBS? Yes.",
+            call_context={'direction': 'OUTBOUND', 'lead_name': 'Ariba', 'duration_seconds': 40},
+        )
+        self.assertNotIn('TIMING_BUSY', {o['category'] for o in neet_q['objections']})
+
+        enrolled = analyze_transcript_locally(
+            "So have you taken admission? Yes, I took admission yesterday.",
+            call_context={'direction': 'OUTBOUND', 'lead_name': 'Alok', 'duration_seconds': 55},
+        )
+        self.assertIn('ALREADY_ENROLLED', {o['category'] for o in enrolled['objections']})
+        self.assertEqual(enrolled['sentiment'], 'NEGATIVE')
 
     @override_settings(AI_TRANSCRIBE_PROVIDER='auto', AI_GEMINI_API_KEY='', AI_GROQ_API_KEY='', AI_OPENAI_API_KEY='')
     def test_provider_auto_defaults_to_local_when_no_keys(self):

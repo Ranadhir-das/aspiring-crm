@@ -19,6 +19,8 @@ from apps.calls.audio_processing import (
 from apps.calls.models import CallRecording
 from apps.calls.recordings import permitted_call, playback
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
+from django.utils import timezone
 from .permissions import CanCreateCall
 
 
@@ -54,8 +56,32 @@ class RecordingUploadSerializer(serializers.Serializer):
 
 
 def transcript_payload(recording):
+    call = recording.call
+    lead = getattr(call, 'lead', None)
+    caller = getattr(call, 'caller', None)
+    caller_name = ''
+    if caller:
+        caller_name = (caller.get_full_name() or caller.username or '').strip()
+    local_started = timezone.localtime(call.started_at) if call.started_at else None
+    audio_url = reverse('web:call-recording', args=[recording.call_id])
+    lead_url = reverse('web:lead-detail', args=[call.lead_id]) if call.lead_id else ''
     return {
         'call_id': recording.call_id,
+        'lead_id': call.lead_id,
+        'lead_name': lead.name if lead else '',
+        'lead_url': lead_url,
+        'phone_number': (lead.phone if lead else call.phone_number) or '',
+        'caller_name': caller_name,
+        'direction': call.direction,
+        'direction_display': call.get_direction_display(),
+        'outcome': call.outcome,
+        'outcome_display': call.get_outcome_display() if call.outcome else 'Recorded',
+        'started_at_display': local_started.strftime('%d %b %Y, %I:%M %p') if local_started else '',
+        'duration_seconds': recording.duration_seconds,
+        'duration_display': recording.duration_display,
+        'audio_url': audio_url,
+        'download_filename': f'call-{recording.call_id}-recording{recording.download_extension}',
+        'call_notes': call.notes or '',
         'transcript_status': recording.transcript_status,
         'transcript_status_display': recording.get_transcript_status_display(),
         'ai_language': recording.ai_language,
@@ -187,6 +213,7 @@ class CallRecordingView(APIView):
                 )
                 if should_auto_queue_recording(recording):
                     recording.transcript_status = CallRecording.TranscriptStatus.PENDING
+                    recording.transcript_priority = 1
                 recording.file.save(f'{uuid4().hex}{processed.extension}', ContentFile(stored_bytes), save=False)
                 saved_file = recording.file
                 recording.save()
@@ -218,6 +245,12 @@ class CallRecordingTranscriptView(APIView):
         if recording.transcript_status != CallRecording.TranscriptStatus.COMPLETED or force:
             recording.transcript_status = CallRecording.TranscriptStatus.PENDING
             recording.transcript_attempts = 0
+            recording.transcript_priority = 2
             recording.transcript_error = ''
-            recording.save(update_fields=['transcript_status', 'transcript_attempts', 'transcript_error'])
+            recording.save(update_fields=[
+                'transcript_status',
+                'transcript_attempts',
+                'transcript_priority',
+                'transcript_error',
+            ])
         return Response(transcript_payload(recording), status=202)
