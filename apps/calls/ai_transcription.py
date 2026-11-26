@@ -583,6 +583,15 @@ def _load_wav_16k_float32(wav_path: str):
     return wav_path
 
 
+def _collapse_asr_repetitions(text: str) -> str:
+    """Strip Whisper repetition-loop artifacts (e.g. 'तो तो तो तो...') while keeping normal speech."""
+    if not text:
+        return ''
+    # Collapse 4+ consecutive identical tokens (supports Latin and Devanagari scripts)
+    cleaned = re.sub(r'([^\s,.;:!?]+)(?:\s+\1){3,}', r'\1', text, flags=re.IGNORECASE)
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
+
 def _transcribe_local_whisper(audio_path: str, call_context: dict[str, Any]) -> dict[str, Any]:
     wav_path = _prepare_wav_16k(audio_path)
     cleanup_wav = wav_path != audio_path
@@ -596,7 +605,11 @@ def _transcribe_local_whisper(audio_path: str, call_context: dict[str, Any]) -> 
                 language=language,
                 task='transcribe',
                 beam_size=2,
-                temperature=0.0,
+                temperature=(0.0, 0.4),
+                compression_ratio_threshold=2.2,
+                no_speech_threshold=0.6,
+                repetition_penalty=1.15,
+                no_repeat_ngram_size=3,
                 vad_filter=True,
                 vad_parameters={'min_silence_duration_ms': 400},
                 condition_on_previous_text=False,
@@ -604,7 +617,7 @@ def _transcribe_local_whisper(audio_path: str, call_context: dict[str, Any]) -> 
             )
             segs = []
             for s in seg_iter:
-                txt = (s.text or '').strip()
+                txt = _collapse_asr_repetitions(s.text or '')
                 if txt:
                     segs.append({
                         'start': round(float(s.start), 2),
