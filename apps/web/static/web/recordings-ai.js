@@ -136,31 +136,33 @@
   }
 
   /* ------------------------------------------------------------------------
-     Card Renderer (updates card live when AJAX Analyze/Poll finishes)
+     Table Cell AI Brief Renderer (updates .rec-ai-panel live without disturbing row)
      ------------------------------------------------------------------------ */
-  function renderCard(card, data) {
+  function renderCard(panel, data) {
     const status = String(data.transcript_status || 'NONE').toUpperCase();
     const objections = Array.isArray(data.ai_objections) ? data.ai_objections : [];
     const keyPoints = Array.isArray(data.ai_key_points) ? data.ai_key_points : [];
     const sentLower = String(data.ai_sentiment || '').toLowerCase();
 
-    card.dataset.aiStatus = status;
-    card.className =
-      'rec-card rec-ai-panel status-' +
-      status.toLowerCase() +
-      (objections.length > 0 ? ' has-objections' : '') +
-      (sentLower ? ' card-sentiment-' + sentLower : '');
+    panel.dataset.aiStatus = status;
+    panel.className = 'rec-ai-panel status-' + status.toLowerCase();
 
-    const badgesWrap = card.querySelector('.rec-ai-badges');
-    const actionsWrap = card.querySelector('.rec-ai-actions');
-    const bodyWrap = card.querySelector('.rec-ai-body');
+    const row = panel.closest('tr.recording-row');
+    if (row) {
+      row.classList.toggle('row-has-objections', objections.length > 0);
+      row.classList.toggle('row-positive', objections.length === 0 && sentLower === 'positive');
+    }
+
+    const badgesWrap = panel.querySelector('.rec-ai-badges');
+    const actionsWrap = panel.querySelector('.rec-ai-actions');
+    const bodyWrap = panel.querySelector('.rec-ai-body');
     if (!badgesWrap || !actionsWrap || !bodyWrap) return;
 
     badgesWrap.replaceChildren();
     actionsWrap.replaceChildren();
     bodyWrap.replaceChildren();
 
-    const callId = card.dataset.callId || data.call_id || '';
+    const callId = panel.dataset.callId || data.call_id || '';
 
     if (status === 'COMPLETED') {
       if (data.ai_language) {
@@ -176,14 +178,15 @@
         );
       }
       if (objections.length > 0) {
-        objections.slice(0, 2).forEach((obj) => {
-          badgesWrap.appendChild(el('span', 'rec-ai-chip objection-alert', '⚠ ' + (obj.label || 'Objection')));
-        });
-        if (objections.length > 2) {
-          badgesWrap.appendChild(el('span', 'rec-ai-chip objection-alert', '+' + (objections.length - 2) + ' more'));
-        }
+        badgesWrap.appendChild(
+          el(
+            'span',
+            'rec-ai-chip objection-alert',
+            '⚠ ' + objections.length + ' Objection' + (objections.length === 1 ? '' : 's')
+          )
+        );
       } else {
-        badgesWrap.appendChild(el('span', 'rec-ai-chip clean', '✓ No Objections'));
+        badgesWrap.appendChild(el('span', 'rec-ai-chip clean', '✓ Clean'));
       }
 
       const inspectBtn = el('button', 'rec-btn-inspect');
@@ -200,44 +203,27 @@
         bodyWrap.appendChild(el('p', 'rec-ai-summary', data.ai_summary));
       }
 
-      if (keyPoints.length > 0) {
-        const ul = el('ul', 'rec-kp-strip');
-        keyPoints.slice(0, 3).forEach((pt) => ul.appendChild(el('li', '', pt)));
-        bodyWrap.appendChild(ul);
-      }
-
       if (objections.length > 0) {
-        const objWrap = el('div', 'rec-obj-inline');
+        const objWrap = el('div', 'rec-obj-compact');
         objections.slice(0, 2).forEach((obj) => {
-          const item = el('div', 'rec-obj-inline-item');
-          item.appendChild(el('strong', '', '⚠ ' + (obj.label || 'Objection') + ':'));
-          if (obj.detail) item.appendChild(el('span', '', ' ' + obj.detail));
-          if (obj.evidence) item.appendChild(el('q', '', obj.evidence));
+          const item = el('div', 'rec-obj-compact-item');
+          item.appendChild(el('strong', '', '⚠ ' + (obj.label || 'Objection')));
+          if (obj.evidence) {
+            item.appendChild(el('span', 'rec-obj-quote', '“' + String(obj.evidence).slice(0, 78) + '”'));
+          }
           objWrap.appendChild(item);
         });
         bodyWrap.appendChild(objWrap);
-      }
-
-      if (data.ai_next_action) {
-        const nextDiv = el('div', 'rec-ai-next');
-        nextDiv.append(el('strong', '', 'Next Step: '), el('span', '', data.ai_next_action));
-        bodyWrap.appendChild(nextDiv);
-      }
-
-      if (data.transcript_text) {
-        const details = el('details', 'rec-transcript-details');
-        const summary = el('summary', 'rec-transcript-summary');
-        summary.appendChild(el('span', '', 'Quick Transcript Preview'));
-        const content = el('div', 'rec-transcript-content');
-        content.appendChild(el('pre', 'rec-transcript-pre', data.transcript_text));
-        details.append(summary, content);
-        bodyWrap.appendChild(details);
+      } else if (keyPoints.length > 0) {
+        const ul = el('ul', 'rec-kp-compact');
+        keyPoints.slice(0, 2).forEach((pt) => ul.appendChild(el('li', '', String(pt).slice(0, 95))));
+        bodyWrap.appendChild(ul);
       }
     } else if (status === 'PENDING' || status === 'PROCESSING') {
       const chip = el('span', 'rec-ai-chip pending');
       const spin = el('span', 'rec-ai-spinner');
       spin.setAttribute('aria-hidden', 'true');
-      chip.append(spin, document.createTextNode(status === 'PROCESSING' ? ' Analyzing call…' : ' Queued for AI…'));
+      chip.append(spin, document.createTextNode(status === 'PROCESSING' ? ' Analyzing…' : ' Queued…'));
       badgesWrap.appendChild(chip);
 
       const detBtn = el('button', 'rec-ai-btn subtle', 'View Details');
@@ -246,20 +232,20 @@
       actionsWrap.appendChild(detBtn);
 
       bodyWrap.appendChild(
-        el('p', 'rec-ai-pending-note', 'Fast AI worker is transcribing & generating English key points and objections…')
+        el('p', 'rec-ai-pending-note', 'Extracting English summary, key points & objections…')
       );
     } else if (status === 'FAILED') {
-      badgesWrap.appendChild(el('span', 'rec-ai-chip failed', '⚠ Analysis Failed'));
-      const retryBtn = el('button', 'rec-ai-btn primary', '↻ Retry Now');
+      badgesWrap.appendChild(el('span', 'rec-ai-chip failed', '⚠ Failed'));
+      const retryBtn = el('button', 'rec-ai-btn primary', '↻ Retry');
       retryBtn.type = 'button';
       retryBtn.dataset.aiTrigger = 'reanalyze';
       actionsWrap.appendChild(retryBtn);
       if (data.transcript_error) {
-        bodyWrap.appendChild(el('p', 'rec-ai-error-note', String(data.transcript_error).slice(0, 180)));
+        bodyWrap.appendChild(el('p', 'rec-ai-error-note', String(data.transcript_error).slice(0, 120)));
       }
     } else {
       badgesWrap.appendChild(el('span', 'rec-ai-chip muted', '○ Not Analyzed'));
-      const btn = el('button', 'rec-ai-btn primary', '✨ Analyze Now');
+      const btn = el('button', 'rec-ai-btn primary', '✨ Analyze');
       btn.type = 'button';
       btn.dataset.aiTrigger = 'analyze';
       const detBtn = el('button', 'rec-ai-btn subtle', 'Details');
@@ -267,7 +253,7 @@
       detBtn.dataset.openCallDetail = String(callId);
       actionsWrap.append(btn, detBtn);
       bodyWrap.appendChild(
-        el('p', 'rec-ai-pending-note', 'Click Analyze Now to transcribe and summarize this call in seconds.')
+        el('p', 'rec-ai-pending-note', 'Click Analyze to generate English summary & transcript.')
       );
     }
   }
@@ -498,8 +484,8 @@
 
   async function openCallDetail(card) {
     if (!dialog || !card || !card.dataset.statusUrl) return;
-    // Pause any background inline card audio before opening drawer
-    document.querySelectorAll('.rec-mini-player audio').forEach((a) => {
+    // Pause any background inline studio audio before opening drawer
+    document.querySelectorAll('.vaani-audio-player audio').forEach((a) => {
       if (!a.paused) a.pause();
     });
 
