@@ -4,7 +4,7 @@
 {% block breadcrumb %}Lead directory{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/leads-directory.css' %}?v=3">
+<link rel="stylesheet" href="{% static 'web/leads-directory.css' %}?v=4">
 
 <div class="leads-workspace">
   <div class="page-heading leads-header">
@@ -339,15 +339,24 @@
       <div tabindex="0" role="region" aria-labelledby="leads-table-caption" class="leads-table-scroll">
         <table class="leads-table {% if can_manage %}has-check-col{% endif %}">
           <caption id="leads-table-caption" class="sr-only">Lead directory with 100-point AI scores, temperature tiers, CRM stages, recordings, and activity</caption>
+          <colgroup>
+            {% if can_manage %}<col style="width: 44px;">{% endif %}
+            <col style="width: 260px;">
+            <col style="width: 195px;">
+            <col style="width: 175px;">
+            <col style="width: 265px;">
+            <col style="width: 225px;">
+            <col style="width: 72px;">
+          </colgroup>
           <thead>
             <tr>
-              {% if can_manage %}<th class="col-sticky-check" style="width: 42px; text-align: center;"><input type="checkbox" id="select-all" aria-label="Select all leads on this page"></th>{% endif %}
-              <th class="col-sticky-lead" style="min-width: 245px;">Lead &amp; Profile</th>
-              <th style="min-width: 185px;">AI Score &amp; Status</th>
-              <th style="min-width: 165px;">CRM Stage &amp; Team</th>
-              <th style="min-width: 245px;">Recordings &amp; AI Insights</th>
-              <th style="min-width: 210px;">Calls &amp; Activity</th>
-              <th style="width: 68px; text-align: center;">Open</th>
+              {% if can_manage %}<th class="col-sticky-check"><input type="checkbox" id="select-all" aria-label="Select all leads on this page"></th>{% endif %}
+              <th class="col-sticky-lead">Lead &amp; Profile</th>
+              <th>AI Score &amp; Status</th>
+              <th>CRM Stage &amp; Team</th>
+              <th>Recordings &amp; AI Insights</th>
+              <th>Calls &amp; Activity</th>
+              <th style="text-align: center;">Open</th>
             </tr>
           </thead>
           <tbody>

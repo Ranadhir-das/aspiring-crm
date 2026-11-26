@@ -594,14 +594,39 @@ dialog.rec-detail-dialog {
 
 .recordings-table-scroll {
   position: relative;
+  display: block;
+  width: 100%;
   max-inline-size: 100%;
-  max-block-size: min(640px, 70dvh);
+  max-block-size: clamp(360px, 60dvh, 560px);
   overflow-x: auto;
   overflow-y: auto;
+  overscroll-behavior-x: contain;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: rgba(99, 102, 241, 0.45) transparent;
+  scrollbar-color: rgba(99, 102, 241, 0.5) transparent;
   -webkit-overflow-scrolling: touch;
+}
+
+.recordings-table-scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.recordings-table-scroll::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 999px;
+}
+
+.recordings-table-scroll::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.42);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.recordings-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.72);
+  background-clip: content-box;
 }
 
 .recordings-table-scroll:focus-visible {
@@ -622,11 +647,24 @@ dialog.rec-detail-dialog {
   --label-ai: "AI Summary & Details";
 }
 
-/* Sticky fixed column headers across vertical scroll */
+.recordings-table col.col-contact { width: 225px; }
+.recordings-table col.col-info { width: 190px; }
+.recordings-table col.col-player { width: 310px; }
+.recordings-table col.col-ai { width: auto; }
+
+/* Sticky fixed column headers across vertical row scrolling */
+.recordings-table thead {
+  position: sticky;
+  top: 0;
+  inset-block-start: 0;
+  z-index: 8;
+}
+
 .recordings-table thead th {
   position: sticky;
+  top: 0;
   inset-block-start: 0;
-  z-index: 6;
+  z-index: 8;
   padding: 12px 14px;
   font-size: 11px;
   font-weight: 800;
@@ -635,24 +673,26 @@ dialog.rec-detail-dialog {
   white-space: nowrap;
   background: #171b26;
   color: #9aa4bc;
-  box-shadow: inset 0 -1px 0 var(--border);
+  box-shadow: inset 0 -1px 0 var(--border), 0 3px 10px rgba(2, 6, 23, 0.22);
 }
 
 [data-theme="light"] .recordings-table thead th {
   background: #f4f6fb;
   color: #4f5b72;
+  box-shadow: inset 0 -1px 0 var(--border), 0 3px 10px rgba(15, 23, 42, 0.07);
 }
 
 /* Top-left corner stays fixed on BOTH vertical and horizontal scroll */
 .recordings-table thead th:first-child {
+  left: 0;
   inset-inline-start: 0;
-  z-index: 8;
-  box-shadow: inset -1px 0 0 var(--border), inset 0 -1px 0 var(--border);
+  z-index: 12;
+  box-shadow: inset -1px 0 0 var(--border), inset 0 -1px 0 var(--border), 3px 3px 10px rgba(15, 23, 42, 0.08);
 }
 
-.recordings-table thead th.col-contact { width: 220px; }
-.recordings-table thead th.col-info { width: 185px; }
-.recordings-table thead th.col-player { width: 305px; }
+.recordings-table thead th.col-contact { width: 225px; }
+.recordings-table thead th.col-info { width: 190px; }
+.recordings-table thead th.col-player { width: 310px; }
 .recordings-table thead th.col-ai { width: auto; }
 
 .recordings-table tbody th,
@@ -674,8 +714,9 @@ dialog.rec-detail-dialog {
 /* Fixed sticky first column (Lead / Contact) with opaque surface & right edge divider */
 .recordings-table tbody th.cell-contact {
   position: sticky;
+  left: 0;
   inset-inline-start: 0;
-  z-index: 4;
+  z-index: 5;
   background: var(--rec-card-bg);
   color: var(--text);
   text-transform: none;
@@ -683,7 +724,7 @@ dialog.rec-detail-dialog {
   letter-spacing: normal;
   font-weight: 400;
   font-size: 13px;
-  box-shadow: inset 4px 0 0 transparent, inset -1px 0 0 var(--border);
+  box-shadow: inset 4px 0 0 transparent, inset -1px 0 0 var(--border), 3px 0 10px rgba(15, 23, 42, 0.05);
   overflow: hidden;
 }
 
@@ -702,6 +743,16 @@ dialog.rec-detail-dialog {
 
 .recordings-table tbody tr:hover th.cell-contact {
   background: linear-gradient(rgba(99, 102, 241, 0.04), rgba(99, 102, 241, 0.04)), var(--rec-card-bg);
+}
+
+.recordings-table tbody td.cell-player {
+  overflow: hidden;
+  min-inline-size: 0;
+}
+
+.recordings-table tbody td.cell-player .rec-studio-player {
+  max-inline-size: 100%;
+  overflow: hidden;
 }
 
 .recordings-table tbody tr:last-child th,
@@ -1236,7 +1287,8 @@ dialog.rec-detail-dialog {
     table-layout: auto;
   }
 
-  .recordings-table thead {
+  .recordings-table thead,
+  .recordings-table colgroup {
     display: none;
   }
 

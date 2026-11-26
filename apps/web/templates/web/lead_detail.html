@@ -1,312 +1,810 @@
-{% extends 'web/base.html' %}{% load web_tags static %}{% block title %}{{ lead.name }}{% endblock %}{% block breadcrumb %}Lead details{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'web/leads-directory.css' %}?v=3"><div class="page-heading"><div><a class="text-link" href="{% url 'web:leads' %}">← Lead directory</a><p>Batch: <a class="text-link" href="{% url 'web:leads' %}?batch={{ lead.import_batch_id|default:'none' }}">{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</a></p><h1>{{ lead.name }}<span class="accent">.</span></h1><p>{{ lead.phone }} · {% employee_link lead.assigned_caller %}</p></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="temp-pill" style="--tier-color: {{ lead.ai_temperature_meta.color }}; padding:5px 12px; font-size:12.5px;">{{ lead.ai_temperature_meta.label }} · {{ lead.ai_score }}/100</span><span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span></div></div><div class="actions spaced" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><a class="button" href="{% url 'web:lead-collaboration' lead.pk %}">Notes, qualification & consultation ↗</a><button type="button" class="button" id="open-wa-btn" style="background:#25D366;color:#ffffff;border-color:#25D366;font-weight:600;display:inline-flex;align-items:center;gap:6px;" onclick="openWhatsAppModal()"><span>💬</span> WhatsApp</button><form method="post" action="{% url 'web:lead-detail' lead.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="action" value="recalculate_score"><button type="submit" class="button">↻ Refresh AI Score</button></form></div>
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}{{ lead.name }}{% endblock %}
+{% block breadcrumb %}Lead details{% endblock %}
 
-<!-- 100-Point AI Lead Score Card -->
-<section class="leads-workspace lead-detail-score-card" aria-label="100-point AI lead score breakdown">
-  <div class="lead-detail-score-grid">
-    <div>
-      <div class="score-hero-banner" style="--tier-color: {{ lead.ai_temperature_meta.color }}; margin-bottom: 12px;">
-        <div class="score-hero-ring" role="img" aria-label="AI lead score {{ lead.ai_score }} out of 100, {{ lead.ai_temperature_meta.label }}" style="--p: {{ lead.ai_score }}%; --tier-color: {{ lead.ai_temperature_meta.color }};">
-          <div class="score-hero-ring-inner">{{ lead.ai_score }}</div>
-        </div>
-        <div class="score-hero-info">
-          <div class="score-hero-tier-row">
-            <span class="score-hero-tier-label">{{ lead.ai_temperature_meta.label }} Lead ({{ lead.ai_score }}/100)</span>
-            <span class="temp-pill" style="--tier-color: {{ lead.ai_temperature_meta.color }};">{{ lead.ai_temperature_meta.range }}</span>
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/leads-directory.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'web/lead-detail.css' %}?v=3">
+
+<div class="lead-detail-page leads-workspace">
+  <!-- ======================================================================
+       TOP EXECUTIVE SNAPSHOT: Everything You Need In Short (Above The Fold)
+       ====================================================================== -->
+  <section class="ld-snapshot-shell" style="--tier-color: {{ lead.ai_temperature_meta.color }};" aria-label="Lead executive summary">
+    <!-- 1. Identity, Contact Chips & Quick Action Bar -->
+    <div class="ld-hero-bar">
+      <div class="ld-hero-left">
+        <span class="ld-hero-avatar" aria-hidden="true">{{ lead.name|first|upper }}</span>
+        <div class="ld-hero-meta">
+          <div class="ld-breadcrumb-row">
+            <a class="ld-back-pill" href="{% url 'web:leads' %}">← Leads</a>
+            <a class="ld-batch-chip" href="{% url 'web:leads' %}?batch={{ lead.import_batch_id|default:'none' }}" title="View import batch">
+              Batch: {{ lead.import_batch.filename|default:"Manual / unbatched" }}
+            </a>
+            <span class="muted">· Added {{ lead.created_at|date:'d M Y' }}</span>
           </div>
-          <p class="score-hero-summary">Auto-calculated from AI call summaries, key points, objections, demos &amp; CRM milestones.</p>
+
+          <div class="ld-title-row">
+            <h1>{{ lead.name }}<span class="accent">.</span></h1>
+            <span class="temp-pill" style="--tier-color: {{ lead.ai_temperature_meta.color }}; padding: 4px 11px; font-size: 12px;">
+              {{ lead.ai_temperature_meta.label }} · {{ lead.ai_score }}/100
+            </span>
+            <span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span>
+          </div>
+
+          <div class="ld-contact-chips">
+            <a class="ld-chip mono" href="tel:{{ lead.phone }}" title="Call {{ lead.phone }}">
+              📞 <span>{{ lead.phone }}</span>
+            </a>
+            {% if lead.email %}
+            <a class="ld-chip" href="mailto:{{ lead.email }}" title="{{ lead.email }}">
+              ✉ <span>{{ lead.email }}</span>
+            </a>
+            {% endif %}
+            {% if lead.preferred_course_label %}
+            <span class="ld-chip" title="Preferred course">🎓 <span>{{ lead.preferred_course_label }}</span></span>
+            {% endif %}
+            {% if lead.location %}
+            <span class="ld-chip" title="Location">📍 <span>{{ lead.location }}</span></span>
+            {% endif %}
+            {% if lead.source %}
+            <span class="ld-chip" title="Source">🌐 <span>{{ lead.source }}</span></span>
+            {% endif %}
+          </div>
         </div>
       </div>
-      <div class="tier-scale-bar" role="list" aria-label="Lead temperature ranges">
-        {% for tier in temperature_tiers %}
-        <div class="tier-scale-col {% if tier.key == lead.ai_temperature %}is-active{% endif %}" role="listitem" style="--tier-color: {{ tier.color }};">
-          <span class="tier-scale-swatch" aria-hidden="true"></span>
-          <span class="tier-scale-name">{{ tier.label }}</span>
-          <span class="tier-scale-range">{{ tier.range }}</span>
-        </div>
-        {% endfor %}
+
+      <div class="ld-hero-actions">
+        <button type="button" class="ld-action-btn wa" id="open-wa-btn" onclick="openWhatsAppModal()">
+          <span>💬</span> WhatsApp
+        </button>
+        {% if lead_snapshot.recordings_count > 0 %}
+        <a class="ld-action-btn rec" href="{% url 'web:call-recordings' %}?q={{ lead.phone|urlencode }}" title="Open call recordings for this lead">
+          🎙 Recordings ({{ lead_snapshot.recordings_count }})
+        </a>
+        {% endif %}
+        <form method="post" action="{% url 'web:lead-detail' lead.pk %}" style="margin:0;">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="recalculate_score">
+          <button type="submit" class="ld-action-btn" title="Recalculate 100-point AI score">↻ Refresh Score</button>
+        </form>
+        <a class="ld-action-btn" href="{% url 'web:lead-collaboration' lead.pk %}">
+          Notes &amp; Consult ↗
+        </a>
       </div>
     </div>
-    <div>
-      <h2 style="margin:0 0 8px;font-size:16px;font-weight:800;">How the 100-point score builds</h2>
-      <ul class="rubric-signal-list">
-        {% for row in lead_core_signals %}
-        <li class="rubric-signal-row {% if not row.triggered %}untriggered{% endif %}">
-          <div class="rubric-signal-left">
-            <span class="rubric-signal-label">{% if row.triggered %}<span aria-hidden="true">{% if row.applied_delta >= 0 %}✓{% else %}⚠{% endif %}</span> {% endif %}{{ row.label }}</span>
-            <span class="rubric-signal-detail">{{ row.detail }}</span>
+
+    <!-- 2. Compact 6-Tile At-a-Glance Bento Strip -->
+    <div class="ld-glance-grid">
+      <!-- Tile 1: AI Score & Tier -->
+      <article class="ld-stat-tile" style="--tier-color: {{ lead.ai_temperature_meta.color }};">
+        <div class="ld-stat-label">
+          <span>AI Lead Score</span>
+          <span>{{ lead.ai_temperature_meta.range }}</span>
+        </div>
+        <div class="ld-stat-main">
+          <div class="ld-mini-score-ring" role="img" aria-label="AI score {{ lead.ai_score }} out of 100, {{ lead.ai_temperature_meta.label }}" style="--p: {{ lead.ai_score }}%;">
+            <div class="ld-mini-score-ring-in">{{ lead.ai_score }}</div>
           </div>
-          <span class="rubric-signal-delta {% if row.triggered %}{% if row.applied_delta >= 0 %}pos{% else %}neg{% endif %}{% else %}muted{% endif %}">
-            {% if row.triggered %}{% if row.applied_delta > 0 %}+{% endif %}{{ row.applied_delta }}{% else %}0 <small style="font-weight:600;opacity:.7;">({% if row.default_delta > 0 %}+{% endif %}{{ row.default_delta }})</small>{% endif %}
+          <div class="ld-stat-val-stack">
+            <span class="ld-stat-val" style="color: {{ lead.ai_temperature_meta.color }};">{{ lead.ai_temperature_meta.label }}</span>
+            <span class="ld-stat-sub">
+              {% if lead_snapshot.qual_temperature %}CRM: {{ lead_snapshot.qual_temperature }}{% else %}Auto-scored{% endif %}
+            </span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Tile 2: Calls, Direction & Latest Outcome -->
+      <article class="ld-stat-tile">
+        <div class="ld-stat-label">
+          <span>Calls &amp; Outcome</span>
+          <span>{{ lead_snapshot.talk_display }}</span>
+        </div>
+        <div class="ld-stat-val-stack">
+          <span class="ld-stat-val">{{ lead_snapshot.total_calls }} Call{% if lead_snapshot.total_calls != 1 %}s{% endif %}</span>
+          <span class="ld-stat-sub">↗ {{ lead_snapshot.outbound_calls }} Out · ↙ {{ lead_snapshot.inbound_calls }} In</span>
+        </div>
+        <div class="ld-stat-pills-row">
+          {% if lead_snapshot.latest_call %}
+          <span class="ld-micro-pill accent" title="Latest call outcome on {{ lead_snapshot.latest_call.started_at|date:'d M, H:i' }}">
+            Last: {{ lead_snapshot.latest_call.outcome_display }}
           </span>
-        </li>
-        {% endfor %}
-        {% for sig in lead_extra_signals %}
-        <li class="rubric-signal-row">
-          <div class="rubric-signal-left">
-            <span class="rubric-signal-label">{{ sig.label }}</span>
-            <span class="rubric-signal-detail">{{ sig.detail }}</span>
-          </div>
-          <span class="rubric-signal-delta {% if sig.delta >= 0 %}pos{% else %}neg{% endif %}">{% if sig.delta > 0 %}+{% endif %}{{ sig.delta }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-  </div>
-</section>
+          {% else %}
+          <span class="ld-micro-pill">Not called yet</span>
+          {% endif %}
+        </div>
+      </article>
 
-<div id="wa-modal" class="panel spaced" style="display:none;background:var(--surface);border:1px solid #25D366;border-radius:12px;padding:20px;margin-bottom:24px;">
-  {% csrf_token %}
-  <div class="panel-heading" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
-    <div>
-      <h2 style="color:#25D366;margin:0;font-size:18px;">Send WhatsApp (Manual Handoff)</h2>
-      <p style="margin:4px 0 0 0;font-size:13px;color:var(--muted);">CRM prepares recipient and prefilled message, then opens WhatsApp. You manually press Send inside WhatsApp.</p>
+      <!-- Tile 3: WhatsApp, Recordings & Objections -->
+      <article class="ld-stat-tile">
+        <div class="ld-stat-label">
+          <span>Channels &amp; AI</span>
+          <span>{% if lead_snapshot.analyzed_count %}{{ lead_snapshot.analyzed_count }} AI{% else %}—{% endif %}</span>
+        </div>
+        <div class="ld-stat-val-stack">
+          <span class="ld-stat-val">💬 {{ lead_snapshot.whatsapp_count }} WA · 🎙 {{ lead_snapshot.recordings_count }}</span>
+          <span class="ld-stat-sub">WhatsApp &amp; recordings</span>
+        </div>
+        <div class="ld-stat-pills-row">
+          {% if lead_snapshot.objections_count > 0 %}
+          <span class="ld-micro-pill danger">⚠ {{ lead_snapshot.objections_count }} Objection{% if lead_snapshot.objections_count != 1 %}s{% endif %}</span>
+          {% elif lead_snapshot.analyzed_count > 0 %}
+          <span class="ld-micro-pill ok">✓ Clean AI</span>
+          {% else %}
+          <span class="ld-micro-pill">No AI analysis yet</span>
+          {% endif %}
+        </div>
+      </article>
+
+      <!-- Tile 4: Assigned Caller & Counsellor -->
+      <article class="ld-stat-tile">
+        <div class="ld-stat-label">
+          <span>Caller &amp; Team</span>
+          <span>Owner</span>
+        </div>
+        <div class="ld-stat-val-stack">
+          <span class="ld-stat-val">
+            {% if lead.assigned_caller %}{% employee_link lead.assigned_caller %}{% else %}Unassigned{% endif %}
+          </span>
+          <span class="ld-stat-sub">
+            {% if lead_snapshot.active_counselor_name %}
+              Counsellor: {% if lead_snapshot.active_counselor_url %}<a href="{{ lead_snapshot.active_counselor_url }}">{{ lead_snapshot.active_counselor_name }}</a>{% else %}{{ lead_snapshot.active_counselor_name }}{% endif %}
+            {% else %}
+              {{ lead_snapshot.routing_status }}
+            {% endif %}
+          </span>
+        </div>
+        <div class="ld-stat-pills-row">
+          {% if caller_counselor_summary %}
+          <span class="ld-micro-pill accent">{{ caller_counselor_summary.contact_status_display }}</span>
+          {% endif %}
+        </div>
+      </article>
+
+      <!-- Tile 5: Follow-up, Demos & Admissions -->
+      <article class="ld-stat-tile">
+        <div class="ld-stat-label">
+          <span>Follow-up &amp; Stage</span>
+          <span>{{ lead_snapshot.counsellings_count }} Demo{% if lead_snapshot.counsellings_count != 1 %}s{% endif %}</span>
+        </div>
+        <div class="ld-stat-val-stack">
+          {% if lead_snapshot.next_followup %}
+          <span class="ld-stat-val">{{ lead_snapshot.next_followup.scheduled_at|date:'d M, H:i' }}</span>
+          <span class="ld-stat-sub">{{ lead_snapshot.next_followup.notes|default:'Pending follow-up' }}</span>
+          {% else %}
+          <span class="ld-stat-val">No Follow-up</span>
+          <span class="ld-stat-sub">{{ lead_snapshot.pending_followups }} pending · {{ lead_snapshot.admissions_count }} admit</span>
+          {% endif %}
+        </div>
+        <div class="ld-stat-pills-row">
+          {% if lead_snapshot.next_followup %}
+            <span class="ld-micro-pill {% if lead_snapshot.next_followup.urgency == 'overdue' %}danger{% elif lead_snapshot.next_followup.urgency == 'today' %}warn{% else %}accent{% endif %}">
+              🗓 {{ lead_snapshot.next_followup.label }}
+            </span>
+          {% endif %}
+          {% if lead_snapshot.admissions_count %}
+            <span class="ld-micro-pill ok">🏆 Admitted{% if can_manage and lead_snapshot.total_admission_fees is not None %} · ₹{{ lead_snapshot.total_admission_fees|floatformat:2 }}{% endif %}</span>
+          {% endif %}
+        </div>
+      </article>
+
+      <!-- Tile 6: Academic / Student Snapshot -->
+      <article class="ld-stat-tile">
+        <div class="ld-stat-label">
+          <span>Academic Profile</span>
+          <span>Intake</span>
+        </div>
+        <div class="ld-stat-val-stack">
+          <span class="ld-stat-val">{{ lead.preferred_course_label|default:"Course TBD" }}</span>
+          <span class="ld-stat-sub">
+            {% if lead.neet_status %}NEET: {{ lead.neet_status }}{% elif lead.college %}{{ lead.college }}{% else %}Academic info pending{% endif %}
+          </span>
+        </div>
+        <div class="ld-stat-pills-row">
+          {% if lead.pcb_percentage is not None %}<span class="ld-micro-pill">PCB {{ lead.pcb_percentage }}%</span>{% endif %}
+          {% if lead.preferred_intake %}<span class="ld-micro-pill accent">{{ lead.preferred_intake }}</span>{% endif %}
+        </div>
+      </article>
     </div>
-    <button type="button" class="icon-button" onclick="closeWhatsAppModal()">✕</button>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
-    <div><strong>Recipient:</strong> {{ lead.name }}</div>
-    <div><strong>Phone:</strong> {{ lead.phone }}</div>
-  </div>
-  <div class="field" style="margin-bottom:12px;">
-    <label for="wa-template-select" style="font-weight:600;display:block;margin-bottom:6px;">Select Template:</label>
-    <select id="wa-template-select" class="input" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--background);color:var(--text);" onchange="onTemplateChange(this)">
-      <option value="" data-body="">-- Custom Message (write your own) --</option>
-      {% for t in whatsapp_templates %}
-      <option value="{{ t.pk }}" data-body="{{ t.message }}">{{ t.title }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="field" style="margin-bottom:16px;">
-    <label for="wa-message-body" style="font-weight:600;display:block;margin-bottom:6px;">Message (Editable):</label>
-    <textarea id="wa-message-body" rows="4" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border);background:var(--background);color:var(--text);font-family:inherit;font-size:14px;" placeholder="Type your WhatsApp message here..."></textarea>
-  </div>
-  <div class="form-actions" style="display:flex;gap:10px;justify-content:flex-end;">
-    <button type="button" class="button" onclick="closeWhatsAppModal()">Cancel</button>
-    <button type="button" class="button primary" id="wa-submit-btn" style="background:#25D366;border-color:#25D366;" onclick="submitWhatsAppInitiate()">Open WhatsApp ↗</button>
-  </div>
+
+    <!-- 3. Short AI Call Summary, Key Points & Objections Strip -->
+    <div class="ld-brief-row">
+      <div class="ld-brief-box">
+        <div class="ld-brief-head">
+          <h2>✨ AI Call Brief &amp; Latest Summary</h2>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+            {% if lead_snapshot.latest_ai %}
+              {% if lead_snapshot.latest_ai.language %}<span class="ld-micro-pill accent">{{ lead_snapshot.latest_ai.language }}</span>{% endif %}
+              {% if lead_snapshot.latest_ai.sentiment %}
+                <span class="ld-micro-pill {% if lead_snapshot.latest_ai.sentiment == 'POSITIVE' %}ok{% elif lead_snapshot.latest_ai.sentiment == 'NEGATIVE' %}danger{% elif lead_snapshot.latest_ai.sentiment == 'HESITANT' %}warn{% endif %}">
+                  {{ lead_snapshot.latest_ai.sentiment|title }}
+                </span>
+              {% endif %}
+              <button type="button" class="ld-micro-pill" data-jump-tab="calls" style="cursor:pointer;">Play Audio &amp; Transcript ↓</button>
+            {% endif %}
+          </div>
+        </div>
+        {% if lead_snapshot.latest_ai and lead_snapshot.latest_ai.summary %}
+          <p class="ld-brief-summary-text">{{ lead_snapshot.latest_ai.summary }}</p>
+          {% if lead_snapshot.latest_ai.next_action %}
+          <div class="ld-next-action-bar">
+            <strong>Next Step:</strong>
+            <span>{{ lead_snapshot.latest_ai.next_action }}</span>
+          </div>
+          {% endif %}
+        {% elif lead.notes %}
+          <p class="ld-brief-summary-text">{{ lead.notes }}</p>
+        {% else %}
+          <p class="ld-brief-summary-text" style="color:var(--ldp-muted);">No AI call summary yet. Once a call recording is analyzed, the executive summary and next action appear right here.</p>
+        {% endif %}
+      </div>
+
+      <div class="ld-brief-box">
+        <div class="ld-brief-head">
+          <h2>📌 Key Points &amp; Objections</h2>
+          {% if lead_snapshot.objections_count == 0 and lead_snapshot.analyzed_count > 0 %}
+            <span class="ld-micro-pill ok">✓ No Objections</span>
+          {% elif lead_snapshot.objections_count > 0 %}
+            <span class="ld-micro-pill danger">⚠ {{ lead_snapshot.objections_count }} Flagged</span>
+          {% endif %}
+        </div>
+
+        {% if lead_snapshot.key_points %}
+        <ul class="ld-kp-list">
+          {% for pt in lead_snapshot.key_points|slice:":4" %}
+          <li><span class="ld-kp-bullet" aria-hidden="true">✓</span><span>{{ pt }}</span></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="ld-brief-summary-text" style="color:var(--ldp-muted);">Key conversation points from AI call summaries will appear here automatically.</p>
+        {% endif %}
+
+        {% if lead_snapshot.objections %}
+        <div class="ld-obj-chips">
+          {% for obj in lead_snapshot.objections %}
+          <span class="ld-obj-chip" title="{{ obj.detail|default:obj.label }}">⚠ {{ obj.label }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- 4. Compact 5-Tier Bar + Collapsible "How the 100-point score builds" Rubric -->
+    <div class="ld-rubric-bar-wrap">
+      <details class="ld-rubric-details">
+        <summary>
+          <span class="ld-rubric-summary-left">
+            <svg class="ld-rubric-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+            <span>How the 100-point score builds ({{ lead.ai_score }}/100 · {{ lead.ai_temperature_meta.label }})</span>
+          </span>
+          <span class="ld-rubric-inline-scale" aria-hidden="true">
+            {% for tier in temperature_tiers %}
+            <span class="ld-inline-tier-dot {% if tier.key == lead.ai_temperature %}is-active{% endif %}" style="--tier-color: {{ tier.color }};">
+              <i></i>{{ tier.label }} {{ tier.range }}
+            </span>
+            {% endfor %}
+          </span>
+        </summary>
+        <div class="ld-rubric-inner">
+          <div class="ld-rubric-two-col">
+            <div>
+              <p class="rubric-section-label" style="margin-top:4px;">Core Scoring Signals</p>
+              <ul class="rubric-signal-list">
+                {% for row in lead_core_signals %}
+                <li class="rubric-signal-row {% if not row.triggered %}untriggered{% endif %}">
+                  <div class="rubric-signal-left">
+                    <span class="rubric-signal-label">{% if row.triggered %}<span aria-hidden="true">{% if row.applied_delta >= 0 %}✓{% else %}⚠{% endif %}</span> {% endif %}{{ row.label }}</span>
+                    <span class="rubric-signal-detail">{{ row.detail }}</span>
+                  </div>
+                  <span class="rubric-signal-delta {% if row.triggered %}{% if row.applied_delta >= 0 %}pos{% else %}neg{% endif %}{% else %}muted{% endif %}">
+                    {% if row.triggered %}{% if row.applied_delta > 0 %}+{% endif %}{{ row.applied_delta }}{% else %}0 <small style="font-weight:600;opacity:.7;">({% if row.default_delta > 0 %}+{% endif %}{{ row.default_delta }})</small>{% endif %}
+                  </span>
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div>
+              <p class="rubric-section-label" style="margin-top:4px;">Conversation &amp; CRM Signals</p>
+              <ul class="rubric-signal-list">
+                {% for sig in lead_extra_signals %}
+                <li class="rubric-signal-row">
+                  <div class="rubric-signal-left">
+                    <span class="rubric-signal-label">{{ sig.label }}</span>
+                    <span class="rubric-signal-detail">{{ sig.detail }}</span>
+                  </div>
+                  <span class="rubric-signal-delta {% if sig.delta >= 0 %}pos{% else %}neg{% endif %}">{% if sig.delta > 0 %}+{% endif %}{{ sig.delta }}</span>
+                </li>
+                {% empty %}
+                <li class="rubric-signal-row untriggered">
+                  <div class="rubric-signal-left">
+                    <span class="rubric-signal-label">No additional signals triggered yet</span>
+                    <span class="rubric-signal-detail">Log calls, follow-ups, or analyze recordings to build the score.</span>
+                  </div>
+                  <span class="rubric-signal-delta muted">0</span>
+                </li>
+                {% endfor %}
+              </ul>
+              <div class="tier-scale-bar" role="list" aria-label="Lead temperature ranges">
+                {% for tier in temperature_tiers %}
+                <div class="tier-scale-col {% if tier.key == lead.ai_temperature %}is-active{% endif %}" role="listitem" style="--tier-color: {{ tier.color }};">
+                  <span class="tier-scale-swatch" aria-hidden="true"></span>
+                  <span class="tier-scale-name">{{ tier.label }}</span>
+                  <span class="tier-scale-range">{{ tier.range }}</span>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       LOWER WORKSPACE: Clean Single-Row Tabbed Interface
+       ====================================================================== -->
+  <section class="ld-tabs-shell" aria-label="Lead detail workspace">
+    <div class="ld-tablist-bar">
+      <div id="ld-tablist" class="ld-tablist" role="tablist" focusgroup="tablist nomemory" aria-label="Lead sections">
+        <button type="button" role="tab" id="ld-tab-overview" class="ld-tab-btn" data-tab-key="overview"
+                aria-selected="{% if initial_tab == 'overview' %}true{% else %}false{% endif %}"
+                tabindex="{% if initial_tab == 'overview' %}0{% else %}-1{% endif %}"
+                {% if initial_tab == 'overview' %}focusgroupstart{% endif %}>
+          <span>👤 Profile &amp; Actions</span>
+        </button>
+
+        <button type="button" role="tab" id="ld-tab-calls" class="ld-tab-btn" data-tab-key="calls"
+                aria-selected="false" tabindex="-1">
+          <span>📞 Calls &amp; AI Transcripts</span>
+          <span class="ld-tab-count">{{ history|length }}</span>
+        </button>
+
+        <button type="button" role="tab" id="ld-tab-timeline" class="ld-tab-btn" data-tab-key="timeline"
+                aria-selected="{% if initial_tab == 'timeline' %}true{% else %}false{% endif %}"
+                tabindex="{% if initial_tab == 'timeline' %}0{% else %}-1{% endif %}"
+                {% if initial_tab == 'timeline' %}focusgroupstart{% endif %}>
+          <span>🕒 360° Timeline &amp; Activity</span>
+          <span class="ld-tab-count">{% if lead_360 %}{{ lead_360.pagination.total_matching_events }}{% else %}{{ activity_log|length }}{% endif %}</span>
+        </button>
+
+        <button type="button" role="tab" id="ld-tab-notes" class="ld-tab-btn" data-tab-key="notes"
+                aria-selected="false" tabindex="-1">
+          <span>📝 Counsellor, Notes &amp; Enquiries</span>
+          <span class="ld-tab-count">{{ lead_snapshot.notes_tab_count }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="ld-tabpanels-stack">
+      <!-- TAB 1: Profile Form & Quick Action Cards -->
+      <div role="tabpanel" aria-labelledby="ld-tab-overview" {% if initial_tab != 'overview' %}hidden="until-found"{% endif %}>
+        <div class="ld-tabpanel-inner">
+          <div class="ld-workspace-grid">
+            <section class="ld-panel-card">
+              <div class="ld-panel-head">
+                <div>
+                  <h2>Lead Profile</h2>
+                  <p>Update contact details, academic info, status &amp; notes</p>
+                </div>
+                <span class="badge">{{ lead.preferred_course_label|default:"Course not set" }}</span>
+              </div>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save">
+                {% include 'web/form_fields.html' %}
+                <div class="form-actions">
+                  <button class="button primary" type="submit">Save changes</button>
+                </div>
+              </form>
+            </section>
+
+            <div class="ld-side-stack">
+              <section class="ld-panel-card">
+                <div class="ld-panel-head">
+                  <div>
+                    <h2>Schedule a Follow-up</h2>
+                    <p>Times in {{ workspace_timezone }}</p>
+                  </div>
+                </div>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="followup">
+                  {% include 'web/form_fields.html' with form=follow_form %}
+                  <div class="form-actions">
+                    <button class="button primary" type="submit">Schedule follow-up</button>
+                  </div>
+                </form>
+              </section>
+
+              {% if qualification_form %}
+              <section class="ld-panel-card">
+                <div class="ld-panel-head">
+                  <div>
+                    <h2>Lead Qualification</h2>
+                    <p>Manual temperature &amp; sub-status</p>
+                  </div>
+                </div>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="qualification">
+                  {% include 'web/form_fields.html' with form=qualification_form %}
+                  <div class="form-actions">
+                    <button class="button primary" type="submit">Save qualification</button>
+                  </div>
+                </form>
+              </section>
+              {% endif %}
+
+              <section class="ld-panel-card">
+                <div class="ld-panel-head">
+                  <div>
+                    <h2>Add Collaboration Note</h2>
+                    <p>Internal note or flag for management consultation</p>
+                  </div>
+                </div>
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="collaboration_note">
+                  <div class="field">
+                    <textarea name="note" aria-label="Lead note" rows="3" placeholder="Write a note on this lead..." required style="width:100%;"></textarea>
+                  </div>
+                  <label class="checkbox" style="display:flex;align-items:center;gap:6px;margin:8px 0;">
+                    <input type="checkbox" name="consult">
+                    <span>Request management consultation</span>
+                  </label>
+                  <div class="form-actions">
+                    <button class="button primary" type="submit">Save note</button>
+                  </div>
+                </form>
+              </section>
+
+              <section class="ld-panel-card">
+                <div class="ld-panel-head">
+                  <div>
+                    <h2>Follow-up History</h2>
+                    <p>Scheduled &amp; completed reminders</p>
+                  </div>
+                </div>
+                <div class="ld-scroll-list compact">
+                  {% for item in followup_history %}
+                  <div class="ld-feed-item">
+                    <div class="ld-feed-body">
+                      <div class="ld-feed-title">{{ item.scheduled_at|date:'d M Y, H:i' }}</div>
+                      <p class="ld-feed-sub">{{ item.notes|default:'No notes' }}</p>
+                    </div>
+                    <span class="badge {{ item.status|lower }}">{{ item.get_status_display }}</span>
+                  </div>
+                  {% empty %}
+                  <div class="empty">No follow-ups scheduled yet.</div>
+                  {% endfor %}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Conversation History (Calls, Audio Player & AI Summaries) -->
+      <div role="tabpanel" aria-labelledby="ld-tab-calls" hidden="until-found">
+        <div class="ld-tabpanel-inner">
+          <section class="ld-panel-card">
+            <div class="ld-panel-head">
+              <div>
+                <h2>Conversation History</h2>
+                <p>Most recent 30 outgoing &amp; incoming calls with AI summaries, objections &amp; recordings</p>
+              </div>
+              {% if lead_snapshot.recordings_count > 0 %}
+              <a class="ld-action-btn rec" href="{% url 'web:call-recordings' %}?q={{ lead.phone|urlencode }}">Open Full Recordings Console ↗</a>
+              {% endif %}
+            </div>
+            <div class="ld-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Direction</th>
+                    <th>Caller</th>
+                    <th>Outcome</th>
+                    <th>Course</th>
+                    <th>Duration</th>
+                    <th>Notes &amp; AI Summary</th>
+                    <th>Recording</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for call in history %}
+                  <tr>
+                    <td style="white-space:nowrap;">{{ call.started_at|date:'d M Y, H:i' }}</td>
+                    <td>
+                      {% if call.direction == 'INBOUND' %}
+                        <span class="badge interested">↙ Incoming</span>
+                      {% else %}
+                        <span class="badge">↗ Outgoing</span>
+                      {% endif %}
+                    </td>
+                    <td>{% employee_link call.caller %}</td>
+                    <td><span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display|default:'Recorded' }}</span></td>
+                    <td>{% include "web/call_course.html" %}</td>
+                    <td style="white-space:nowrap;">{{ call.duration_seconds }}s</td>
+                    <td class="notes-cell" style="min-width:260px;">
+                      {% if call.notes %}<div>{{ call.notes }}</div>{% endif %}
+                      {% if call.recording and call.recording.transcript_status == 'COMPLETED' %}
+                      <div class="ld-call-ai-box">
+                        <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:5px;">
+                          <span class="badge">✨ AI · {{ call.recording.ai_language|default:'Summary' }}</span>
+                          {% if call.recording.ai_sentiment %}<span class="badge">{{ call.recording.ai_sentiment|title }}</span>{% endif %}
+                          {% if call.recording.objections_count > 0 %}
+                            <span class="badge busy">⚠ {{ call.recording.objections_count }} Objection{% if call.recording.objections_count != 1 %}s{% endif %}</span>
+                          {% endif %}
+                        </div>
+                        {% if call.recording.ai_summary %}<p style="margin:0 0 4px;line-height:1.45;">{{ call.recording.ai_summary }}</p>{% endif %}
+                        {% if call.recording.ai_key_points or call.recording.ai_objections or call.recording.transcript_text %}
+                        <details style="margin-top:4px;">
+                          <summary style="cursor:pointer;color:var(--ldp-accent);font-weight:700;">Key points, objections &amp; transcript</summary>
+                          {% if call.recording.ai_key_points %}
+                          <ul style="margin:6px 0 4px 16px;padding:0;">
+                            {% for pt in call.recording.ai_key_points %}<li>{{ pt }}</li>{% endfor %}
+                          </ul>
+                          {% endif %}
+                          {% if call.recording.ai_objections %}
+                          <div style="margin-top:4px;color:var(--ldp-neg);">
+                            <strong>Objections:</strong>
+                            {% for obj in call.recording.ai_objections %}
+                              <span style="display:block;">• {{ obj.label }}{% if obj.detail %} — {{ obj.detail }}{% endif %}</span>
+                            {% endfor %}
+                          </div>
+                          {% endif %}
+                          {% if call.recording.transcript_text %}
+                          <pre>{{ call.recording.transcript_text }}</pre>
+                          {% endif %}
+                        </details>
+                        {% endif %}
+                      </div>
+                      {% elif not call.notes %}
+                        <span class="muted">—</span>
+                      {% endif %}
+                    </td>
+                    <td>{% include 'web/call_recording.html' %}</td>
+                  </tr>
+                  {% empty %}
+                  <tr><td colspan="8" class="empty">No calls recorded for this lead yet.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- TAB 3: Unified Lead 360° Timeline & System Activity -->
+      <div role="tabpanel" aria-labelledby="ld-tab-timeline" {% if initial_tab != 'timeline' %}hidden="until-found"{% endif %}>
+        <div class="ld-tabpanel-inner">
+          {% if lead_360 %}
+          <section class="ld-panel-card" aria-label="Unified Lead 360 Timeline">
+            <div class="ld-panel-head">
+              <div>
+                <h2>Lead 360° Unified Timeline</h2>
+                <p>Calls, WhatsApp, follow-ups, enquiries, counselling, admissions &amp; notes ({{ lead_360.pagination.total_matching_events }} events)</p>
+              </div>
+              <div class="ld-cat-pills">
+                {% for cat in lead_360.filters.available_categories %}
+                <a class="ld-cat-pill {% if lead_360.filters.selected_category == cat %}active{% endif %}"
+                   href="{% url 'web:lead-detail' lead.pk %}{% if cat != 'ALL' %}?category={{ cat }}{% endif %}">{{ cat|title }}</a>
+                {% endfor %}
+              </div>
+            </div>
+            <div class="ld-scroll-list">
+              {% for ev in lead_360.timeline %}
+              <div class="ld-feed-item" data-event-id="{{ ev.event_id }}" data-event-category="{{ ev.category }}">
+                <div class="ld-feed-item-left">
+                  <span class="ld-feed-icon" aria-hidden="true">
+                    {% if ev.category == 'CALL' %}📞{% elif ev.category == 'WHATSAPP' %}💬{% elif ev.category == 'FOLLOWUP' %}🗓{% elif ev.category == 'COUNSELING' %}🎓{% elif ev.category == 'ADMISSION' %}🏆{% elif ev.category == 'INTAKE' %}🌐{% elif ev.category == 'NOTE' %}📝{% else %}✦{% endif %}
+                  </span>
+                  <div class="ld-feed-body">
+                    <div class="ld-feed-title">
+                      <span>{{ ev.title }}</span>
+                      {% for b in ev.badges %}<span class="badge">{{ b }}</span>{% endfor %}
+                    </div>
+                    {% if ev.subtitle %}
+                    <p class="ld-feed-sub">{{ ev.subtitle }} · Actor: {% if ev.actor_url %}<a class="text-link" href="{{ ev.actor_url }}">{{ ev.actor_name }}</a>{% else %}{{ ev.actor_name }}{% endif %}</p>
+                    {% endif %}
+                    {% if ev.body %}<p class="ld-feed-text">{{ ev.body }}</p>{% endif %}
+                    {% if ev.metadata.has_recording and ev.metadata.recording_url %}
+                    <p style="margin:5px 0 0;"><a class="text-link" href="{{ ev.metadata.recording_url }}">▶ Play Call Recording ({{ ev.metadata.recording_duration_display|default:"Audio" }})</a></p>
+                    {% endif %}
+                  </div>
+                </div>
+                <time class="ld-feed-time">{{ ev.timestamp_display }}</time>
+              </div>
+              {% empty %}
+              <div class="empty">No timeline events found for this filter.</div>
+              {% endfor %}
+            </div>
+          </section>
+          {% endif %}
+
+          <section class="ld-panel-card">
+            <div class="ld-panel-head">
+              <div>
+                <h2>System Activity Log</h2>
+                <p>Status changes, assignments, calls &amp; follow-ups — most recent 50</p>
+              </div>
+            </div>
+            <div class="ld-scroll-list compact">
+              {% for item in activity_log %}
+              <div class="ld-feed-item">
+                <div class="ld-feed-item-left">
+                  <span class="ld-feed-icon" aria-hidden="true">
+                    {% if item.verb == 'CALL_LOGGED' %}📞{% elif item.verb == 'STATUS_CHANGED' %}↻{% elif item.verb == 'ASSIGNED' or item.verb == 'REASSIGNED' %}👤{% elif item.verb == 'FOLLOWUP_SCHEDULED' %}🗓{% elif item.verb == 'FOLLOWUP_COMPLETED' %}✓{% elif item.verb == 'FOLLOWUP_CANCELLED' %}✕{% elif item.verb == 'WHATSAPP_INITIATED' %}💬{% else %}✦{% endif %}
+                  </span>
+                  <div class="ld-feed-body">
+                    <div class="ld-feed-title">{{ item.description }}</div>
+                  </div>
+                </div>
+                <time class="ld-feed-time">{{ item.created_at|date:'d M Y, H:i' }}</time>
+              </div>
+              {% empty %}
+              <div class="empty">No activity recorded for this lead yet.</div>
+              {% endfor %}
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- TAB 4: Counsellor Notes, Collaboration Notes, Website Enquiries & Admin Workflow -->
+      <div role="tabpanel" aria-labelledby="ld-tab-notes" hidden="until-found">
+        <div class="ld-tabpanel-inner">
+          <section class="ld-panel-card" aria-label="Counsellor Notes">
+            <div class="ld-panel-head">
+              <div>
+                <h2>Counsellor Notes</h2>
+                <p>Conversation, message contact &amp; counselling progress</p>
+              </div>
+              {% if caller_counselor_summary %}
+              <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                <span class="badge">Counsellor: {{ caller_counselor_summary.counselor_name }}</span>
+                <span class="badge {% if caller_counselor_summary.contact_status == 'CONTACTED' %}interested{% elif caller_counselor_summary.contact_status == 'CONTACTED_BY_MESSAGE' %}call_back{% else %}pending{% endif %}">
+                  {{ caller_counselor_summary.contact_status_display }}
+                </span>
+                {% if caller_counselor_summary.call_count %}<span class="badge">Calls: {{ caller_counselor_summary.call_count }}</span>{% endif %}
+                {% if caller_counselor_summary.message_count %}<span class="badge">Messages: {{ caller_counselor_summary.message_count }}</span>{% endif %}
+                {% if caller_counselor_summary.admission_request_status_display %}<span class="badge">Admission Req: {{ caller_counselor_summary.admission_request_status_display }}</span>{% endif %}
+              </div>
+              {% endif %}
+            </div>
+            {% if counselor_notes %}
+            <div class="ld-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Counsellor</th>
+                    <th>Type</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for note in counselor_notes %}
+                  <tr>
+                    <td style="white-space:nowrap;"><time datetime="{{ note.created_at|date:'c' }}">{{ note.created_at|date:'d M Y, H:i' }}</time></td>
+                    <td><strong>{{ note.counselor|user_name }}</strong></td>
+                    <td>
+                      <span class="badge">{{ note.get_kind_display }}</span>
+                      {% if note.duration_seconds %}<small class="muted" style="display:block;margin-top:2px;">{{ note.duration_seconds|duration }}</small>{% endif %}
+                    </td>
+                    <td class="notes-cell" style="max-width:520px;white-space:pre-wrap;">{{ note.body }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="empty">No counsellor notes recorded for this lead yet.</div>
+            {% endif %}
+          </section>
+
+          {% if collaboration_notes %}
+          <section class="ld-panel-card">
+            <div class="ld-panel-head">
+              <div>
+                <h2>Internal Collaboration Notes</h2>
+                <p>Team notes &amp; management consultation flags</p>
+              </div>
+            </div>
+            <div class="ld-scroll-list compact">
+              {% for cn in collaboration_notes %}
+              <div class="ld-feed-item">
+                <div class="ld-feed-body">
+                  <div class="ld-feed-title">
+                    <span>{{ cn.author|user_name }}</span>
+                    {% if cn.consult_admin %}<span class="badge busy">Consult Admin</span>{% endif %}
+                  </div>
+                  <p class="ld-feed-text">{{ cn.note }}</p>
+                </div>
+                <time class="ld-feed-time">{{ cn.created_at|date:'d M Y, H:i' }}</time>
+              </div>
+              {% endfor %}
+            </div>
+          </section>
+          {% endif %}
+
+          {% if website_submissions %}
+          <section class="ld-panel-card">
+            <div class="ld-panel-head">
+              <div>
+                <h2>Website Enquiries</h2>
+                <p>Inbound website form submissions &amp; source tracking</p>
+              </div>
+            </div>
+            <div class="ld-table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Submitted</th><th>Source</th><th>Campaign</th><th>Service</th><th>Type</th><th>Location</th><th>Notes</th></tr>
+                </thead>
+                <tbody>
+                  {% for sub in website_submissions %}
+                  <tr>
+                    <td style="white-space:nowrap;">{{ sub.submitted_at|date:'d M Y, H:i' }}</td>
+                    <td>{{ sub.website_source.name|default:sub.source }}</td>
+                    <td>{{ sub.campaign|default:'—' }}</td>
+                    <td><span class="badge">{{ sub.service_type.code|default:sub.service|default:'—' }}</span></td>
+                    <td>{% if sub.is_duplicate %}<span class="badge busy">Duplicate</span>{% else %}<span class="badge interested">New Lead</span>{% endif %}</td>
+                    <td>{{ sub.location|default:'—' }}</td>
+                    <td class="notes-cell">{{ sub.notes|default:'—' }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          {% endif %}
+
+          {% if counselor_panel %}{% include 'web/lead_counselor_panel.html' %}{% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
-{% if lead_360 %}
-<section class="panel spaced" aria-label="Lead 360 summary" style="padding:16px 20px;">
-  <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;">
+<!-- Native Modal Dialog: WhatsApp Manual Handoff (modern-web-guidance: dialog) -->
+<dialog id="wa-modal" class="ld-wa-dialog" closedby="any" data-lead-id="{{ lead.pk }}" aria-labelledby="wa-modal-title">
+  <div class="ld-wa-head">
     <div>
-      <h2 style="margin:0;font-size:18px;">Lead 360° Overview</h2>
-      <p style="margin:4px 0 0 0;font-size:13px;color:var(--muted);">
-        Routing: <strong>{{ lead_360.lead.routing_status }}</strong>
-        {% if lead_360.lead.active_counselor_name %} · Active Counselor: <strong>{% if lead_360.lead.active_counselor_url %}<a class="text-link" href="{{ lead_360.lead.active_counselor_url }}">{{ lead_360.lead.active_counselor_name }}</a>{% else %}{{ lead_360.lead.active_counselor_name }}{% endif %}</strong>{% endif %}
-        {% if lead_360.lead.qualification.temperature %} · Temperature: <span class="badge">{{ lead_360.lead.qualification.temperature }}</span>{% endif %}
-      </p>
+      <h1 id="wa-modal-title">Send WhatsApp (Manual Handoff)</h1>
+      <p>CRM prepares the recipient and prefilled message, then opens WhatsApp so you can review and send.</p>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <span class="badge">Calls: {{ lead_360.summary.total_calls }} ({{ lead_360.summary.total_talk_time_display }})</span>
-      <span class="badge">Recordings: {{ lead_360.summary.recordings_count }}</span>
-      <span class="badge">WhatsApp: {{ lead_360.summary.whatsapp_count }}</span>
-      <span class="badge">Pending Follow-ups: {{ lead_360.summary.pending_followups }}{% if lead_360.summary.overdue_followups %} ({{ lead_360.summary.overdue_followups }} overdue){% endif %}</span>
-      <span class="badge">Admissions: {{ lead_360.summary.admissions_count }}</span>
-      {% if can_manage and lead_360.summary.total_admission_fees is not None %}
-      <span class="badge interested">Enrolled Fees: ₹{{ lead_360.summary.total_admission_fees|floatformat:2 }}</span>
-      {% endif %}
-    </div>
+    <form method="dialog" style="margin:0;">
+      <button type="submit" value="close" class="score-modal-close" aria-label="Close WhatsApp dialog">✕</button>
+    </form>
   </div>
-</section>
-{% endif %}
-
-<div class="dashboard-grid spaced"><section class="panel form-panel"><div class="panel-heading"><div><h2>Lead profile</h2><p>Preferred course: <span class="badge">{{ lead.preferred_course_label|default:"Not recorded" }}</span></p><p>Keep every detail in one place</p></div></div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="save">{% include 'web/form_fields.html' %}<div class="form-actions"><button class="button primary">Save changes</button></div></form></section><div class="stack"><section class="panel form-panel"><div class="panel-heading"><div><h2>Schedule a follow-up</h2><p>All times in {{ workspace_timezone }}</p></div></div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="followup">{% include 'web/form_fields.html' with form=follow_form %}<div class="form-actions"><button class="button primary">Schedule follow-up</button></div></form></section>{% if qualification_form %}<section class="panel form-panel"><div class="panel-heading"><div><h2>Lead qualification</h2><p>Temperature &amp; sub-status</p></div></div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="qualification">{% include 'web/form_fields.html' with form=qualification_form %}<div class="form-actions"><button class="button primary">Save qualification</button></div></form></section>{% endif %}<section class="panel form-panel"><div class="panel-heading"><div><h2>Add collaboration note</h2><p>Log internal note or flag management consultation</p></div></div><form method="post">{% csrf_token %}<input type="hidden" name="action" value="collaboration_note"><div class="field"><textarea name="note" aria-label="Lead note" rows="3" placeholder="Write a note on this lead..." required style="width:100%;"></textarea></div><label class="checkbox" style="display:flex;align-items:center;gap:6px;margin:8px 0;"><input type="checkbox" name="consult">Request management consultation</label><div class="form-actions"><button class="button primary">Save note</button></div></form></section><section class="panel"><div class="panel-heading"><h2>Follow-up history</h2></div>{% for item in followup_history %}<div class="activity-row"><div><strong>{{ item.scheduled_at|date:'d M Y, H:i' }}</strong><p>{{ item.notes|default:'No notes' }}</p></div><span class="badge {{ item.status|lower }}">{{ item.get_status_display }}</span></div>{% empty %}<div class="empty">No follow-ups scheduled yet.</div>{% endfor %}</section></div></div>
-
-{% if lead_360 %}
-<section class="panel spaced" aria-label="Unified Lead 360 Timeline">
-  <div class="panel-heading" style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
+  <div class="ld-wa-body">
+    {% csrf_token %}
+    <div class="ld-wa-recip">
+      <div><strong>Recipient:</strong> {{ lead.name }}</div>
+      <div><strong>Phone:</strong> {{ lead.phone }}</div>
+    </div>
     <div>
-      <h2>Lead 360° Unified Timeline</h2>
-      <p>Every call, WhatsApp, follow-up, enquiry, counselling, admission and note in chronological order ({{ lead_360.pagination.total_matching_events }} events)</p>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
-      {% for cat in lead_360.filters.available_categories %}
-      <a class="button {% if lead_360.filters.selected_category == cat %}primary{% endif %}" href="{% url 'web:lead-detail' lead.pk %}{% if cat != 'ALL' %}?category={{ cat }}{% endif %}" style="padding:5px 10px;font-size:12px;">{{ cat|title }}</a>
-      {% endfor %}
-    </div>
-  </div>
-  {% for ev in lead_360.timeline %}
-  <div class="activity-row" data-event-id="{{ ev.event_id }}" data-event-category="{{ ev.category }}">
-    <span class="activity-mark">
-      {% if ev.category == 'CALL' %}📞{% elif ev.category == 'WHATSAPP' %}💬{% elif ev.category == 'FOLLOWUP' %}🗓{% elif ev.category == 'COUNSELING' %}🎓{% elif ev.category == 'ADMISSION' %}🏆{% elif ev.category == 'INTAKE' %}🌐{% elif ev.category == 'NOTE' %}📝{% else %}✦{% endif %}
-    </span>
-    <div style="flex:1;">
-      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-        <strong>{{ ev.title }}</strong>
-        {% for b in ev.badges %}<span class="badge">{{ b }}</span>{% endfor %}
-      </div>
-      {% if ev.subtitle %}<p class="muted" style="margin:2px 0 0 0;font-size:12px;">{{ ev.subtitle }} · Actor: {% if ev.actor_url %}<a class="text-link" href="{{ ev.actor_url }}">{{ ev.actor_name }}</a>{% else %}{{ ev.actor_name }}{% endif %}</p>{% endif %}
-      {% if ev.body %}<p style="margin:4px 0 0 0;white-space:pre-wrap;">{{ ev.body }}</p>{% endif %}
-      {% if ev.metadata.has_recording and ev.metadata.recording_url %}
-      <p style="margin:4px 0 0 0;"><a class="text-link" href="{{ ev.metadata.recording_url }}">▶ Play Call Recording ({{ ev.metadata.recording_duration_display|default:"Audio" }})</a></p>
-      {% endif %}
-    </div>
-    <time>{{ ev.timestamp_display }}</time>
-  </div>
-  {% empty %}
-  <div class="empty">No timeline events found for this filter.</div>
-  {% endfor %}
-</section>
-{% endif %}
-
-{% if website_submissions %}<section class="panel spaced"><div class="panel-heading"><div><h2>Website Enquiries</h2><p>Inbound website form submissions and source tracking</p></div></div><div class="table-scroll"><table><thead><tr><th>Submitted</th><th>Source</th><th>Campaign</th><th>Service</th><th>Type</th><th>Location</th><th>Notes</th></tr></thead><tbody>{% for sub in website_submissions %}<tr><td>{{ sub.submitted_at|date:'d M Y, H:i' }}</td><td>{{ sub.website_source.name|default:sub.source }}</td><td>{{ sub.campaign|default:'—' }}</td><td><span class="badge">{{ sub.service_type.code|default:sub.service|default:'—' }}</span></td><td>{% if sub.is_duplicate %}<span class="badge busy">Duplicate</span>{% else %}<span class="badge interested">New Lead</span>{% endif %}</td><td>{{ sub.location|default:'—' }}</td><td class="notes-cell">{{ sub.notes|default:'—' }}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}<section class="panel spaced"><div class="panel-heading"><div><h2>Conversation history</h2><p>Most recent 30 outgoing &amp; incoming calls with AI summaries &amp; recordings</p></div></div><div class="table-scroll"><table><thead><tr><th>When</th><th>Direction</th><th>Caller</th><th>Outcome</th><th>Course / Admission</th><th>Duration</th><th>Notes &amp; AI Summary</th><th>Recording</th></tr></thead><tbody>{% for call in history %}<tr><td>{{ call.started_at|date:'d M Y, H:i' }}</td><td>{% if call.direction == 'INBOUND' %}<span class="badge interested">↙ Incoming</span>{% else %}<span class="badge">↗ Outgoing</span>{% endif %}</td><td>{% employee_link call.caller %}</td><td><span class="badge {{ call.outcome|lower }}">{{ call.get_outcome_display|default:'Recorded' }}</span></td><td>{% include "web/call_course.html" %}</td><td>{{ call.duration_seconds }}s</td><td class="notes-cell">{% if call.notes %}<div>{{ call.notes }}</div>{% endif %}{% if call.recording and call.recording.transcript_status == 'COMPLETED' %}<div style="margin-top:6px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);font-size:12px;"><div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:4px;"><span class="badge">✨ AI · {{ call.recording.ai_language|default:'Summary' }}</span>{% if call.recording.objections_count > 0 %}<span class="badge busy">⚠ {{ call.recording.objections_count }} Objection{% if call.recording.objections_count != 1 %}s{% endif %}</span>{% endif %}</div>{% if call.recording.ai_summary %}<p style="margin:0 0 4px 0;line-height:1.45;">{{ call.recording.ai_summary }}</p>{% endif %}{% if call.recording.ai_key_points or call.recording.ai_objections or call.recording.transcript_text %}<details style="margin-top:4px;"><summary style="cursor:pointer;color:var(--accent);font-weight:600;">Key points, objections &amp; transcript</summary>{% if call.recording.ai_key_points %}<ul style="margin:6px 0 4px 16px;padding:0;">{% for pt in call.recording.ai_key_points %}<li>{{ pt }}</li>{% endfor %}</ul>{% endif %}{% if call.recording.ai_objections %}<div style="margin-top:4px;color:#e11d48;"><strong>Objections:</strong> {% for obj in call.recording.ai_objections %}<span style="display:block;">• {{ obj.label }}{% if obj.detail %} — {{ obj.detail }}{% endif %}</span>{% endfor %}</div>{% endif %}{% if call.recording.transcript_text %}<pre style="margin:6px 0 0 0;white-space:pre-wrap;font-family:inherit;font-size:11.5px;max-height:180px;overflow:auto;">{{ call.recording.transcript_text }}</pre>{% endif %}</details>{% endif %}</div>{% elif not call.notes %}—{% endif %}</td><td>{% include 'web/call_recording.html' %}</td></tr>{% empty %}<tr><td colspan="8" class="empty">No calls recorded for this lead.</td></tr>{% endfor %}</tbody></table></div></section><section class="panel spaced"><div class="panel-heading"><div><h2>Lead activity</h2><p>Every status change, assignment, call and follow-up — most recent 50</p></div></div>{% for item in activity_log %}<div class="activity-row"><span class="activity-mark">{% if item.verb == 'CALL_LOGGED' %}📞{% elif item.verb == 'STATUS_CHANGED' %}↻{% elif item.verb == 'ASSIGNED' or item.verb == 'REASSIGNED' %}👤{% elif item.verb == 'FOLLOWUP_SCHEDULED' %}🗓{% elif item.verb == 'FOLLOWUP_COMPLETED' %}✓{% elif item.verb == 'FOLLOWUP_CANCELLED' %}✕{% elif item.verb == 'WHATSAPP_INITIATED' %}💬{% else %}✦{% endif %}</span><div><strong>{{ item.description }}</strong></div><time>{{ item.created_at|date:'d M Y, H:i' }}</time></div>{% empty %}<div class="empty">No activity recorded for this lead yet.</div>{% endfor %}</section>
-
-
-<section class="panel spaced" aria-label="Counsellor Notes">
-  <div class="panel-heading" style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;">
-    <div>
-      <h2>Counsellor Notes</h2>
-      <p>Conversation, message contact, and counselling progress recorded by the assigned counsellor</p>
-    </div>
-    {% if caller_counselor_summary %}
-    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-      <span class="badge">Counsellor: {{ caller_counselor_summary.counselor_name }}</span>
-      <span class="badge {% if caller_counselor_summary.contact_status == 'CONTACTED' %}interested{% elif caller_counselor_summary.contact_status == 'CONTACTED_BY_MESSAGE' %}call_back{% else %}pending{% endif %}">
-        {{ caller_counselor_summary.contact_status_display }}
-      </span>
-      {% if caller_counselor_summary.call_count %}<span class="badge">Calls: {{ caller_counselor_summary.call_count }}</span>{% endif %}
-      {% if caller_counselor_summary.message_count %}<span class="badge">Messages: {{ caller_counselor_summary.message_count }}</span>{% endif %}
-      {% if caller_counselor_summary.admission_request_status_display %}<span class="badge">Admission Req: {{ caller_counselor_summary.admission_request_status_display }}</span>{% endif %}
-    </div>
-    {% endif %}
-  </div>
-  {% if counselor_notes %}
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>When</th>
-          <th>Counsellor</th>
-          <th>Type</th>
-          <th>Notes</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for note in counselor_notes %}
-        <tr>
-          <td><time datetime="{{ note.created_at|date:'c' }}">{{ note.created_at|date:'d M Y, H:i' }}</time></td>
-          <td><strong>{{ note.counselor|user_name }}</strong></td>
-          <td>
-            <span class="badge">{{ note.get_kind_display }}</span>
-            {% if note.duration_seconds %}<small class="muted" style="display:block;margin-top:2px;">{{ note.duration_seconds|duration }}</small>{% endif %}
-          </td>
-          <td class="notes-cell" style="max-width: 500px; white-space: pre-wrap;">{{ note.body }}</td>
-        </tr>
+      <label for="wa-template-select">Select Template</label>
+      <select id="wa-template-select" onchange="onTemplateChange(this)">
+        <option value="" data-body="">-- Custom Message (write your own) --</option>
+        {% for t in whatsapp_templates %}
+        <option value="{{ t.pk }}" data-body="{{ t.message }}">{{ t.title }}</option>
         {% endfor %}
-      </tbody>
-    </table>
+      </select>
+    </div>
+    <div>
+      <label for="wa-message-body">Message (Editable)</label>
+      <textarea id="wa-message-body" rows="4" placeholder="Type your WhatsApp message here..."></textarea>
+    </div>
+    <div class="ld-wa-actions">
+      <button type="button" class="button" onclick="closeWhatsAppModal()">Cancel</button>
+      <button type="button" class="button primary" id="wa-submit-btn" style="background:#25D366;border-color:#25D366;" onclick="submitWhatsAppInitiate()">Open WhatsApp ↗</button>
+    </div>
   </div>
-  {% else %}
-  <div class="empty" style="padding: 24px; text-align: center;">No counsellor notes recorded for this lead yet.</div>
-  {% endif %}
-</section>
+</dialog>
 
-{% if counselor_panel %}{% include 'web/lead_counselor_panel.html' %}{% endif %}
 {{ lead.name|json_script:"wa-lead-name" }}
-<script>
-function openWhatsAppModal() {
-  const modal = document.getElementById('wa-modal');
-  if (!modal) return;
-  modal.style.display = 'block';
-  modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  const select = document.getElementById('wa-template-select');
-  if (select && select.options.length > 1 && !select.value) {
-    select.selectedIndex = 1;
-    onTemplateChange(select);
-  }
-}
-function closeWhatsAppModal() {
-  const modal = document.getElementById('wa-modal');
-  if (modal) modal.style.display = 'none';
-}
-function onTemplateChange(select) {
-  if (!select) return;
-  const opt = select.options[select.selectedIndex];
-  let body = (opt && opt.getAttribute('data-body')) || '';
-  const leadNameEl = document.getElementById('wa-lead-name');
-  let parsedName = '';
-  if (leadNameEl && leadNameEl.textContent) {
-    try {
-      parsedName = JSON.parse(leadNameEl.textContent);
-    } catch (e) {
-      parsedName = leadNameEl.textContent.trim();
-    }
-  }
-  body = body.replace(/\{name\}/g, parsedName);
-  const textarea = document.getElementById('wa-message-body');
-  if (textarea) textarea.value = body;
-}
-async function submitWhatsAppInitiate() {
-  const btn = document.getElementById('wa-submit-btn');
-  const select = document.getElementById('wa-template-select');
-  const textarea = document.getElementById('wa-message-body');
-  const templateId = select && select.value ? parseInt(select.value, 10) : null;
-  const message = textarea ? textarea.value.trim() : '';
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
-      }
-    }
-    return cookieValue;
-  }
-  const csrf = document.querySelector('#wa-modal [name=csrfmiddlewaretoken]')?.value
-    || document.querySelector('[name=csrfmiddlewaretoken]')?.value
-    || getCookie('csrftoken')
-    || '';
-
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Preparing...';
-  }
-
-  try {
-    const res = await fetch('/api/v1/leads/{{ lead.pk }}/whatsapp/initiate/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': csrf,
-      },
-      body: JSON.stringify({
-        template_id: templateId,
-        message: message,
-        source: 'CRM',
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      alert(data.detail || 'Could not initiate WhatsApp. Check phone number format.');
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Open WhatsApp ↗';
-      }
-      return;
-    }
-    // Open WhatsApp Web or application
-    if (data.web_link) {
-      window.open(data.web_link, '_blank');
-    }
-    closeWhatsAppModal();
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Open WhatsApp ↗';
-    }
-    // Reload page after brief delay to show the new timeline activity
-    setTimeout(() => { window.location.reload(); }, 1000);
-  } catch (err) {
-    alert('Network error while preparing WhatsApp.');
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Open WhatsApp ↗';
-    }
-  }
-}
-</script>
+<script src="{% static 'web/lead-detail.js' %}?v=1" defer></script>
 {% endblock %}

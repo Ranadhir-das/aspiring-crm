@@ -5,7 +5,7 @@
 {% block breadcrumb %}Call Recordings{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=8">
+<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=10">
 <script src="{% static 'web/recordings-ai.js' %}?v=4" defer></script>
 
 <div class="recordings-page" data-csrf-token="{{ csrf_token }}">
@@ -237,6 +237,12 @@
     >
       <table class="recordings-table">
         <caption class="sr-only">Recorded call conversations with contact, caller, outcome, audio player, and AI summary</caption>
+        <colgroup>
+          <col class="col-contact">
+          <col class="col-info">
+          <col class="col-player">
+          <col class="col-ai">
+        </colgroup>
         <thead>
           <tr>
             <th scope="col" class="col-contact">Lead / Contact</th>

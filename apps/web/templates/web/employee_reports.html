@@ -1,31 +1,57 @@
 {% extends 'web/base.html' %}
 {% load web_tags static %}
-{% block title %}Employee Reports{% endblock %}
-{% block breadcrumb %}Employee Reports{% endblock %}
+{% block title %}{% if selected_employee %}{{ selected_employee|user_name }} · Employee Report{% else %}Employee Reports{% endif %}{% endblock %}
+{% block breadcrumb %}{% if selected_employee %}Employee Reports / {{ selected_employee|user_name }}{% else %}Employee Reports{% endif %}{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/employee-reports.css' %}?v=1">
+<link rel="stylesheet" href="{% static 'web/employee-reports.css' %}?v=3">
 
 <div class="emp-reports-page">
-  <!-- Visual Top Header & Filter Controls -->
+  <!-- ======================================================================
+       SHARED TOP COMMAND BAR (Time Presets, Custom Range, Quick Employee Picker)
+       ====================================================================== -->
   <div class="er-hero-header">
-    <div>
+    <div class="er-hero-title-wrap">
       <div class="eyebrow">VISUAL 360° WORKFORCE ANALYTICS</div>
-      <h1>Employee Performance Reports<span class="accent">.</span></h1>
-      <p>Inspect every caller, counselor &amp; staff member in one visual command center — calls, AI lead scores, attendance, demos &amp; tasks.</p>
+      {% if selected_employee and employee_detail %}
+        <h1>Employee 360° Report<span class="accent">.</span></h1>
+        <p>{{ employee_detail.employee.subtitle }}</p>
+      {% else %}
+        <h1>Employee Performance Reports<span class="accent">.</span></h1>
+        <p>Inspect every caller, counselor, IT &amp; video editor visually — click any employee to open their full 360° report.</p>
+      {% endif %}
     </div>
 
     <div class="er-controls-bar">
-      <!-- Time Window Presets -->
+      {% if is_mgmt %}
+      <form method="get" action="{% url 'web:employee-reports' %}" class="er-emp-picker-form">
+        <input type="hidden" name="range" value="{{ selected_range }}">
+        {% if selected_range == 'custom' %}
+          <input type="hidden" name="start" value="{{ start_date }}">
+          <input type="hidden" name="end" value="{{ end_date }}">
+        {% endif %}
+        <select name="employee" class="er-emp-select" aria-label="Jump directly to an employee report" onchange="this.form.submit()">
+          <option value="">All Employees Overview</option>
+          {% for u in all_selectable_employees %}
+          <option value="{{ u.pk }}" {% if selected_employee and selected_employee.pk == u.pk %}selected{% endif %}>
+            {{ u|user_name }} · {{ u.get_role_display }}
+          </option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+
       <div class="er-preset-group" role="group" aria-label="Report date window">
-        <a href="?range=today{% if selected_role != 'all' %}&amp;role={{ selected_role }}{% endif %}" class="er-preset-pill {% if selected_range == 'today' %}active{% endif %}">Today</a>
-        <a href="?range=7d{% if selected_role != 'all' %}&amp;role={{ selected_role }}{% endif %}" class="er-preset-pill {% if selected_range == '7d' %}active{% endif %}">7D</a>
-        <a href="?range=30d{% if selected_role != 'all' %}&amp;role={{ selected_role }}{% endif %}" class="er-preset-pill {% if selected_range == '30d' %}active{% endif %}">30D</a>
-        <a href="?range=month{% if selected_role != 'all' %}&amp;role={{ selected_role }}{% endif %}" class="er-preset-pill {% if selected_range == 'month' %}active{% endif %}">This Month</a>
+        <a href="{% querystring range='today' start=None end=None %}" class="er-preset-pill {% if selected_range == 'today' %}active{% endif %}">Today</a>
+        <a href="{% querystring range='yesterday' start=None end=None %}" class="er-preset-pill {% if selected_range == 'yesterday' %}active{% endif %}">Yesterday</a>
+        <a href="{% querystring range='7d' start=None end=None %}" class="er-preset-pill {% if selected_range == '7d' %}active{% endif %}">7D</a>
+        <a href="{% querystring range='30d' start=None end=None %}" class="er-preset-pill {% if selected_range == '30d' %}active{% endif %}">30D</a>
+        <a href="{% querystring range='month' start=None end=None %}" class="er-preset-pill {% if selected_range == 'month' %}active{% endif %}">Month</a>
       </div>
 
       <form method="get" action="{% url 'web:employee-reports' %}" class="er-custom-date-form">
-        {% if selected_role != 'all' %}<input type="hidden" name="role" value="{{ selected_role }}">{% endif %}
+        {% if selected_employee %}<input type="hidden" name="employee" value="{{ selected_employee.pk }}">{% endif %}
+        {% if selected_role != 'all' and not selected_employee %}<input type="hidden" name="role" value="{{ selected_role }}">{% endif %}
         <input type="date" name="start" value="{{ start_date }}" aria-label="Report start date">
         <span class="er-date-sep">–</span>
         <input type="date" name="end" value="{{ end_date }}" aria-label="Report end date">
@@ -38,7 +64,819 @@
   <div class="filter-alert-error" role="alert" style="margin-bottom:14px;">⚠️ {{ date_error }}</div>
   {% endif %}
 
-  <!-- Role Filter Strip + Instant Employee Search -->
+  {% if employee_detail %}
+  <!-- ======================================================================
+       MODE B: SELECTED EMPLOYEE 360° DETAIL VIEW (Lead-Detail-Style Layout)
+       ====================================================================== -->
+  {% with emp=employee_detail.employee calls=employee_detail.calls att=employee_detail.attendance proj=employee_detail.projects pts=employee_detail.points %}
+  <section class="er-emp-snapshot" aria-label="Selected employee executive summary">
+    <!-- 1. Identity & Quick Actions Bar -->
+    <div class="er-snap-head">
+      <div class="er-snap-left">
+        <span class="er-snap-avatar" aria-hidden="true">
+          {{ emp.initials }}
+          {% if emp.active_shift %}<span class="evc-live-dot" title="Active Shift Online"></span>{% endif %}
+        </span>
+        <div class="er-snap-meta">
+          <div class="er-snap-crumbs">
+            {% if is_mgmt %}
+            <a class="er-back-pill" href="{% querystring employee=None %}">← All Employees</a>
+            {% endif %}
+            <span class="er-role-badge">{{ emp.role_display }}</span>
+            {% if emp.active_shift %}<span class="er-live-badge">● Active Shift</span>{% endif %}
+            <span class="er-muted-chip">Window: {{ start_date }} → {{ end_date }}</span>
+          </div>
+          <div class="er-snap-title-row">
+            <h2>{{ emp.name }}</h2>
+            <span class="er-username-tag">@{{ emp.username }}</span>
+          </div>
+          <div class="er-snap-chips">
+            {% if emp.phone %}<span class="er-info-chip">📞 <span>{{ emp.phone }}</span></span>{% endif %}
+            {% if emp.email %}<span class="er-info-chip">✉ <span>{{ emp.email }}</span></span>{% endif %}
+            <span class="er-info-chip">🏢 <span>{{ emp.branch_name }}</span></span>
+            {% if emp.manager_name %}<span class="er-info-chip">👤 <span>Mgr: {{ emp.manager_name }}</span></span>{% endif %}
+            {% for svc in emp.services %}<span class="er-info-chip accent"><span>{{ svc }}</span></span>{% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="er-snap-right">
+        <div class="er-hero-ring" role="img" aria-label="Overall visual performance score {{ emp.overall_score }} out of 100"
+             style="--p: {{ emp.overall_score }}%; --c: {% if emp.overall_score >= 75 %}#10b981{% elif emp.overall_score >= 50 %}#3b82f6{% elif emp.overall_score >= 30 %}#f59e0b{% else %}#ef4444{% endif %};">
+          <div class="er-hero-ring-in">{{ emp.overall_score }}</div>
+        </div>
+        <div class="er-hero-score-copy">
+          <strong>Performance Index</strong>
+          <span>Overall 360° Score</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Role-Tailored Visual At-a-Glance Strip (Shows ONLY metrics relevant to this employee's role) -->
+    <div class="er-glance-grid" data-cols="{{ emp.glance_tile_count }}">
+      {% if emp.sections.show_calls %}
+      <!-- Tile: Calls & Connect (Callers / Counselors / Management with calls) -->
+      <article class="er-stat-tile">
+        <div class="er-stat-label"><span>Calls &amp; Connect</span><span>{{ calls.summary.talk_display }}</span></div>
+        <div class="er-stat-row">
+          <div class="er-mini-ring" role="img" aria-label="Connect rate {{ calls.summary.connect_pct }}%" style="--p: {{ calls.summary.connect_pct }}%; --c: #6366f1;">
+            <div class="er-mini-ring-in">{{ calls.summary.connect_pct }}%</div>
+          </div>
+          <div class="er-stat-copy">
+            <strong>{{ calls.summary.total }} Calls</strong>
+            <span>↗{{ calls.summary.outbound }} Out · ↙{{ calls.summary.inbound }} In</span>
+            <span class="er-micro-note">🎙 {{ calls.summary.recordings }} Rec · ⚠ {{ calls.summary.objections }} Obj</span>
+          </div>
+        </div>
+      </article>
+      {% endif %}
+
+      <!-- Tile: Attendance & Shifts (All Roles) -->
+      <article class="er-stat-tile">
+        <div class="er-stat-label"><span>Attendance</span><span>{{ att.total_net_display }}</span></div>
+        <div class="er-stat-row">
+          <div class="er-mini-ring" role="img" aria-label="Attendance {{ att.pct }}%" style="--p: {{ att.pct }}%; --c: #10b981;">
+            <div class="er-mini-ring-in">{{ att.pct }}%</div>
+          </div>
+          <div class="er-stat-copy">
+            <strong>{{ att.counts.present_full }} Full · {{ att.counts.short_shift }} Short</strong>
+            <span>{{ att.counts.leave }} Leave · {{ att.counts.absent }} Absent</span>
+            <span class="er-micro-note">Breaks: {{ att.total_break_display }}</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- Tile: Workforce & PC Activity (All Roles) -->
+      <article class="er-stat-tile">
+        <div class="er-stat-label"><span>Workforce &amp; PC</span><span>{{ att.sessions_count }} Shifts</span></div>
+        <div class="er-stat-row">
+          <div class="er-mini-ring" role="img" aria-label="PC active {{ att.pc_active_pct }}%" style="--p: {{ att.pc_active_pct }}%; --c: #0ea5e9;">
+            <div class="er-mini-ring-in">{{ att.pc_active_pct }}%</div>
+          </div>
+          <div class="er-stat-copy">
+            <strong>{{ att.activity_categories|length }} Activities</strong>
+            <span>PC: {{ att.pc_active_minutes }}m active</span>
+            <span class="er-micro-note">{{ att.pc_idle_minutes }}m idle · {{ att.break_reasons|length }} break types</span>
+          </div>
+        </div>
+      </article>
+
+      {% if emp.sections.show_projects %}
+      <!-- Tile: Projects & Deliverables (IT, Video Editor & Staff) -->
+      <article class="er-stat-tile">
+        <div class="er-stat-label"><span>Projects &amp; Deliverables</span><span>{{ proj.total_logged_display }}</span></div>
+        <div class="er-stat-row">
+          <div class="er-mini-ring" role="img" aria-label="Projects completed {{ proj.completion_pct }}%" style="--p: {{ proj.completion_pct }}%; --c: #8b5cf6;">
+            <div class="er-mini-ring-in">{{ proj.completion_pct }}%</div>
+          </div>
+          <div class="er-stat-copy">
+            <strong>{{ proj.status_counts.completed }}/{{ proj.total }} Completed</strong>
+            <span>{{ proj.status_counts.in_progress }} Active · {{ proj.status_counts.pending_review }} Review</span>
+            <span class="er-micro-note">{{ proj.status_counts.overdue }} Overdue · {{ proj.work_logs|length }} Logs</span>
+          </div>
+        </div>
+      </article>
+      {% endif %}
+
+      {% if emp.sections.show_sales_outcomes %}
+      <!-- Tile: Points & Sales Outcomes (Callers / Counselors) -->
+      <article class="er-stat-tile">
+        <div class="er-stat-label"><span>Points &amp; Outcomes</span><span>Peer {{ pts.peer_avg }}/10</span></div>
+        <div class="er-stat-row">
+          <div class="er-pts-badge {% if pts.total < 0 %}neg{% endif %}">
+            {% if pts.total > 0 %}+{% endif %}{{ pts.total }}
+          </div>
+          <div class="er-stat-copy">
+            <strong>+{{ pts.positive }} / -{{ pts.negative }} pts</strong>
+            <span>🎯 {{ pts.counsellings }} Demos · 🏆 {{ pts.admissions }} Admit</span>
+            <span class="er-micro-note">💬 {{ pts.whatsapp }} WhatsApp</span>
+          </div>
+        </div>
+      </article>
+      {% else %}
+      <!-- Tile: Daily Work Reports & Peer Rating (IT, Video Editor & Non-Caller Staff) -->
+      <article class="er-stat-tile">
+        <div class="er-stat-label"><span>Reports &amp; Recognition</span><span>Peer {{ pts.peer_avg }}/10</span></div>
+        <div class="er-stat-row">
+          <div class="er-mini-ring" role="img" aria-label="Daily work reports cadence {{ proj.report_pct }}%" style="--p: {{ proj.report_pct }}%; --c: #6366f1;">
+            <div class="er-mini-ring-in">{{ proj.report_pct }}%</div>
+          </div>
+          <div class="er-stat-copy">
+            <strong>{{ proj.work_reports_count }} Daily Reports</strong>
+            <span>{{ proj.work_logs|length }} Project Logs</span>
+            <span class="er-micro-note">{% if pts.total %}🏆 {% if pts.total > 0 %}+{% endif %}{{ pts.total }} pts · {% endif %}{{ pts.peer_count }} Peer Review{% if pts.peer_count != 1 %}s{% endif %}</span>
+          </div>
+        </div>
+      </article>
+      {% endif %}
+
+      {% if emp.sections.show_leads %}
+      <!-- Tile: Assigned Leads & Follow-ups (Callers / Counselors) -->
+      <article class="er-stat-tile">
+        <div class="er-stat-label"><span>Leads &amp; Follow-ups</span><span>Avg {{ pts.leads.avg_score }}/100</span></div>
+        <div class="er-stat-row">
+          <div class="er-mini-ring" role="img" aria-label="Follow-up completion {{ pts.followups.completion_pct }}%" style="--p: {{ pts.followups.completion_pct }}%; --c: #f59e0b;">
+            <div class="er-mini-ring-in">{{ pts.followups.completion_pct }}%</div>
+          </div>
+          <div class="er-stat-copy">
+            <strong>{{ pts.leads.total }} Leads</strong>
+            <span>🔥 {{ pts.leads.temps.HOT }} Hot · ☀ {{ pts.leads.temps.WARM }} Warm</span>
+            <span class="er-micro-note">🗓 {{ pts.followups.completed }} Done · {{ pts.followups.overdue }} Overdue</span>
+          </div>
+        </div>
+      </article>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- 3. Single-Row Role-Tailored Responsive Tabs (Block Stack — Zero Grid Hit-Test Bug!) -->
+  <section class="er-tabs-shell" aria-label="Employee 360 report sections">
+    <div class="er-tablist-bar">
+      <div id="er-detail-tablist" class="er-tablist" role="tablist" focusgroup="tablist nomemory" aria-label="Employee report sections">
+        {% if emp.sections.show_calls %}
+        <button type="button" role="tab" id="er-tab-calls" class="er-tab-btn" data-tab-key="calls"
+                aria-selected="{% if emp.default_tab == 'calls' %}true{% else %}false{% endif %}"
+                tabindex="{% if emp.default_tab == 'calls' %}0{% else %}-1{% endif %}"
+                {% if emp.default_tab == 'calls' %}focusgroupstart{% endif %}>
+          <span>📞 Calls &amp; Outcomes</span>
+          <span id="er-tab-calls-count" class="er-tab-count">{{ calls.summary.total }}</span>
+        </button>
+        {% endif %}
+
+        {% if emp.sections.show_projects and not emp.sections.show_calls %}
+        <button type="button" role="tab" id="er-tab-projects" class="er-tab-btn" data-tab-key="projects"
+                aria-selected="{% if emp.default_tab == 'projects' %}true{% else %}false{% endif %}"
+                tabindex="{% if emp.default_tab == 'projects' %}0{% else %}-1{% endif %}"
+                {% if emp.default_tab == 'projects' %}focusgroupstart{% endif %}>
+          <span>💻 Projects &amp; Work Reports</span>
+          <span class="er-tab-count">{{ proj.total }}</span>
+        </button>
+        {% endif %}
+
+        <button type="button" role="tab" id="er-tab-attendance" class="er-tab-btn" data-tab-key="attendance"
+                aria-selected="{% if emp.default_tab == 'attendance' %}true{% else %}false{% endif %}"
+                tabindex="{% if emp.default_tab == 'attendance' %}0{% else %}-1{% endif %}"
+                {% if emp.default_tab == 'attendance' %}focusgroupstart{% endif %}>
+          <span>🗓 Attendance &amp; Workforce</span>
+          <span class="er-tab-count">{{ att.rows|length }}</span>
+        </button>
+
+        {% if emp.sections.show_projects and emp.sections.show_calls %}
+        <button type="button" role="tab" id="er-tab-projects" class="er-tab-btn" data-tab-key="projects"
+                aria-selected="{% if emp.default_tab == 'projects' %}true{% else %}false{% endif %}"
+                tabindex="{% if emp.default_tab == 'projects' %}0{% else %}-1{% endif %}"
+                {% if emp.default_tab == 'projects' %}focusgroupstart{% endif %}>
+          <span>💻 Projects &amp; Work Reports</span>
+          <span class="er-tab-count">{{ proj.total }}</span>
+        </button>
+        {% endif %}
+
+        {% if emp.sections.show_points %}
+        <button type="button" role="tab" id="er-tab-points" class="er-tab-btn" data-tab-key="points"
+                aria-selected="{% if emp.default_tab == 'points' %}true{% else %}false{% endif %}"
+                tabindex="{% if emp.default_tab == 'points' %}0{% else %}-1{% endif %}"
+                {% if emp.default_tab == 'points' %}focusgroupstart{% endif %}>
+          <span>{% if emp.sections.show_leads %}🏆 Points, Outcomes &amp; Leads{% else %}🏆 Points &amp; Recognition{% endif %}</span>
+          <span class="er-tab-count">{{ pts.rows|length }}</span>
+        </button>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="er-tabpanels-stack">
+      {% if emp.sections.show_calls %}
+      <!-- ================================================================
+           TAB 1: CALLS & OUTCOMES (Live Everyday Filter + Donuts + Fixed Table)
+           ================================================================ -->
+      <div role="tabpanel" aria-labelledby="er-tab-calls" {% if emp.default_tab != 'calls' %}hidden="until-found"{% endif %}>
+        <div class="er-tabpanel-inner">
+          <!-- Independent Everyday Calls Filter Toolbar -->
+          <div class="er-calls-toolbar" id="er-calls-toolbar" data-api-url="{{ emp.calls_api_url }}">
+            <div class="er-calls-presets" role="group" aria-label="Filter employee calls by day">
+              <button type="button" class="er-call-range-btn {% if calls.range == 'today' %}active{% endif %}" data-call-range="today">Today</button>
+              <button type="button" class="er-call-range-btn {% if calls.range == 'yesterday' %}active{% endif %}" data-call-range="yesterday">Yesterday</button>
+              <button type="button" class="er-call-range-btn {% if calls.range == '7d' %}active{% endif %}" data-call-range="7d">Last 7 Days</button>
+              <button type="button" class="er-call-range-btn {% if calls.range == '30d' %}active{% endif %}" data-call-range="30d">30 Days</button>
+              <button type="button" class="er-call-range-btn {% if calls.range == 'month' %}active{% endif %}" data-call-range="month">This Month</button>
+            </div>
+            <div class="er-calls-filters-right">
+              <div class="er-calls-custom-dates">
+                <input type="date" id="er-call-start" value="{{ calls.start }}" aria-label="Calls start date">
+                <span>–</span>
+                <input type="date" id="er-call-end" value="{{ calls.end }}" aria-label="Calls end date">
+                <button type="button" id="er-call-custom-apply" class="er-apply-btn">Filter</button>
+              </div>
+              <select id="er-call-direction" class="er-mini-select" aria-label="Call direction">
+                <option value="">All Directions</option>
+                <option value="OUTBOUND">↗ Outgoing</option>
+                <option value="INBOUND">↙ Incoming</option>
+              </select>
+              <select id="er-call-outcome" class="er-mini-select" aria-label="Call outcome">
+                <option value="">All Outcomes</option>
+                {% for val, lbl in call_outcomes_choices %}
+                <option value="{{ val }}">{{ lbl }}</option>
+                {% endfor %}
+              </select>
+              <span id="er-calls-loading" class="er-loading-pill" hidden>Updating…</span>
+            </div>
+          </div>
+
+          <!-- 3 Interactive Calls Donut Charts -->
+          <div class="er-detail-charts-3">
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Call Outcomes Mix</h2><span id="er-calls-total-tag" class="er-chart-tag">{{ calls.summary.total }} Calls</span></header>
+              <div id="emp-chart-call-outcomes" class="er-donut-mount" role="img" aria-label="Call outcomes donut chart"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Out vs In &amp; Connect</h2><span id="er-calls-talk-tag" class="er-chart-tag">{{ calls.summary.talk_display }}</span></header>
+              <div id="emp-chart-call-flow" class="er-donut-mount" role="img" aria-label="Outgoing vs incoming calls donut chart"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>AI Call Sentiment</h2><span id="er-calls-ai-tag" class="er-chart-tag">{{ calls.summary.ai_analyzed }} AI</span></header>
+              <div id="emp-chart-call-sentiment" class="er-donut-mount" role="img" aria-label="AI call sentiment donut chart"></div>
+            </article>
+          </div>
+
+          <!-- Calls Trend Area Chart + Top Exact Outcomes Bars -->
+          <div class="er-wide-charts-grid">
+            <article class="er-chart-card">
+              <header class="er-chart-head">
+                <div>
+                  <h2 id="er-calls-trend-title">Calls &amp; Connected Trend</h2>
+                  <p class="er-chart-sub">Hourly breakdown for single day · daily breakdown for multi-day</p>
+                </div>
+                <div class="er-legend-inline" aria-hidden="true">
+                  <span><i style="background:#6366f1;"></i>All Calls</span>
+                  <span><i style="background:#10b981;"></i>Connected</span>
+                </div>
+              </header>
+              <div id="emp-chart-calls-trend" class="er-svg-chart-mount" role="img" aria-label="Employee calls trend area chart"></div>
+            </article>
+
+            <article class="er-chart-card">
+              <header class="er-chart-head">
+                <div>
+                  <h2>Outcome Breakdown</h2>
+                  <p class="er-chart-sub">Exact call dispositions in selected period</p>
+                </div>
+              </header>
+              <div id="emp-chart-top-outcomes" class="er-task-bars"></div>
+            </article>
+          </div>
+
+          <!-- Fixed-Column, Row-Scrollable Calls Log Table -->
+          <article class="er-table-card">
+            <header class="er-table-head">
+              <div>
+                <h2 id="er-calls-table-heading">Call Activity Log</h2>
+                <p>Fixed Lead column &amp; column headers — scroll rows smoothly across the selected period</p>
+              </div>
+              <span id="er-calls-range-badge" class="er-chart-tag">{{ calls.start }} → {{ calls.end }}</span>
+            </header>
+            <div tabindex="0" role="region" aria-labelledby="er-calls-table-heading" class="er-table-scroll">
+              <table class="er-fixed-table er-calls-table">
+                <colgroup>
+                  <col style="width:205px;">
+                  <col style="width:150px;">
+                  <col style="width:105px;">
+                  <col style="width:140px;">
+                  <col style="width:120px;">
+                  <col style="width:85px;">
+                  <col style="width:320px;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" class="er-sticky-col">Lead / Contact</th>
+                    <th scope="col">When</th>
+                    <th scope="col">Direction</th>
+                    <th scope="col">Outcome</th>
+                    <th scope="col">Course</th>
+                    <th scope="col">Duration</th>
+                    <th scope="col">AI Summary &amp; Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="er-calls-tbody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- ================================================================
+           TAB 2: ATTENDANCE & WORKFORCE ACTIVITY
+           ================================================================ -->
+      <div role="tabpanel" aria-labelledby="er-tab-attendance" {% if emp.default_tab != 'attendance' %}hidden="until-found"{% endif %}>
+        <div class="er-tabpanel-inner">
+          <div class="er-detail-charts-3">
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Attendance Health</h2><span class="er-chart-tag">{{ att.pct }}%</span></header>
+              <div id="emp-chart-att-health" class="er-donut-mount" role="img" aria-label="Attendance health donut"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Workforce Activity Mix</h2><span class="er-chart-tag">{{ att.activity_categories|length }} Types</span></header>
+              <div id="emp-chart-workforce-cats" class="er-donut-mount" role="img" aria-label="Workforce activity categories donut"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>PC Active vs Idle &amp; Breaks</h2><span class="er-chart-tag">{{ att.total_break_display }} Brk</span></header>
+              <div id="emp-chart-pc-breaks" class="er-donut-mount" role="img" aria-label="PC active vs idle and breaks donut"></div>
+            </article>
+          </div>
+
+          <article class="er-chart-card">
+            <header class="er-chart-head">
+              <div>
+                <h2>Daily Net Shift Hours vs Break Hours</h2>
+                <p class="er-chart-sub">Verified working hours logged each day across shifts</p>
+              </div>
+              <div class="er-legend-inline" aria-hidden="true">
+                <span><i style="background:#10b981;"></i>Net Work Hours</span>
+                <span><i style="background:#f59e0b;"></i>Break Hours</span>
+              </div>
+            </header>
+            <div id="emp-chart-att-hours" class="er-svg-chart-mount" role="img" aria-label="Daily shift hours trend chart"></div>
+          </article>
+
+          <article class="er-table-card">
+            <header class="er-table-head">
+              <div>
+                <h2 id="er-att-table-heading">Daily Attendance, Shifts &amp; Workforce Activity</h2>
+                <p>Authoritative shift start/end, breaks, net work hours, activity segments &amp; PC tracking</p>
+              </div>
+              <span class="er-chart-tag">Net: {{ att.total_net_display }}</span>
+            </header>
+            <div tabindex="0" role="region" aria-labelledby="er-att-table-heading" class="er-table-scroll">
+              <table class="er-fixed-table">
+                <colgroup>
+                  <col style="width:155px;">
+                  <col style="width:135px;">
+                  <col style="width:160px;">
+                  <col style="width:95px;">
+                  <col style="width:110px;">
+                  <col style="width:105px;">
+                  <col style="width:230px;">
+                  <col style="width:165px;">
+                  <col style="width:150px;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" class="er-sticky-col">Date</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Shift In → Out</th>
+                    <th scope="col">Gross</th>
+                    <th scope="col">Breaks</th>
+                    <th scope="col">Net Work</th>
+                    <th scope="col">Workforce Segments</th>
+                    <th scope="col">PC Activity</th>
+                    <th scope="col">Branch &amp; Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in att.rows %}
+                  <tr>
+                    <th scope="row" class="er-sticky-col"><strong>{{ r.date_str }}</strong></th>
+                    <td>
+                      <span class="er-status-pill st-{{ r.status_code|lower }}">{{ r.status_label }}</span>
+                    </td>
+                    <td style="white-space:nowrap;">{{ r.shift_start }} → {{ r.shift_end }}</td>
+                    <td>{{ r.gross_display }}</td>
+                    <td>
+                      {{ r.break_display }}
+                      {% if r.breaks_count %}<small class="er-sub-note">({{ r.breaks_count }}x{% if r.break_warnings %} ⚠{% endif %})</small>{% endif %}
+                    </td>
+                    <td><strong>{{ r.net_display }}</strong></td>
+                    <td>{{ r.segments_summary }}</td>
+                    <td>{{ r.pc_display }}</td>
+                    <td>
+                      {{ r.branch }}
+                      {% if r.exception %}<span class="er-sub-note">{{ r.exception }}</span>{% endif %}
+                      {% if r.notes %}<span class="er-sub-note">{{ r.notes }}</span>{% endif %}
+                    </td>
+                  </tr>
+                  {% empty %}
+                  <tr><td colspan="9" class="empty">No attendance records in this date window.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      {% if emp.sections.show_projects %}
+      <!-- ================================================================
+           TAB 3: PROJECTS & WORK REPORTS (IT, Video Editor & Staff)
+           ================================================================ -->
+      <div role="tabpanel" aria-labelledby="er-tab-projects" {% if emp.default_tab != 'projects' %}hidden="until-found"{% endif %}>
+        <div class="er-tabpanel-inner">
+          <div class="er-detail-charts-3">
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Project Status Mix</h2><span class="er-chart-tag">{{ proj.total }} Total</span></header>
+              <div id="emp-chart-proj-status" class="er-donut-mount" role="img" aria-label="Projects status donut chart"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Time Logged by Project</h2><span class="er-chart-tag">{{ proj.total_logged_display }}</span></header>
+              <div id="emp-chart-proj-time" class="er-task-bars"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Work Reports Cadence</h2><span class="er-chart-tag">{{ proj.report_pct }}%</span></header>
+              <div id="emp-chart-reports-ring" class="er-donut-mount" role="img" aria-label="Work report compliance donut"></div>
+            </article>
+          </div>
+
+          <!-- Projects Fixed-Column Scrollable Table -->
+          <article class="er-table-card">
+            <header class="er-table-head">
+              <div>
+                <h2 id="er-proj-table-heading">Assigned Projects &amp; Deliverables</h2>
+                <p>Tasks, priorities, deadlines, logged work time &amp; review comments (IT, Video Editor &amp; Team)</p>
+              </div>
+              <span class="er-chart-tag">{{ proj.status_counts.completed }} Completed</span>
+            </header>
+            <div tabindex="0" role="region" aria-labelledby="er-proj-table-heading" class="er-table-scroll">
+              <table class="er-fixed-table">
+                <colgroup>
+                  <col style="width:240px;">
+                  <col style="width:105px;">
+                  <col style="width:140px;">
+                  <col style="width:125px;">
+                  <col style="width:115px;">
+                  <col style="width:260px;">
+                  <col style="width:110px;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" class="er-sticky-col">Project Title</th>
+                    <th scope="col">Priority</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Due Date</th>
+                    <th scope="col">Time Logged</th>
+                    <th scope="col">Review Comments</th>
+                    <th scope="col">Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for pr in proj.rows %}
+                  <tr>
+                    <th scope="row" class="er-sticky-col">
+                      <a class="er-row-link" href="{{ pr.url }}">{{ pr.title }}</a>
+                    </th>
+                    <td><span class="er-priority-pill pr-{{ pr.priority|lower }}">{{ pr.priority_display }}</span></td>
+                    <td><span class="er-status-pill st-{{ pr.status|lower }}">{{ pr.status_display }}</span></td>
+                    <td>
+                      {{ pr.due_date }}
+                      {% if pr.is_overdue %}<span class="er-status-pill st-absent">Overdue</span>{% endif %}
+                    </td>
+                    <td><strong>{{ pr.duration_display }}</strong> <small class="er-sub-note">({{ pr.entries_count }} logs)</small></td>
+                    <td>{{ pr.review_comments|default:'—' }}</td>
+                    <td>{{ pr.updated_at }}</td>
+                  </tr>
+                  {% empty %}
+                  <tr><td colspan="7" class="empty">No projects assigned to this employee yet.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <!-- Daily Work Reports & Project Work Logs Table -->
+          <article class="er-table-card">
+            <header class="er-table-head">
+              <div>
+                <h2 id="er-wr-table-heading">Daily Work Reports &amp; Output Links</h2>
+                <p>Submitted daily reports, project task breakdowns, links &amp; feedback in selected range</p>
+              </div>
+              <span class="er-chart-tag">{{ proj.work_reports_count }} Reports</span>
+            </header>
+            <div tabindex="0" role="region" aria-labelledby="er-wr-table-heading" class="er-table-scroll">
+              <table class="er-fixed-table">
+                <colgroup>
+                  <col style="width:155px;">
+                  <col style="width:115px;">
+                  <col style="width:270px;">
+                  <col style="width:270px;">
+                  <col style="width:185px;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" class="er-sticky-col">Date</th>
+                    <th scope="col">Duration</th>
+                    <th scope="col">Project Entries</th>
+                    <th scope="col">Notes &amp; Summary</th>
+                    <th scope="col">Work Links</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for wr in proj.work_reports %}
+                  <tr>
+                    <th scope="row" class="er-sticky-col"><strong>{{ wr.date_str }}</strong></th>
+                    <td><strong>{{ wr.duration_display }}</strong></td>
+                    <td>
+                      {% for entry in wr.project_entries %}
+                        <div class="er-wr-entry">• {{ entry }}</div>
+                      {% empty %}
+                        <span class="er-sub-note">—</span>
+                      {% endfor %}
+                    </td>
+                    <td>{{ wr.notes|default:'—' }}</td>
+                    <td>
+                      {% for link in wr.links %}
+                        <a class="er-row-link" href="{{ link }}" target="_blank" rel="noopener noreferrer">Open Link ↗</a><br>
+                      {% empty %}
+                        —
+                      {% endfor %}
+                    </td>
+                  </tr>
+                  {% empty %}
+                  <tr><td colspan="5" class="empty">No daily work reports submitted in this date window.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          {% if proj.work_logs %}
+          <article class="er-table-card">
+            <header class="er-table-head">
+              <div>
+                <h2 id="er-pwr-table-heading">Project Work Report Entries</h2>
+                <p>Granular task-level project work logs submitted in this period</p>
+              </div>
+              <span class="er-chart-tag">{{ proj.work_logs|length }} Logs</span>
+            </header>
+            <div tabindex="0" role="region" aria-labelledby="er-pwr-table-heading" class="er-table-scroll">
+              <table class="er-fixed-table">
+                <colgroup>
+                  <col style="width:120px;">
+                  <col style="width:210px;">
+                  <col style="width:95px;">
+                  <col style="width:125px;">
+                  <col style="width:320px;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" class="er-sticky-col">Date</th>
+                    <th scope="col">Project</th>
+                    <th scope="col">Time</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Progress Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for log in proj.work_logs %}
+                  <tr>
+                    <th scope="row" class="er-sticky-col">{{ log.date_str }}</th>
+                    <td><a class="er-row-link" href="{{ log.project_url }}">{{ log.project_title }}</a></td>
+                    <td><strong>{{ log.duration_display }}</strong></td>
+                    <td><span class="er-status-pill st-{{ log.status|lower }}">{{ log.status_display }}</span></td>
+                    <td>
+                      {{ log.description|default:'—' }}
+                      {% if log.reference_link %} · <a class="er-row-link" href="{{ log.reference_link }}" target="_blank" rel="noopener noreferrer">Ref ↗</a>{% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </article>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if emp.sections.show_points %}
+      <!-- ================================================================
+           TAB 4: POINTS, OUTCOMES & LEADS (or POINTS & RECOGNITION for Non-Callers)
+           ================================================================ -->
+      <div role="tabpanel" aria-labelledby="er-tab-points" {% if emp.default_tab != 'points' %}hidden="until-found"{% endif %}>
+        <div class="er-tabpanel-inner">
+          {% if emp.sections.show_leads %}
+          <div class="er-detail-charts-3">
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Points by Event</h2><span class="er-chart-tag">{% if pts.total > 0 %}+{% endif %}{{ pts.total }} pts</span></header>
+              <div id="emp-chart-points-events" class="er-task-bars"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Assigned Lead Temperatures</h2><span class="er-chart-tag">{{ pts.leads.total }} Leads</span></header>
+              <div id="emp-chart-emp-leads" class="er-donut-mount" role="img" aria-label="Employee lead temperature donut"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Follow-ups &amp; Outcomes</h2><span class="er-chart-tag">{{ pts.followups.completion_pct }}%</span></header>
+              <div id="emp-chart-emp-followups" class="er-donut-mount" role="img" aria-label="Employee follow-ups donut"></div>
+            </article>
+          </div>
+          {% else %}
+          <div class="er-detail-charts-2">
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Points by Event</h2><span class="er-chart-tag">{% if pts.total > 0 %}+{% endif %}{{ pts.total }} pts</span></header>
+              <div id="emp-chart-points-events" class="er-task-bars"></div>
+            </article>
+            <article class="er-chart-card">
+              <header class="er-chart-head"><h2>Peer Appreciation Rating</h2><span class="er-chart-tag">{{ pts.peer_count }} Review{% if pts.peer_count != 1 %}s{% endif %}</span></header>
+              <div id="emp-chart-peer-rating" class="er-donut-mount" role="img" aria-label="Peer appreciation average rating donut"></div>
+            </article>
+          </div>
+          {% endif %}
+
+          <!-- Points Ledger Fixed-Column Scrollable Table -->
+          <article class="er-table-card">
+            <header class="er-table-head">
+              <div>
+                <h2 id="er-pts-table-heading">Performance Points Ledger</h2>
+                <p>{% if emp.sections.show_leads %}Daily call bonuses, interested leads, counselling demos, verified admissions &amp; adjustments{% else %}Recorded recognition bonuses, spot awards &amp; adjustments{% endif %}</p>
+              </div>
+              <span class="er-chart-tag">+{{ pts.positive }} / -{{ pts.negative }}</span>
+            </header>
+            <div tabindex="0" role="region" aria-labelledby="er-pts-table-heading" class="er-table-scroll">
+              <table class="er-fixed-table">
+                <colgroup>
+                  <col style="width:165px;">
+                  <col style="width:175px;">
+                  <col style="width:95px;">
+                  {% if emp.sections.show_leads %}<col style="width:170px;">{% endif %}
+                  <col style="width:300px;">
+                  <col style="width:140px;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" class="er-sticky-col">When</th>
+                    <th scope="col">Event</th>
+                    <th scope="col">Points</th>
+                    {% if emp.sections.show_leads %}<th scope="col">Lead</th>{% endif %}
+                    <th scope="col">Reason</th>
+                    <th scope="col">Recorded By</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for pe in pts.rows %}
+                  <tr>
+                    <th scope="row" class="er-sticky-col">{{ pe.when }}</th>
+                    <td><span class="er-status-pill st-info">{{ pe.event_display }}</span></td>
+                    <td>
+                      <strong class="{% if pe.points >= 0 %}er-pts-pos{% else %}er-pts-neg{% endif %}">
+                        {% if pe.points > 0 %}+{% endif %}{{ pe.points }}
+                      </strong>
+                    </td>
+                    {% if emp.sections.show_leads %}
+                    <td>
+                      {% if pe.lead_url %}<a class="er-row-link" href="{{ pe.lead_url }}">{{ pe.lead_name }}</a>{% else %}—{% endif %}
+                    </td>
+                    {% endif %}
+                    <td>{{ pe.reason }}</td>
+                    <td>{{ pe.recorded_by }}</td>
+                  </tr>
+                  {% empty %}
+                  <tr><td colspan="{% if emp.sections.show_leads %}6{% else %}5{% endif %}" class="empty">No points ledger entries in this date window.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          {% if not emp.sections.show_leads and pts.peer_reviews %}
+          <article class="er-table-card">
+            <header class="er-table-head">
+              <div>
+                <h2 id="er-peer-table-heading">Peer Appreciation Reviews</h2>
+                <p>Monthly colleague appreciation ratings received by {{ emp.name }}</p>
+              </div>
+              <span class="er-chart-tag">Avg {{ pts.peer_avg }}/10</span>
+            </header>
+            <div tabindex="0" role="region" aria-labelledby="er-peer-table-heading" class="er-table-scroll">
+              <table class="er-fixed-table">
+                <colgroup>
+                  <col style="width:140px;">
+                  <col style="width:120px;">
+                  <col style="width:240px;">
+                  <col style="width:160px;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" class="er-sticky-col">Month</th>
+                    <th scope="col">Score</th>
+                    <th scope="col">Reviewer</th>
+                    <th scope="col">Recorded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for rev in pts.peer_reviews %}
+                  <tr>
+                    <th scope="row" class="er-sticky-col"><strong>{{ rev.month }}</strong></th>
+                    <td><span class="er-status-pill st-full_shift">{{ rev.score }} / 10</span></td>
+                    <td>{{ rev.reviewer }}</td>
+                    <td>{{ rev.when }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </article>
+          {% endif %}
+
+          <!-- Top Priority Assigned Leads Table (Callers / Counselors only) -->
+          {% if emp.sections.show_leads and pts.leads.rows %}
+          <article class="er-table-card">
+            <header class="er-table-head">
+              <div>
+                <h2 id="er-leads-table-heading">Assigned Leads by AI Score</h2>
+                <p>Highest-priority leads owned by {{ emp.name }} sorted by 100-point AI readiness score</p>
+              </div>
+              <span class="er-chart-tag">Avg {{ pts.leads.avg_score }}/100</span>
+            </header>
+            <div tabindex="0" role="region" aria-labelledby="er-leads-table-heading" class="er-table-scroll">
+              <table class="er-fixed-table">
+                <colgroup>
+                  <col style="width:220px;">
+                  <col style="width:155px;">
+                  <col style="width:140px;">
+                  <col style="width:145px;">
+                  <col style="width:90px;">
+                  <col style="width:120px;">
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col" class="er-sticky-col">Lead</th>
+                    <th scope="col">AI Score &amp; Temp</th>
+                    <th scope="col">CRM Status</th>
+                    <th scope="col">Course</th>
+                    <th scope="col">Calls</th>
+                    <th scope="col">Updated</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for ld in pts.leads.rows %}
+                  <tr>
+                    <th scope="row" class="er-sticky-col">
+                      <a class="er-row-link" href="{{ ld.url }}">{{ ld.name }}</a>
+                      <span class="er-sub-note">{{ ld.phone }}</span>
+                    </th>
+                    <td>
+                      <span class="er-temp-pill" style="--tier-color: {{ ld.temp_color }};">
+                        {{ ld.ai_score }}/100 · {{ ld.temp_label }}
+                      </span>
+                    </td>
+                    <td><span class="badge {{ ld.status_slug }}">{{ ld.status_display }}</span></td>
+                    <td>{{ ld.course }}</td>
+                    <td>{{ ld.calls_count }}</td>
+                    <td>{{ ld.updated_at }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </article>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+  {% endwith %}
+
+  {% else %}
+  <!-- ======================================================================
+       MODE A: ALL EMPLOYEES VISUAL OVERVIEW
+       ====================================================================== -->
   {% if is_mgmt %}
   <div class="er-subbar">
     <div class="er-role-pills" role="navigation" aria-label="Filter employees by role">
@@ -56,42 +894,25 @@
   </div>
   {% endif %}
 
-  <!-- SECTION 1: 4 Team Visual Donut Charts (Zero Plain Number Boxes!) -->
   <section class="er-donuts-grid" aria-label="Team performance donut charts">
     <article class="er-chart-card">
-      <header class="er-chart-head">
-        <h2>Lead Temperature Mix</h2>
-        <span class="er-chart-tag">AI 100-Pt</span>
-      </header>
+      <header class="er-chart-head"><h2>Lead Temperature Mix</h2><span class="er-chart-tag">AI 100-Pt</span></header>
       <div id="chart-team-temps" class="er-donut-mount" role="img" aria-label="Team lead temperature donut chart"></div>
     </article>
-
     <article class="er-chart-card">
-      <header class="er-chart-head">
-        <h2>Call Outcomes &amp; Flow</h2>
-        <span class="er-chart-tag">Out / In</span>
-      </header>
+      <header class="er-chart-head"><h2>Call Outcomes &amp; Flow</h2><span class="er-chart-tag">Out / In</span></header>
       <div id="chart-team-calls" class="er-donut-mount" role="img" aria-label="Team call outcomes donut chart"></div>
     </article>
-
     <article class="er-chart-card">
-      <header class="er-chart-head">
-        <h2>Attendance &amp; Shifts</h2>
-        <span class="er-chart-tag">Live</span>
-      </header>
+      <header class="er-chart-head"><h2>Attendance &amp; Shifts</h2><span class="er-chart-tag">Live</span></header>
       <div id="chart-team-attendance" class="er-donut-mount" role="img" aria-label="Team attendance health donut chart"></div>
     </article>
-
     <article class="er-chart-card">
-      <header class="er-chart-head">
-        <h2>AI Call Sentiment</h2>
-        <span class="er-chart-tag">Transcripts</span>
-      </header>
+      <header class="er-chart-head"><h2>AI Call Sentiment</h2><span class="er-chart-tag">Transcripts</span></header>
       <div id="chart-team-sentiment" class="er-donut-mount" role="img" aria-label="AI call sentiment donut chart"></div>
     </article>
   </section>
 
-  <!-- SECTION 2: Interactive Trend Graph + Employee Visual Comparison Bar Chart -->
   <section class="er-wide-charts-grid" aria-label="Team trends and employee visual comparison">
     <article class="er-chart-card er-wide-card">
       <header class="er-chart-head">
@@ -112,11 +933,11 @@
       <header class="er-chart-head">
         <div>
           <h2>Employee Performance Radar</h2>
-          <p class="er-chart-sub">Click any employee bar to open their full 360° visual report</p>
+          <p class="er-chart-sub">Click any employee bar to open their full 360° report</p>
         </div>
         <div class="er-legend-inline" aria-hidden="true">
-          <span><i style="background:#10b981;"></i>80+</span>
-          <span><i style="background:#3b82f6;"></i>50–79</span>
+          <span><i style="background:#10b981;"></i>75+</span>
+          <span><i style="background:#3b82f6;"></i>50–74</span>
           <span><i style="background:#f59e0b;"></i>&lt;50</span>
         </div>
       </header>
@@ -124,12 +945,11 @@
     </article>
   </section>
 
-  <!-- SECTION 3: Every Employee's 360° Visual Scorecard Wall (All in One Place) -->
   <section class="er-wall-section" aria-label="Individual employee visual scorecards">
     <div class="er-wall-header">
       <div>
         <h2>Every Employee — Visual 360° Cards</h2>
-        <p>Rings, temperature bars &amp; sparklines for every team member. Click any card for expanded multi-chart analysis.</p>
+        <p>Click any employee card to inspect their complete Calls, Attendance, Workforce, Projects, Work Reports &amp; Points.</p>
       </div>
       <div class="er-tier-key" aria-hidden="true">
         <span><i style="background:#d61f3c;"></i>Hot</span>
@@ -140,33 +960,18 @@
       </div>
     </div>
 
-    <div id="er-employee-grid" class="er-employee-grid"></div>
+    <div id="er-employee-grid" class="er-employee-grid" data-base-url="{% url 'web:employee-reports' %}" data-range="{{ selected_range }}" data-start="{{ start_date }}" data-end="{{ end_date }}"></div>
     <div id="er-empty-state" class="er-empty-state" hidden>
       No employees match your filter criteria.
     </div>
   </section>
+  {% endif %}
 </div>
-
-<!-- Native Modal Dialog: In-Page Employee 360° Expanded Visual Report (Zero Page Hopping!) -->
-<dialog id="emp-360-dialog" class="emp-360-dialog" closedby="any" aria-labelledby="emp-dialog-title">
-  <header class="er-dialog-header">
-    <div class="er-dialog-identity">
-      <span id="emp-dialog-avatar" class="er-avatar-lg" aria-hidden="true"></span>
-      <div>
-        <h1 id="emp-dialog-title">Employee Visual Report</h1>
-        <p id="emp-dialog-subtitle" class="er-dialog-sub"></p>
-      </div>
-    </div>
-    <form method="dialog" style="margin:0;">
-      <button type="submit" value="close" class="er-dialog-close" aria-label="Close employee visual report">✕</button>
-    </form>
-  </header>
-  <div id="emp-dialog-body" class="er-dialog-body"></div>
-</dialog>
 
 <!-- Floating chart tooltip -->
 <div id="er-tooltip" class="er-tooltip" role="tooltip" hidden></div>
 
 {{ report_payload|json_script:"employee-reports-data" }}
-<script src="{% static 'web/employee-reports.js' %}?v=1" defer></script>
+{% if employee_detail %}{{ employee_detail|json_script:"employee-detail-data" }}{% endif %}
+<script src="{% static 'web/employee-reports.js' %}?v=3" defer></script>
 {% endblock %}

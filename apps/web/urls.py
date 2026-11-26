@@ -147,6 +147,7 @@ urlpatterns = [
     path('', marketing_views.landing_page, name='landing'),
     path('dashboard/', analytics_views.dashboard_view, name='dashboard'),
     path('employee-reports/', employee_reports_views.employee_reports, name='employee-reports'),
+    path('employee-reports/<int:user_id>/calls/', employee_reports_views.employee_calls_report_api, name='employee-reports-calls-api'),
     path('analytics/overview/', analytics_views.dashboard_view, name='analytics-overview'),
     path('api/v1/analytics/overview/', analytics_views.analytics_overview_api, name='api-analytics-overview'),
     path('services/', service_views.services_list, name='services'),

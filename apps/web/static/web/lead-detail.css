@@ -1,0 +1,1074 @@
+/* ==========================================================================
+   Vaani CRM — Redesigned Lead Detail (/leads/<id>/) Stylesheet
+   Executive above-the-fold snapshot, clean spacing, responsive tabs & dialogs
+   ========================================================================== */
+
+:root {
+  --in-oklab: ;
+}
+@supports (background: linear-gradient(in oklab, white, black)) {
+  :root {
+    --in-oklab: in oklab;
+  }
+}
+
+@property --ld-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --ld-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.lead-detail-page,
+dialog.ld-wa-dialog {
+  --ldp-surface: #141824;
+  --ldp-surface-2: #1b2131;
+  --ldp-surface-3: #222a3e;
+  --ldp-border: rgba(148, 163, 184, 0.16);
+  --ldp-border-strong: rgba(148, 163, 184, 0.28);
+  --ldp-text: #f1f5f9;
+  --ldp-muted: #94a3b8;
+  --ldp-accent: #6366f1;
+  --ldp-pos: #22c55e;
+  --ldp-neg: #fb7185;
+  --ldp-warn: #fbbf24;
+  --ldp-wa: #25D366;
+  --ldp-shadow: 0 10px 30px rgba(2, 6, 23, 0.30);
+}
+
+:root[data-theme="light"] .lead-detail-page,
+:root[data-theme="light"] dialog.ld-wa-dialog {
+  --ldp-surface: #ffffff;
+  --ldp-surface-2: #f8fafc;
+  --ldp-surface-3: #eef2f7;
+  --ldp-border: #e2e8f0;
+  --ldp-border-strong: #cbd5e1;
+  --ldp-text: #0f172a;
+  --ldp-muted: #475569;
+  --ldp-accent: #4f46e5;
+  --ldp-pos: #15803d;
+  --ldp-neg: #be123c;
+  --ldp-warn: #b45309;
+  --ldp-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+.lead-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding-bottom: 24px;
+}
+
+/* ==========================================================================
+   TOP EXECUTIVE SNAPSHOT SHELL ("All Required Details In Short")
+   ========================================================================== */
+.ld-snapshot-shell {
+  background: var(--ldp-surface);
+  border: 1px solid var(--ldp-border);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--ldp-shadow);
+  position: relative;
+}
+.ld-snapshot-shell::before {
+  content: "";
+  display: block;
+  height: 4px;
+  width: 100%;
+  background: linear-gradient(90deg var(--in-oklab), var(--tier-color, #6366f1), color-mix(in oklab, var(--tier-color, #6366f1) 45%, #4f46e5));
+}
+
+/* Header Bar inside Snapshot */
+.ld-hero-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ldp-border);
+  flex-wrap: wrap;
+}
+.ld-hero-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  flex: 1 1 360px;
+}
+.ld-hero-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 850;
+  color: #ffffff;
+  background: var(--tier-color, #6366f1);
+  box-shadow: 0 6px 16px color-mix(in oklab, var(--tier-color, #6366f1) 36%, transparent);
+  flex-shrink: 0;
+}
+.ld-hero-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.ld-breadcrumb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.ld-back-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--ldp-surface-2);
+  border: 1px solid var(--ldp-border-strong);
+  color: var(--ldp-text);
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color .15s ease, color .15s ease;
+}
+.ld-back-pill:hover {
+  border-color: var(--ldp-accent);
+  color: var(--ldp-accent);
+}
+.ld-batch-chip {
+  color: var(--ldp-muted);
+  text-decoration: none;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+.ld-batch-chip:hover {
+  color: var(--ldp-accent);
+}
+.ld-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ld-title-row h1 {
+  margin: 0;
+  font-size: clamp(20px, 2.2vw, 26px);
+  font-weight: 850;
+  line-height: 1.2;
+  color: var(--ldp-text);
+  overflow-wrap: anywhere;
+}
+.ld-contact-chips {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.ld-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: var(--ldp-surface-2);
+  border: 1px solid var(--ldp-border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ldp-text);
+  text-decoration: none;
+  min-inline-size: 0;
+  max-inline-size: 240px;
+}
+.ld-chip > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ld-chip.mono {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+.ld-chip:hover[href] {
+  border-color: var(--ldp-accent);
+  color: var(--ldp-accent);
+}
+
+/* Action Buttons Cluster */
+.ld-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.ld-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 13px;
+  border-radius: 10px;
+  border: 1px solid var(--ldp-border-strong);
+  background: var(--ldp-surface-2);
+  color: var(--ldp-text);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform .14s ease, border-color .14s ease, background .14s ease;
+}
+.ld-action-btn:hover {
+  border-color: var(--ldp-accent);
+  color: var(--ldp-accent);
+  transform: translateY(-1px);
+}
+.ld-action-btn.wa {
+  background: #25D366;
+  border-color: #25D366;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.28);
+}
+.ld-action-btn.wa:hover {
+  background: #1ebe5b;
+  border-color: #1ebe5b;
+  color: #ffffff;
+}
+.ld-action-btn.rec {
+  background: color-mix(in oklab, var(--ldp-accent) 14%, var(--ldp-surface));
+  border-color: color-mix(in oklab, var(--ldp-accent) 36%, transparent);
+  color: var(--ldp-accent);
+}
+
+/* ==========================================================================
+   6-Tile Compact At-a-Glance Bento Strip (Score, Calls, WA, Caller, Follow-up, Profile)
+   ========================================================================== */
+.ld-glance-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 20px;
+  background: var(--ldp-surface-2);
+  border-bottom: 1px solid var(--ldp-border);
+}
+@media (max-width: 1260px) {
+  .ld-glance-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .ld-glance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px 14px; }
+}
+@media (max-width: 420px) {
+  .ld-glance-grid { grid-template-columns: 1fr; }
+}
+
+.ld-stat-tile {
+  background: var(--ldp-surface);
+  border: 1px solid var(--ldp-border);
+  border-radius: 13px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  container-type: inline-size;
+}
+.ld-stat-label {
+  font-size: 10.5px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--ldp-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.ld-stat-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ld-mini-score-ring {
+  --p: 0%;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: conic-gradient(var(--tier-color, #8c929d) var(--p), var(--ldp-surface-3) 0%);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.ld-mini-score-ring-in {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ldp-surface);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 850;
+  color: var(--tier-color, var(--ldp-text));
+  font-variant-numeric: tabular-nums;
+}
+.ld-stat-val-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ld-stat-val {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ldp-text);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.ld-stat-sub {
+  font-size: 11.5px;
+  color: var(--ldp-muted);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ld-stat-sub a {
+  color: var(--ldp-text);
+  font-weight: 650;
+  text-decoration: none;
+}
+.ld-stat-sub a:hover {
+  color: var(--ldp-accent);
+}
+.ld-stat-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+}
+.ld-micro-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--ldp-surface-2);
+  border: 1px solid var(--ldp-border);
+  color: var(--ldp-text);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ld-micro-pill.ok {
+  background: color-mix(in oklab, #16a34a 14%, var(--ldp-surface));
+  border-color: color-mix(in oklab, #16a34a 30%, transparent);
+  color: var(--ldp-pos);
+}
+.ld-micro-pill.warn {
+  background: color-mix(in oklab, #f59e0b 15%, var(--ldp-surface));
+  border-color: color-mix(in oklab, #f59e0b 32%, transparent);
+  color: var(--ldp-warn);
+}
+.ld-micro-pill.danger {
+  background: color-mix(in oklab, #e11d48 15%, var(--ldp-surface));
+  border-color: color-mix(in oklab, #e11d48 32%, transparent);
+  color: var(--ldp-neg);
+}
+.ld-micro-pill.accent {
+  background: color-mix(in oklab, var(--ldp-accent) 14%, var(--ldp-surface));
+  border-color: color-mix(in oklab, var(--ldp-accent) 30%, transparent);
+  color: var(--ldp-accent);
+}
+
+/* ==========================================================================
+   AI Executive Brief + Key Points + Objections + Collapsible Score Rubric
+   ========================================================================== */
+.ld-brief-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 15px 20px;
+  background: var(--ldp-surface);
+}
+@media (max-width: 920px) {
+  .ld-brief-row {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+}
+.ld-brief-box {
+  background: var(--ldp-surface-2);
+  border: 1px solid var(--ldp-border);
+  border-radius: 13px;
+  padding: 12px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ld-brief-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ld-brief-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ldp-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ld-brief-summary-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ldp-text);
+}
+.ld-next-action-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--ldp-accent) 11%, var(--ldp-surface));
+  border: 1px solid color-mix(in oklab, var(--ldp-accent) 26%, transparent);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ldp-text);
+}
+.ld-kp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ld-kp-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ldp-text);
+}
+.ld-kp-bullet {
+  color: var(--ldp-pos);
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.ld-obj-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.ld-obj-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: color-mix(in oklab, #e11d48 13%, var(--ldp-surface));
+  border: 1px solid color-mix(in oklab, #e11d48 30%, transparent);
+  color: var(--ldp-neg);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* Compact 5-Tier Scale + Animated Accordion Details (modern-web-guidance: accordion) */
+.ld-rubric-bar-wrap {
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--ldp-border);
+  background: var(--ldp-surface);
+}
+@media (max-width: 680px) {
+  .ld-rubric-bar-wrap { padding: 12px 14px; }
+}
+.ld-rubric-details {
+  border-radius: 12px;
+  border: 1px solid var(--ldp-border);
+  background: var(--ldp-surface-2);
+  overflow: hidden;
+}
+.ld-rubric-details > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--ldp-text);
+  flex-wrap: wrap;
+}
+.ld-rubric-details > summary::-webkit-details-marker {
+  display: none;
+}
+.ld-rubric-summary-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ld-rubric-chevron {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  transition: rotate .2s ease;
+  rotate: -90deg;
+  color: var(--ldp-accent);
+  flex-shrink: 0;
+}
+.ld-rubric-details[open] .ld-rubric-chevron {
+  rotate: 0deg;
+}
+.ld-rubric-inline-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ld-inline-tier-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ldp-muted);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.ld-inline-tier-dot i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+  background: var(--tier-color);
+}
+.ld-inline-tier-dot.is-active {
+  background: color-mix(in oklab, var(--tier-color) 16%, var(--ldp-surface));
+  color: var(--tier-color);
+  outline: 1px solid color-mix(in oklab, var(--tier-color) 42%, transparent);
+}
+
+.ld-rubric-details::details-content {
+  interpolate-size: allow-keywords;
+  overflow: clip;
+  contain: layout;
+}
+.ld-rubric-details:not([open])::details-content {
+  block-size: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ld-rubric-details::details-content {
+    transition: block-size 0.25s ease-in-out, content-visibility 0.25s ease-in-out, display 0.25s ease-in-out;
+    transition-behavior: allow-discrete;
+  }
+}
+.ld-rubric-inner {
+  padding: 4px 16px 16px;
+  border-top: 1px solid var(--ldp-border);
+  background: var(--ldp-surface);
+}
+.ld-rubric-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding-top: 10px;
+}
+@media (max-width: 780px) {
+  .ld-rubric-two-col { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   RESPONSIVE SINGLE-ROW TABBED WORKSPACE (modern-web-guidance: tabs)
+   ========================================================================== */
+.ld-tabs-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ld-tablist-bar {
+  background: var(--ldp-surface);
+  border: 1px solid var(--ldp-border);
+  border-radius: 14px;
+  padding: 4px 8px 0;
+  overflow: hidden;
+}
+.ld-tablist {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: inline proximity;
+  scroll-padding-inline: 2.5rem;
+  scrollbar-width: none;
+  --ld-fade-size: 2.5rem;
+  mask:
+    linear-gradient(black, black) no-clip subtract,
+    linear-gradient(to right, black, transparent) 0 0 / var(--ld-fade-start) 100% no-repeat no-clip,
+    linear-gradient(to right, transparent, black) 100% 0 / var(--ld-fade-end) 100% no-repeat no-clip;
+  animation: ld-reveal-fade-start linear both, ld-hide-fade-end linear both;
+  animation-timeline: scroll(self inline);
+  animation-range: 0 var(--ld-fade-size), calc(100% - var(--ld-fade-size)) 100%;
+  transition: --ld-fade-start .2s, --ld-fade-end .2s;
+}
+.ld-tablist::-webkit-scrollbar {
+  display: none;
+}
+.ld-tablist.more-start { --ld-fade-start: var(--ld-fade-size); }
+.ld-tablist.more-end { --ld-fade-end: var(--ld-fade-size); }
+
+@keyframes ld-reveal-fade-start {
+  to { --ld-fade-start: var(--ld-fade-size); }
+}
+@keyframes ld-hide-fade-end {
+  from { --ld-fade-end: var(--ld-fade-size); }
+}
+
+.ld-tab-btn {
+  flex: none;
+  scroll-snap-align: start;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 13px;
+  border: none;
+  background: transparent;
+  color: var(--ldp-muted);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s ease;
+}
+.ld-tab-btn:hover {
+  color: var(--ldp-text);
+}
+.ld-tab-btn:focus-visible {
+  outline: 2px solid var(--ldp-accent);
+  outline-offset: -3px;
+  border-radius: 8px;
+}
+.ld-tab-btn[aria-selected="true"] {
+  color: var(--ldp-accent);
+}
+.ld-tab-btn[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 8px 0;
+  border-block-end: 3px solid var(--ldp-accent);
+  border-radius: 3px 3px 0 0;
+}
+.ld-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  background: var(--ldp-surface-2);
+  color: var(--ldp-muted);
+  border: 1px solid var(--ldp-border);
+}
+.ld-tab-btn[aria-selected="true"] .ld-tab-count {
+  background: color-mix(in oklab, var(--ldp-accent) 16%, var(--ldp-surface));
+  color: var(--ldp-accent);
+  border-color: color-mix(in oklab, var(--ldp-accent) 32%, transparent);
+}
+
+/* Tab Panels Stack — ZERO padding/border/margin on [role="tabpanel"] so hidden="until-found" leaves no empty strip.
+   Use block layout (not stacked grid-area: 1/1) and pointer-events: none on [hidden] panels so an invisible
+   hidden="until-found" sibling can NEVER stretch over the active tab panel and swallow clicks or scroll events. */
+.ld-tabpanels-stack {
+  display: block;
+}
+.ld-tabpanels-stack > [role="tabpanel"] {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.ld-tabpanels-stack > [role="tabpanel"][hidden] {
+  pointer-events: none;
+}
+.ld-tabpanels-stack > [role="tabpanel"]:not([hidden]) {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+.ld-tabpanel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Tab 1: Profile + Quick Actions Balanced Grid */
+.ld-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 1020px) {
+  .ld-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.ld-panel-card {
+  background: var(--ldp-surface);
+  border: 1px solid var(--ldp-border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+}
+@media (max-width: 680px) {
+  .ld-panel-card { padding: 14px 15px; }
+}
+.ld-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--ldp-border);
+  flex-wrap: wrap;
+}
+.ld-panel-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ldp-text);
+}
+.ld-panel-head p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--ldp-muted);
+}
+.ld-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Consistent spacing inside forms on Lead Detail */
+.ld-panel-card .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+@media (max-width: 640px) {
+  .ld-panel-card .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.ld-panel-card .field.span-two {
+  grid-column: 1 / -1;
+}
+.ld-panel-card .form-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Scrollable history lists — allow natural vertical scroll chaining back to <main> */
+.ld-scroll-list {
+  max-height: 460px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+.ld-scroll-list.compact {
+  max-height: 280px;
+}
+.ld-feed-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--ldp-surface-2);
+  border: 1px solid var(--ldp-border);
+}
+.ld-feed-item-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.ld-feed-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--ldp-surface);
+  border: 1px solid var(--ldp-border);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.ld-feed-body {
+  min-width: 0;
+  flex: 1;
+}
+.ld-feed-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ldp-text);
+}
+.ld-feed-sub {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--ldp-muted);
+}
+.ld-feed-text {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ldp-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ld-feed-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ldp-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+@media (max-width: 520px) {
+  .ld-feed-item {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .ld-feed-time {
+    align-self: flex-start;
+  }
+}
+
+/* Filter chips in Timeline */
+.ld-cat-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ld-cat-pill {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid var(--ldp-border-strong);
+  background: var(--ldp-surface-2);
+  color: var(--ldp-text);
+}
+.ld-cat-pill:hover {
+  border-color: var(--ldp-accent);
+  color: var(--ldp-accent);
+}
+.ld-cat-pill.active {
+  background: var(--ldp-accent);
+  border-color: var(--ldp-accent);
+  color: #ffffff;
+}
+
+/* Responsive Scrollable Tables inside Tabs — lock only horizontal overscroll so vertical page scroll stays fluid */
+.ld-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  max-height: clamp(320px, 56dvh, 540px);
+  overflow-y: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid var(--ldp-border);
+  border-radius: 12px;
+}
+.ld-table-wrap table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  font-size: 12.5px;
+}
+.ld-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--ldp-surface-2) !important;
+  color: var(--ldp-muted) !important;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: inset 0 -1px 0 var(--ldp-border-strong);
+  white-space: nowrap;
+}
+.ld-table-wrap tbody td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--ldp-border);
+  vertical-align: top;
+  background: var(--ldp-surface);
+  overflow-wrap: anywhere;
+}
+.ld-table-wrap tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ld-call-ai-box {
+  margin-top: 6px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--ldp-border);
+  background: var(--ldp-surface-2);
+  font-size: 12px;
+}
+.ld-call-ai-box pre {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 11.5px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--ldp-surface);
+  border: 1px solid var(--ldp-border);
+}
+
+/* ==========================================================================
+   Native WhatsApp Handoff Modal <dialog> (modern-web-guidance: dialog)
+   ========================================================================== */
+dialog.ld-wa-dialog {
+  padding: 0;
+  border: 1px solid color-mix(in oklab, #25D366 45%, var(--ldp-border-strong));
+  border-radius: 18px;
+  background: var(--ldp-surface);
+  color: var(--ldp-text);
+  width: min(540px, calc(100dvw - 24px));
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+  box-shadow: var(--ldp-shadow);
+  margin: auto;
+}
+dialog.ld-wa-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.ld-wa-dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog.ld-wa-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.ld-wa-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ldp-border);
+  background: var(--ldp-surface);
+}
+.ld-wa-head h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #25D366;
+}
+.ld-wa-head p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ldp-muted);
+}
+.ld-wa-body {
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  background: var(--ldp-surface);
+}
+.ld-wa-recip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--ldp-surface-2);
+  border: 1px solid var(--ldp-border);
+  font-size: 13px;
+}
+@media (max-width: 480px) {
+  .ld-wa-recip { grid-template-columns: 1fr; }
+}
+.ld-wa-body label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  margin-bottom: 5px;
+  color: var(--ldp-text);
+}
+.ld-wa-body select,
+.ld-wa-body textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--ldp-border-strong);
+  background: var(--ldp-surface-2);
+  color: var(--ldp-text);
+  font-family: inherit;
+  font-size: 13.5px;
+}
+.ld-wa-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}

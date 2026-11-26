@@ -734,7 +734,7 @@ def lead_detail(request, pk):
         }
     from apps.leads.scoring import CORE_RUBRIC_SIGNALS, TEMPERATURE_TIERS, refresh_lead_score
     if lead.ai_scored_at is None:
-        refresh_lead_score(lead, save=True)
+        refresh_lead_score(lead, save=False)
     raw_breakdown = lead.ai_score_breakdown if isinstance(lead.ai_score_breakdown, list) else []
     breakdown_by_code = {item.get('code'): item for item in raw_breakdown if isinstance(item, dict) and item.get('code')}
     core_codes = {c['code'] for c in CORE_RUBRIC_SIGNALS}
@@ -754,15 +754,134 @@ def lead_detail(request, pk):
         if isinstance(item, dict) and item.get('code') not in core_codes
     ]
 
+    history_calls = list(
+        visible_calls(request.user)
+        .filter(lead=lead)
+        .select_related('caller', 'recording')
+        .order_by('-started_at', '-pk')[:30]
+    )
+    followup_list = list(
+        visible_followups(request.user)
+        .filter(lead=lead)
+        .order_by('-scheduled_at', '-pk')[:20]
+    )
+    activity_list = list(activity_qs[:50])
+
+    # Build concise top-of-page "everything in short" snapshot
+    now_local = timezone.localtime()
+    today_local = now_local.date()
+    all_visible_calls = visible_calls(request.user).filter(lead=lead)
+    outbound_calls = all_visible_calls.filter(direction=Call.Direction.OUTBOUND).count()
+    inbound_calls = all_visible_calls.filter(direction=Call.Direction.INBOUND).count()
+    total_calls_count = outbound_calls + inbound_calls
+
+    latest_call = history_calls[0] if history_calls else None
+    latest_ai = None
+    aggregated_key_points = []
+    seen_kp = set()
+    aggregated_objections = []
+    analyzed_count = 0
+
+    for c in history_calls:
+        rec = getattr(c, 'recording', None)
+        if rec is None or rec.transcript_status != 'COMPLETED':
+            continue
+        analyzed_count += 1
+        if latest_ai is None and (rec.ai_summary or rec.ai_key_points or rec.transcript_text):
+            latest_ai = {
+                'call_id': c.pk,
+                'summary': (rec.ai_summary or '').strip(),
+                'sentiment': (rec.ai_sentiment or '').strip(),
+                'language': (rec.ai_language or '').strip(),
+                'next_action': (rec.ai_next_action or '').strip(),
+                'direction': c.direction,
+                'started_at': c.started_at,
+                'duration_display': rec.duration_display,
+            }
+        if isinstance(rec.ai_key_points, list):
+            for pt in rec.ai_key_points:
+                clean_pt = str(pt or '').strip()
+                if clean_pt and clean_pt.lower() not in seen_kp and len(aggregated_key_points) < 6:
+                    seen_kp.add(clean_pt.lower())
+                    aggregated_key_points.append(clean_pt)
+        if isinstance(rec.ai_objections, list):
+            for obj in rec.ai_objections:
+                if isinstance(obj, dict) and (obj.get('label') or obj.get('detail')):
+                    aggregated_objections.append({
+                        'label': str(obj.get('label') or obj.get('category') or 'Objection').strip(),
+                        'detail': str(obj.get('detail') or '').strip(),
+                    })
+                elif isinstance(obj, str) and obj.strip():
+                    aggregated_objections.append({'label': obj.strip(), 'detail': ''})
+
+    next_pending_fu = (
+        visible_followups(request.user)
+        .filter(lead=lead, status=FollowUp.Status.PENDING)
+        .order_by('scheduled_at', 'pk')
+        .first()
+    )
+    next_followup_meta = None
+    if next_pending_fu and next_pending_fu.scheduled_at:
+        fu_local = timezone.localtime(next_pending_fu.scheduled_at)
+        if next_pending_fu.scheduled_at < now_local:
+            fu_urg, fu_lbl = 'overdue', 'Overdue'
+        elif fu_local.date() == today_local:
+            fu_urg, fu_lbl = 'today', 'Due Today'
+        else:
+            fu_urg, fu_lbl = 'upcoming', 'Scheduled'
+        next_followup_meta = {
+            'scheduled_at': next_pending_fu.scheduled_at,
+            'notes': next_pending_fu.notes,
+            'urgency': fu_urg,
+            'label': fu_lbl,
+        }
+
+    summary_360 = (lead_360 or {}).get('summary', {})
+    lead_snapshot = {
+        'total_calls': summary_360.get('total_calls', total_calls_count),
+        'outbound_calls': outbound_calls,
+        'inbound_calls': inbound_calls,
+        'talk_display': summary_360.get('total_talk_time_display', '0s'),
+        'recordings_count': summary_360.get('recordings_count', 0),
+        'analyzed_count': analyzed_count,
+        'whatsapp_count': summary_360.get('whatsapp_count', 0),
+        'pending_followups': summary_360.get('pending_followups', 0),
+        'overdue_followups': summary_360.get('overdue_followups', 0),
+        'admissions_count': summary_360.get('admissions_count', 0),
+        'counsellings_count': lead.counsellings.count(),
+        'total_admission_fees': summary_360.get('total_admission_fees'),
+        'routing_status': (lead_360 or {}).get('lead', {}).get('routing_status', lead.routing_status),
+        'active_counselor_name': (lead_360 or {}).get('lead', {}).get('active_counselor_name'),
+        'active_counselor_url': (lead_360 or {}).get('lead', {}).get('active_counselor_url'),
+        'qual_temperature': (lead_360 or {}).get('lead', {}).get('qualification', {}).get('temperature'),
+        'latest_call': {
+            'outcome_display': latest_call.get_outcome_display() or 'Recorded',
+            'outcome_slug': (latest_call.outcome or 'recorded').lower(),
+            'direction': latest_call.direction,
+            'started_at': latest_call.started_at,
+            'duration_display': _format_talk_short(latest_call.duration_seconds),
+            'caller_name': (latest_call.caller.get_full_name() or latest_call.caller.username) if latest_call.caller else '—',
+        } if latest_call else None,
+        'latest_ai': latest_ai,
+        'key_points': aggregated_key_points,
+        'objections': aggregated_objections[:5],
+        'objections_count': len(aggregated_objections),
+        'next_followup': next_followup_meta,
+        'notes_tab_count': len(counselor_notes) + len(collaboration_notes) + len(website_submissions),
+    }
+    initial_tab = 'timeline' if selected_category != 'ALL' else 'overview'
+
     return page(request, 'lead_detail', 'leads', lead=lead, form=form, follow_form=follow_form,
                 qualification_form=qualification_form, collaboration_notes=collaboration_notes,
                 lead_360=lead_360, selected_timeline_category=selected_category,
+                lead_snapshot=lead_snapshot,
+                initial_tab=initial_tab,
                 temperature_tiers=TEMPERATURE_TIERS,
                 lead_core_signals=lead_core_signals,
                 lead_extra_signals=lead_extra_signals,
-                history=visible_calls(request.user).filter(lead=lead).order_by('-started_at')[:30],
-                followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20],
-                activity_log=activity_qs[:50],
+                history=history_calls,
+                followup_history=followup_list,
+                activity_log=activity_list,
                 website_submissions=website_submissions,
                 whatsapp_templates=whatsapp_templates, counselor_panel=counselor_panel,
                 caller_counselor_summary=caller_counselor_summary,
