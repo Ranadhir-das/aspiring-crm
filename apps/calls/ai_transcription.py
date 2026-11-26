@@ -198,10 +198,10 @@ OBJECTION_RULES: list[dict[str, Any]] = [
         'detail': 'Contact raised concerns about fees, affordability, total cost, or financing.',
         'next_step': 'Share itemized fee structure, scholarship options, or education loan guidance on WhatsApp.',
         'patterns': [
-            r'\b(fee|fees|fe|fes|phis|phees|budget|bajat|cost|costly|expensive|afford|affordable|mehenga|mahanga|mahnga|mahenga)\b',
-            r'\b(paise|paisa|rupay|rupees|rupes|lakh|lakhs|amount|charge|charges|loan|emi|scholarship|discount|installment|instalment)\b',
-            r'\b(zyada|jyada|jada|bahut|to\s+high|to\s+much|kam\s+kar|less|reduce)\b.{0,28}\b(fee|fees|fe|fes|phis|cost|budget|paisa|paise|amount|lakh|charge)\b',
-            r'\b(fee|fees|fe|fes|phis|cost|budget|paisa|paise|amount|lakh)\b.{0,28}\b(zyada|jyada|jada|high|much|problem|issue|dikkat|tight|kam)\b',
+            r'\b(costly|expensive|unaffordable|mehenga|mahanga|mahnga|mahenga|loan|emi|scholarship|discount|concession|installment|instalment)\b',
+            r'\b(not\s+afford|cant\s+afford|can\'t\s+afford|afford\s+nahi|paisa\s+nahi|paise\s+nahi|budget\s+se\s+upar|out\s+of\s+budget|over\s+budget|tight\s+budget|low\s+budget)\b',
+            r'\b(zyada|jyada|jada|bahut|to\s+high|to\s+much|kam\s+kar|less|reduce|kam|tight|issue|problem|dikkat|manage|upar|exceed)\b.{0,32}\b(fee|fees|fe|fes|phis|phees|cost|budget|bajat|paisa|paise|amount|lakh|lakhs|charge|charges)\b',
+            r'\b(fee|fees|fe|fes|phis|phees|cost|budget|bajat|paisa|paise|amount|lakh|lakhs|charge|charges)\b.{0,32}\b(zyada|jyada|jada|high|much|problem|issue|dikkat|tight|kam|upar|nahi|less|reduce|manage|heavy)\b',
         ],
     },
     {
@@ -233,7 +233,7 @@ OBJECTION_RULES: list[dict[str, Any]] = [
         'next_step': 'Verify disposition and avoid unnecessary repeat calls unless contact asks for alternatives.',
         'patterns': [
             r'\b(not\s+interested|no\s+interest|nahi\s+chahiye|nahin\s+chahiye|nahi\s+karna|nahin\s+karna|interest\s+nahi|interested\s+nahi|drop\s+kar|cancel\s+kar|plan\s+change|abhi\s+plan\s+nahi)\b',
-            r'\b(already\s+admitted|already\s+joined|already\s+took|admission\s+ho\s+gaya|admission\s+le\s+liya|ho\s+gaya\s+admission|dusre\s+college|other\s+consultancy|kisi\s+aur\s+se|already\s+enrolled)\b',
+            r'\b(already\s+admitted|already\s+joined|already\s+took|already\s+taken|taken\s+admission.{0,20}\b(yes|haan|han|ji)\b|where\s+have\s+you\s+taken\s+admission|admission\s+ho\s+gaya|admission\s+le\s+liya|ho\s+gaya\s+admission|dusre\s+college|other\s+consultancy|kisi\s+aur\s+se|already\s+enrolled)\b',
             r'\b(wrong\s+number|galat\s+number|dont\s+call|don\'t\s+call|mat\s+karo\s+call|call\s+mat\s+kar)\b',
         ],
     },
@@ -267,7 +267,7 @@ OBJECTION_RULES: list[dict[str, Any]] = [
 ]
 
 _TOPIC_PATTERNS: list[tuple[str, str]] = [
-    ('MBBS', r'\b(mbbs|medical|doctor)\b'),
+    ('MBBS', r'\b(mbbs|mbabs|m\.b\.b\.s|medical|doctor)\b'),
     ('NEET', r'\b(neet|neet\s+ug|neet\s+pg)\b'),
     ('MBA / Management', r'\b(mba|pgdm|bba|management)\b'),
     ('BTech / Engineering', r'\b(b\.?tech|btech|engineering|computer\s+science|cse)\b'),
@@ -403,13 +403,22 @@ def analyze_transcript_locally(
     if amounts:
         key_points.append(f"Fee/budget figures discussed: {', '.join(amounts[:3])}.")
 
-    # Pick up to 3 informative non-filler utterances not already quoted in objections
+    # Pick up to 3 informative, deduplicated non-filler utterances not already quoted in objections
     evidence_set = {o['evidence'] for o in objections}
+    seen_excerpts: set[str] = set()
     ranked_sentences: list[tuple[int, str]] = []
     for orig_sent, norm_sent in normalized_pairs:
         excerpt = _clean_excerpt(orig_sent, 155)
-        if len(excerpt) < 16 or _FILLER_ONLY_RE.match(norm_sent) or excerpt in evidence_set:
+        dedupe_key = re.sub(r'[^a-z0-9]+', ' ', norm_sent).strip()
+        if (
+            len(excerpt) < 16
+            or _FILLER_ONLY_RE.match(norm_sent)
+            or excerpt in evidence_set
+            or not dedupe_key
+            or dedupe_key in seen_excerpts
+        ):
             continue
+        seen_excerpts.add(dedupe_key)
         score = min(40, len(norm_sent.split()))
         if any(re.search(pat, norm_sent, re.IGNORECASE) for _, pat in _TOPIC_PATTERNS):
             score += 30
@@ -586,7 +595,8 @@ def _transcribe_local_whisper(audio_path: str, call_context: dict[str, Any]) -> 
                 audio_input,
                 language=language,
                 task='transcribe',
-                beam_size=3,
+                beam_size=2,
+                temperature=0.0,
                 vad_filter=True,
                 vad_parameters={'min_silence_duration_ms': 400},
                 condition_on_previous_text=False,

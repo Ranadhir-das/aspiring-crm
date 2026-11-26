@@ -91,6 +91,20 @@ class CallAITranscriptionUnitTests(TestCase):
         self.assertIn('no clear speech', res['summary'].lower())
         self.assertEqual(res['objections'], [])
 
+    def test_deduplicates_key_points_and_avoids_bare_budget_false_positive(self):
+        res = analyze_transcript_locally(
+            "Do you have a student who wants MBBS? Do you have a student who wants MBBS? Budget? Location?",
+            segments=[
+                {'start': 0, 'end': 4, 'text': 'Do you have a student who wants MBBS?'},
+                {'start': 5, 'end': 9, 'text': 'Do you have a student who wants MBBS?'},
+                {'start': 10, 'end': 12, 'text': 'budget'},
+            ],
+            call_context={'direction': 'OUTBOUND', 'lead_name': 'Alok', 'duration_seconds': 55},
+        )
+        self.assertEqual(res['objections'], [])
+        matching_kp = [kp for kp in res['key_points'] if 'wants MBBS' in kp]
+        self.assertEqual(len(matching_kp), 1)
+
     @override_settings(AI_TRANSCRIBE_PROVIDER='auto', AI_GEMINI_API_KEY='', AI_GROQ_API_KEY='', AI_OPENAI_API_KEY='')
     def test_provider_auto_defaults_to_local_when_no_keys(self):
         self.assertEqual(resolve_ai_provider(), 'local')
