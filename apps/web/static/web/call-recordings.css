@@ -5,7 +5,8 @@
    and native <dialog> Call Detail Inspector. Dark & Light theme + WCAG safe.
    ========================================================================== */
 
-.recordings-page {
+.recordings-page,
+dialog.rec-detail-dialog {
   --rec-target-size: 38px;
   --rec-accent-a: #6366f1;
   --rec-accent-b: #0ea5e9;
@@ -14,9 +15,19 @@
   --rec-emerald: #10b981;
   --rec-amber: #f59e0b;
   --rec-rose: #f43f5e;
-  --rec-card-bg: var(--panel);
-  --rec-card-elevated: rgba(148, 163, 184, 0.06);
-  --rec-subtle-bg: rgba(148, 163, 184, 0.08);
+  --rec-card-bg: #14171f;
+  --rec-card-elevated: #1b2030;
+  --rec-subtle-bg: rgba(148, 163, 184, 0.12);
+  --rec-dialog-surface: #141824;
+  --rec-dialog-header-bg: #1b2132;
+  --rec-dialog-section-bg: #1a2030;
+  --rec-dialog-row-bg: #121622;
+  --rec-dialog-border: #2c354d;
+  --rec-dialog-text: #eef2ff;
+  --rec-dialog-muted: #9aa6c1;
+}
+
+.recordings-page {
   container: recordings-page / inline-size;
   display: flex;
   flex-direction: column;
@@ -25,12 +36,20 @@
   max-inline-size: 100%;
 }
 
-[data-theme="light"] .recordings-page {
+[data-theme="light"] .recordings-page,
+[data-theme="light"] dialog.rec-detail-dialog {
   --rec-accent-a: #4f46e5;
   --rec-accent-b: #0284c7;
   --rec-card-bg: #ffffff;
   --rec-card-elevated: #f8fafd;
   --rec-subtle-bg: #f1f5fb;
+  --rec-dialog-surface: #ffffff;
+  --rec-dialog-header-bg: #f5f7fc;
+  --rec-dialog-section-bg: #f8fafd;
+  --rec-dialog-row-bg: #ffffff;
+  --rec-dialog-border: #dce3f0;
+  --rec-dialog-text: #1e293b;
+  --rec-dialog-muted: #5b677e;
 }
 
 @media (pointer: coarse) {
@@ -576,8 +595,7 @@
 .recordings-table-scroll {
   max-inline-size: 100%;
   overflow-x: auto;
-  overflow-y: auto;
-  max-block-size: min(760px, 78vh);
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -588,6 +606,7 @@
 
 .recordings-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 13px;
@@ -597,14 +616,8 @@
   --label-ai: "AI Summary & Details";
 }
 
-.recordings-table thead {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: 5;
-}
-
 .recordings-table thead th {
-  padding: 12px 15px;
+  padding: 12px 14px;
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -620,33 +633,38 @@
   color: #4f5b72;
 }
 
-.recordings-table thead th:first-child {
-  position: sticky;
-  inset-inline-start: 0;
-  z-index: 6;
-}
-
-.recordings-table thead th.col-contact { min-inline-size: 195px; }
-.recordings-table thead th.col-info { min-inline-size: 165px; }
-.recordings-table thead th.col-player { min-inline-size: 280px; width: 295px; }
-.recordings-table thead th.col-ai { min-inline-size: 320px; }
+.recordings-table thead th.col-contact { width: 21%; }
+.recordings-table thead th.col-info { width: 17%; }
+.recordings-table thead th.col-player { width: 29%; }
+.recordings-table thead th.col-ai { width: 33%; }
 
 .recordings-table tbody th,
 .recordings-table tbody td {
-  padding: 13px 15px;
+  padding: 13px 14px;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
   font-weight: 400;
+  font-size: 13px;
   color: var(--text);
   background: transparent;
+  white-space: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
+/* Override global crm.css & theme.css uppercase/nowrap/bg on tbody th */
 .recordings-table tbody th.cell-contact {
-  position: sticky;
-  inset-inline-start: 0;
-  z-index: 2;
   background: var(--rec-card-bg);
+  color: var(--text);
+  text-transform: none;
+  white-space: normal;
+  letter-spacing: normal;
+  font-weight: 400;
+  font-size: 13px;
   box-shadow: inset 4px 0 0 transparent;
+  overflow: hidden;
 }
 
 .recordings-table tbody tr.row-positive th.cell-contact {
@@ -691,7 +709,7 @@
   border-radius: 10px;
   font-size: 13.5px;
   font-weight: 850;
-  color: #ffffff;
+  color: #ffffff !important;
   flex-shrink: 0;
 }
 
@@ -791,9 +809,11 @@
   margin: 6px 0 0;
   font-size: 11.5px;
   color: var(--muted);
-  line-height: 1.38;
-  max-inline-size: 28ch;
-  overflow-wrap: break-word;
+  line-height: 1.4;
+  white-space: normal;
+  text-transform: none;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
 }
 
 /* Caller & Info Cell */
@@ -883,9 +903,9 @@
 
 .rec-studio-player .player-controls-row {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
 }
 
 .rec-studio-player .btn-play {
@@ -897,14 +917,14 @@
 }
 
 .rec-studio-player .timeline-container {
-  flex: 1 1 85px;
-  min-inline-size: 75px;
+  flex: 1 1 95px;
+  min-inline-size: 85px;
   gap: 4px;
 }
 
 .rec-studio-player .timeline-track {
   position: relative;
-  height: 8px;
+  height: 7px;
   border-radius: 999px;
   touch-action: none;
   overflow: visible;
@@ -918,23 +938,43 @@
 }
 
 .rec-studio-player .player-extras {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
 }
 
+.rec-studio-player .speed-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--rec-subtle-bg);
+  border: 1px solid var(--border);
+}
+
 .rec-studio-player .speed-chip {
-  min-block-size: 26px;
-  padding: 2px 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-block-size: 24px;
+  padding: 0 6px;
+  line-height: 1;
+  white-space: nowrap;
   font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 6px;
 }
 
 .rec-studio-player .btn-download-audio {
-  min-block-size: 28px;
-  min-inline-size: 28px;
-  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  height: 28px;
+  width: 28px;
+  padding: 0;
   border-radius: 7px;
 }
 
@@ -1159,9 +1199,9 @@
 .rec-ai-btn:disabled { opacity: 0.6; cursor: wait; }
 
 /* --------------------------------------------------------------------------
-   7. Container Query: Automatic Stacked Mobile Cards (< 940px container)
+   7. Container Query: Automatic Stacked Mobile Cards (< 1020px container)
    -------------------------------------------------------------------------- */
-@container recordings-table (inline-size < 940px) {
+@container recordings-table (inline-size < 1020px) {
   .recordings-table-scroll {
     max-block-size: none;
     overflow: visible;
@@ -1171,6 +1211,7 @@
   .recordings-table tbody {
     display: block;
     width: 100%;
+    table-layout: auto;
   }
 
   .recordings-table thead {
@@ -1266,7 +1307,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   8. Native <dialog> Call Detail Inspector (Top-Layer Animation + Scroll Lock)
+   8. Native <dialog> Call Detail Inspector (Opaque Solid Light & Dark Themes)
    -------------------------------------------------------------------------- */
 dialog.rec-detail-dialog {
   margin: auto;
@@ -1274,15 +1315,19 @@ dialog.rec-detail-dialog {
   width: min(860px, calc(100vw - 24px));
   max-height: min(88dvh, 860px);
   border-radius: 20px;
-  border: 1px solid rgba(99, 102, 241, 0.34);
-  background: var(--rec-card-bg);
-  color: var(--text);
+  border: 1px solid var(--rec-dialog-border);
+  background-color: var(--rec-dialog-surface);
+  color: var(--rec-dialog-text);
   box-shadow: 0 28px 80px rgba(2, 6, 23, 0.55);
   opacity: 0;
   transition-property: opacity, transform, display, overlay;
   transition-duration: 0.24s;
   transition-timing-function: ease-out;
   transition-behavior: allow-discrete;
+}
+
+[data-theme="light"] dialog.rec-detail-dialog {
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1354,6 +1399,9 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   flex-direction: column;
   max-height: min(88dvh, 860px);
   overflow: hidden;
+  background-color: var(--rec-dialog-surface);
+  color: var(--rec-dialog-text);
+  border-radius: 20px;
 }
 
 .rec-dialog-header {
@@ -1363,10 +1411,10 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   justify-content: space-between;
   gap: 12px;
   padding: 18px 22px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--rec-dialog-border);
   background:
-    radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.18), transparent 55%),
-    var(--rec-card-elevated);
+    radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.14), transparent 55%),
+    var(--rec-dialog-header-bg);
 }
 
 .rec-dialog-title-group {
@@ -1378,17 +1426,31 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
 }
 
 .rec-dialog-badges { display: flex; flex-wrap: wrap; gap: 6px; }
-.rec-dialog-title { margin: 0; font-size: 1.2rem; font-weight: 850; color: var(--text); }
-.rec-dialog-subtitle { margin: 0; font-size: 12.5px; color: var(--muted); }
+.rec-dialog-badges .rec-ai-chip.muted,
+.rec-dialog-badges .rec-ai-chip.sentiment-neutral {
+  background-color: var(--rec-dialog-surface);
+  color: var(--rec-dialog-text);
+  border: 1px solid var(--rec-dialog-border);
+}
+.rec-dialog-title { margin: 0; font-size: 1.25rem; font-weight: 850; color: var(--rec-dialog-text); }
+.rec-dialog-subtitle { margin: 0; font-size: 12.5px; color: var(--rec-dialog-muted); }
 .rec-dialog-header-actions { display: flex; align-items: center; gap: 8px; }
+
+.rec-dialog-header-actions .rec-ai-btn.subtle,
+.rec-dialog-audio-bar .rec-ai-btn.subtle,
+.rec-dialog-body .rec-ai-btn.subtle {
+  background-color: var(--rec-dialog-surface);
+  color: var(--rec-dialog-text);
+  border: 1px solid var(--rec-dialog-border);
+}
 
 .rec-dialog-close {
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--rec-card-bg);
-  color: var(--text);
+  border: 1px solid var(--rec-dialog-border);
+  background-color: var(--rec-dialog-surface);
+  color: var(--rec-dialog-text);
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
@@ -1402,8 +1464,8 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   align-items: center;
   gap: 10px;
   padding: 11px 22px;
-  border-bottom: 1px solid var(--border);
-  background: var(--rec-card-bg);
+  border-bottom: 1px solid var(--rec-dialog-border);
+  background-color: var(--rec-dialog-surface);
 }
 
 .rec-dialog-audio-bar audio {
@@ -1417,13 +1479,15 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  background-color: var(--rec-dialog-surface);
 }
 
 .rec-dialog-section {
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--rec-card-elevated);
+  border: 1px solid var(--rec-dialog-border);
+  background-color: var(--rec-dialog-section-bg);
+  color: var(--rec-dialog-text);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1431,16 +1495,18 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
 
 .rec-dialog-section.summary-box {
   border-color: rgba(99, 102, 241, 0.32);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.09), rgba(6, 182, 212, 0.06));
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.10), rgba(6, 182, 212, 0.06)),
+    var(--rec-dialog-section-bg);
 }
 
 .rec-dialog-section.objections-box {
-  border-color: rgba(244, 63, 94, 0.32);
-  background: rgba(244, 63, 94, 0.06);
+  border-color: rgba(244, 63, 94, 0.35);
+  background-color: rgba(244, 63, 94, 0.10);
 }
 
 [data-theme="light"] .rec-dialog-section.objections-box {
-  background: #fff5f6;
+  background-color: #fff5f6;
   border-color: #fecdd3;
 }
 
@@ -1458,7 +1524,7 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   font-weight: 850;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--muted);
+  color: var(--rec-dialog-muted);
 }
 
 .rec-dialog-section.objections-box .rec-dialog-sec-title { color: #fb7185; }
@@ -1469,6 +1535,7 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   -webkit-line-clamp: unset;
   font-size: 13.5px;
   line-height: 1.55;
+  color: var(--rec-dialog-text);
 }
 
 .rec-kp-strip {
@@ -1485,7 +1552,7 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   padding-inline-start: 18px;
   font-size: 12.5px;
   line-height: 1.45;
-  color: var(--text);
+  color: var(--rec-dialog-text);
 }
 
 .rec-kp-strip li::before {
@@ -1502,38 +1569,38 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   border-radius: 10px;
   font-size: 12.5px;
   line-height: 1.45;
-  background: rgba(244, 63, 94, 0.09);
-  border: 1px solid rgba(244, 63, 94, 0.25);
-  color: var(--text);
+  background-color: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.30);
+  color: var(--rec-dialog-text);
 }
-[data-theme="light"] .rec-obj-inline-item { background: #fff1f2; border-color: #fecdd3; }
+[data-theme="light"] .rec-obj-inline-item { background-color: #fff1f2; border-color: #fecdd3; }
 .rec-obj-inline-item strong { color: #fb7185; margin-inline-end: 4px; }
 [data-theme="light"] .rec-obj-inline-item strong { color: #be123c; }
-.rec-obj-inline-item q { display: block; margin-top: 3px; font-size: 11.5px; font-style: italic; color: var(--muted); }
+.rec-obj-inline-item q { display: block; margin-top: 3px; font-size: 11.5px; font-style: italic; color: var(--rec-dialog-muted); }
 
 .rec-ai-next {
   padding: 8px 11px;
   border-radius: 10px;
   font-size: 12.5px;
   line-height: 1.45;
-  background: rgba(14, 165, 233, 0.11);
-  border: 1px solid rgba(14, 165, 233, 0.26);
-  color: var(--text);
+  background-color: rgba(14, 165, 233, 0.14);
+  border: 1px solid rgba(14, 165, 233, 0.30);
+  color: var(--rec-dialog-text);
 }
-[data-theme="light"] .rec-ai-next { background: #f0f9ff; border-color: #bae6fd; }
+[data-theme="light"] .rec-ai-next { background-color: #f0f9ff; border-color: #bae6fd; }
 .rec-ai-next strong { color: #38bdf8; }
 [data-theme="light"] .rec-ai-next strong { color: #0369a1; }
 
 .rec-dialog-transcript-tools { display: flex; gap: 8px; }
 .rec-dialog-search {
   flex: 1 1 200px;
-  min-block-size: 34px;
-  padding: 5px 11px;
+  min-block-size: 36px;
+  padding: 6px 12px;
   border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--rec-card-bg);
-  color: var(--text);
-  font-size: 12.5px;
+  border: 1px solid var(--rec-dialog-border);
+  background-color: var(--rec-dialog-row-bg);
+  color: var(--rec-dialog-text);
+  font-size: 13px;
 }
 
 .rec-transcript-lines {
@@ -1549,32 +1616,32 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 7px 10px;
+  padding: 8px 11px;
   border-radius: 10px;
-  background: var(--rec-card-bg);
-  border: 1px solid transparent;
+  background-color: var(--rec-dialog-row-bg);
+  border: 1px solid var(--rec-dialog-border);
 }
 
-.rec-seg-row.is-active { border-color: var(--rec-cyan); background: rgba(6, 182, 212, 0.12); }
+.rec-seg-row.is-active { border-color: var(--rec-cyan); background-color: rgba(6, 182, 212, 0.14); }
 .rec-seg-row.is-hidden { display: none; }
 
 .rec-seg-time {
   flex-shrink: 0;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: 7px;
   border: 1px solid rgba(99, 102, 241, 0.34);
-  background: rgba(99, 102, 241, 0.14);
+  background-color: rgba(99, 102, 241, 0.16);
   color: #a5b4fc;
   font-size: 11px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-[data-theme="light"] .rec-seg-time { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
-.rec-seg-time:hover { background: var(--rec-accent-a); color: #ffffff; }
+[data-theme="light"] .rec-seg-time { background-color: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
+.rec-seg-time:hover { background-color: var(--rec-accent-a); color: #ffffff; }
 
-.rec-seg-text { font-size: 13px; line-height: 1.5; color: var(--text); overflow-wrap: break-word; }
-.rec-transcript-pre { margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 12.5px; line-height: 1.55; }
+.rec-seg-text { font-size: 13px; line-height: 1.5; color: var(--rec-dialog-text); overflow-wrap: break-word; }
+.rec-transcript-pre { margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 12.5px; line-height: 1.55; color: var(--rec-dialog-text); }
 
 /* Forced Colors / High Contrast Support */
 @media (forced-colors: active) {

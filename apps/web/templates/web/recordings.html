@@ -5,7 +5,7 @@
 {% block breadcrumb %}Call Recordings{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=6">
+<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=7">
 <script src="{% static 'web/recordings-ai.js' %}?v=3" defer></script>
 
 <div class="recordings-page" data-csrf-token="{{ csrf_token }}">
@@ -249,14 +249,16 @@
           {% for rec in records %}
           {% cycle 'a' 'b' 'c' 'd' 'e' 'f' as avatar_tone silent %}
           <tr class="recording-row{% if rec.objections_count > 0 %} row-has-objections{% elif rec.ai_sentiment == 'POSITIVE' %} row-positive{% endif %}">
-            <!-- Col 1: Lead / Contact (Sticky on desktop) -->
+            <!-- Col 1: Lead / Contact -->
             <th scope="row" class="cell-contact">
               {% if rec.call.lead_id %}
               <a class="person rec-person" href="{% url 'web:lead-detail' rec.call.lead_id %}">
-                <span class="rec-avatar tone-{{ avatar_tone }}" aria-hidden="true">{{ rec.call.lead.name|first|upper }}</span>
+                <span class="rec-avatar tone-{{ avatar_tone }}" aria-hidden="true">{{ rec.call.lead.name|cut:" "|first|upper|default:"☎" }}</span>
                 <span class="rec-person-meta">
-                  <strong class="rec-person-name">{{ rec.call.lead.name }}</strong>
+                  <strong class="rec-person-name">{{ rec.call.lead.name|default:rec.call.lead.phone }}</strong>
+                  {% if rec.call.lead.name and rec.call.lead.name != rec.call.lead.phone %}
                   <small class="rec-person-phone">{{ rec.call.lead.phone }}</small>
+                  {% endif %}
                   <small class="rec-person-batch">{{ rec.call.lead.import_batch.filename|default:"Direct Lead"|truncatechars:26 }}</small>
                 </span>
               </a>

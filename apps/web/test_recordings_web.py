@@ -154,7 +154,7 @@ class CallRecordingsWebTests(TestCase):
         self.client.force_login(self.manager)
         response = self.client.get('/recordings/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'call-recordings.css?v=6')
+        self.assertContains(response, 'call-recordings.css?v=7')
         self.assertContains(response, 'recordings-ai.js?v=3')
         self.assertContains(response, 'audio-visualizer.js?v=2')
         self.assertContains(response, 'recordings-table')
