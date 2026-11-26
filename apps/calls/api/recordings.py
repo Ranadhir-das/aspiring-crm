@@ -9,7 +9,10 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.calls.ai_transcription import should_auto_queue_recording
+from apps.calls.ai_transcription import (
+    ensure_recording_transcript_language,
+    should_auto_queue_recording,
+)
 from apps.calls.audio_processing import (
     ALLOWED_AUDIO_EXTENSIONS,
     MAX_RECORDING_SIZE,
@@ -94,6 +97,7 @@ def transcript_payload(recording):
         'ai_provider': recording.ai_provider,
         'transcript_text': recording.transcript_text,
         'transcript_segments': recording.transcript_segments or [],
+        'transcript_variants': recording.transcript_variants or {},
         'transcript_error': recording.transcript_error,
         'transcribed_at': recording.transcribed_at.isoformat() if recording.transcribed_at else None,
     }
@@ -234,6 +238,9 @@ class CallRecordingTranscriptView(APIView):
     def get(self, request, call_id):
         call = permitted_call(request.user, call_id)
         recording = get_object_or_404(CallRecording, call=call)
+        req_lang = (request.GET.get('lang') or '').strip().lower()
+        if req_lang in {'en', 'hinglish', 'hi'} and recording.transcript_status == CallRecording.TranscriptStatus.COMPLETED:
+            ensure_recording_transcript_language(recording, req_lang)
         return Response(transcript_payload(recording), status=200)
 
     def post(self, request, call_id):

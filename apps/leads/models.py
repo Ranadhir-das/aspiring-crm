@@ -135,6 +135,13 @@ class Lead(models.Model):
         return course_label(self.preferred_course, self.preferred_course_custom)
 
 
+    class Temperature(models.TextChoices):
+        HOT = "HOT", "Hot"
+        WARM = "WARM", "Warm"
+        INTERESTED = "INTERESTED", "Interested"
+        COLD = "COLD", "Cold"
+        INACTIVE = "INACTIVE", "Inactive"
+
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
         CALLED = "CALLED", "Called"
@@ -232,6 +239,40 @@ class Lead(models.Model):
         default=Status.PENDING,
         db_index=True,
     )
+
+    # -------------------------
+    # AI Lead Scoring (100-Point Rubric)
+    # -------------------------
+
+    ai_score = models.PositiveSmallIntegerField(
+        default=0,
+        db_index=True,
+        help_text="0-100 AI lead readiness score computed from call summaries, key points, objections, and CRM milestones.",
+    )
+
+    ai_temperature = models.CharField(
+        max_length=16,
+        choices=Temperature.choices,
+        default=Temperature.INACTIVE,
+        db_index=True,
+        help_text="5-tier lead temperature derived from ai_score (Hot 80-100, Warm 60-79, Interested 40-59, Cold 20-39, Inactive 0-19).",
+    )
+
+    ai_score_breakdown = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Structured list of positive/negative scoring signals contributing to ai_score.",
+    )
+
+    ai_scored_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    @property
+    def ai_temperature_meta(self):
+        from .scoring import TEMPERATURE_META
+        return TEMPERATURE_META.get(self.ai_temperature, TEMPERATURE_META[self.Temperature.INACTIVE])
 
     # -------------------------
     # Assignment

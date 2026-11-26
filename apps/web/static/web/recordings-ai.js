@@ -1,7 +1,9 @@
 /**
- * Vaani Call Recordings AI Insights & Interactive Conversation Drawer Controller
- * - Opens spacious native <dialog> Call Detail Inspector with clickable audio timestamps
- * - Live in-call transcript keyword filter & 1-click Copy Transcript
+ * Vaani Call Recordings AI Insights & Interactive Conversation Drawer Controller (v4)
+ * - Spacious native <dialog> Call Detail Inspector with custom studio top audio player
+ * - Native <input type="range"> seek bar with reliable pre-metadata timestamp jump
+ * - 1-click Transcript Language Switcher (English | Hinglish | हिंदी) with roving-tabindex fallback
+ * - Live in-call transcript keyword filter & 1-click Copy Transcript (active language)
  * - Priority AJAX Analyze / Re-analyze + fast 2.5s live polling
  * - Progressive fallbacks for Safari light-dismiss (closedby) & Firefox/Safari top-layer exit
  */
@@ -14,14 +16,33 @@
   const dialogBadges = document.getElementById('rec-dialog-badges');
   const dialogBody = document.getElementById('rec-dialog-body');
   const dialogAudio = document.getElementById('rec-dialog-audio');
+  const dialogPlayBtn = document.getElementById('rec-dialog-play');
+  const dialogPlayIcon = document.getElementById('rec-dialog-play-icon');
+  const dialogBackBtn = document.getElementById('rec-dialog-back');
+  const dialogFwdBtn = document.getElementById('rec-dialog-fwd');
+  const dialogSeek = document.getElementById('rec-dialog-seek');
+  const dialogTimeCur = document.getElementById('rec-dialog-time-cur');
+  const dialogTimeDur = document.getElementById('rec-dialog-time-dur');
+  const dialogAudioMsg = document.getElementById('rec-dialog-audio-msg');
+  const dialogMuteBtn = document.getElementById('rec-dialog-mute');
+  const dialogSpeedBtns = Array.from(document.querySelectorAll('[data-dialog-speed]'));
   const dialogDownload = document.getElementById('rec-dialog-download');
   const dialogLeadLink = document.getElementById('rec-dialog-lead-link');
   const dialogReanalyze = document.getElementById('rec-dialog-reanalyze');
 
+  const LANG_META = {
+    en: { label: 'English', title: 'English' },
+    hinglish: { label: 'Hinglish', title: 'Hinglish' },
+    hi: { label: 'हिंदी', title: 'Hindi (हिंदी)' },
+  };
+
   let activeDialogCallId = null;
   let activeDialogStatusUrl = null;
-  let activeDialogAnalyzeUrl = null;
+  let activeDialogData = null;
+  let activeTranscriptLang = 'en';
   let activeSegments = [];
+  let pendingSeekSeconds = null;
+  let isUserScrubbing = false;
 
   function getCsrfToken() {
     const page = document.querySelector('.recordings-page');
@@ -58,6 +79,206 @@
     if (s === 'HESITANT') return '◐ ';
     if (s === 'NEGATIVE') return '✕ ';
     return '● ';
+  }
+
+  /* ------------------------------------------------------------------------
+     Custom Popup Studio Audio Controller (reliable seeking + native range slider)
+     ------------------------------------------------------------------------ */
+  function setAudioMsg(text, isError) {
+    if (!dialogAudioMsg) return;
+    dialogAudioMsg.textContent = text || '';
+    dialogAudioMsg.classList.toggle('is-error', Boolean(isError));
+  }
+
+  function syncDialogSlider(current, duration) {
+    if (!dialogSeek) return;
+    const maxVal = Number.isFinite(duration) && duration > 0 ? duration : Number(dialogSeek.max) || 100;
+    const curVal = Math.max(0, Math.min(maxVal, Number(current) || 0));
+    dialogSeek.min = '0';
+    dialogSeek.max = String(maxVal);
+    if (!isUserScrubbing) {
+      dialogSeek.value = String(curVal);
+    }
+    dialogSeek.style.setProperty('--attr-min', '0');
+    dialogSeek.style.setProperty('--attr-max', String(maxVal));
+    dialogSeek.style.setProperty('--control-value', dialogSeek.value);
+    dialogSeek.setAttribute('aria-valuetext', fmtTime(curVal) + ' of ' + fmtTime(maxVal));
+    if (dialogTimeCur) dialogTimeCur.textContent = fmtTime(curVal);
+    if (dialogTimeDur && Number.isFinite(duration) && duration > 0) {
+      dialogTimeDur.textContent = fmtTime(duration);
+    }
+  }
+
+  function syncPlayButtonState() {
+    if (!dialogAudio || !dialogPlayIcon || !dialogPlayBtn) return;
+    const playing = !dialogAudio.paused && !dialogAudio.ended;
+    dialogPlayIcon.textContent = playing ? '⏸' : '▶';
+    dialogPlayBtn.setAttribute('aria-label', playing ? 'Pause recording' : 'Play recording');
+  }
+
+  function loadDialogAudio(url, fallbackDurationSec) {
+    if (!dialogAudio) return;
+    pendingSeekSeconds = null;
+    try {
+      dialogAudio.pause();
+    } catch (_) {}
+    setAudioMsg('', false);
+    const dur = Math.max(1, Number(fallbackDurationSec) || 100);
+    if (dialogTimeDur) dialogTimeDur.textContent = fmtTime(fallbackDurationSec || 0);
+    syncDialogSlider(0, dur);
+    syncPlayButtonState();
+    if (url) {
+      dialogAudio.src = url;
+      dialogAudio.playbackRate = getActiveDialogSpeed();
+      dialogAudio.load();
+    } else {
+      dialogAudio.removeAttribute('src');
+    }
+  }
+
+  function getActiveDialogSpeed() {
+    const active = dialogSpeedBtns.find((b) => b.getAttribute('aria-pressed') === 'true');
+    return active ? parseFloat(active.dataset.dialogSpeed || '1') || 1 : 1;
+  }
+
+  function seekAndPlayDialogAudio(seconds) {
+    if (!dialogAudio || !dialogAudio.getAttribute('src')) return;
+    const target = Math.max(0, Number(seconds) || 0);
+    setAudioMsg('', false);
+    if (dialogAudio.readyState >= 1) {
+      const clamped = Number.isFinite(dialogAudio.duration) && dialogAudio.duration > 0
+        ? Math.min(target, Math.max(0, dialogAudio.duration - 0.1))
+        : target;
+      dialogAudio.currentTime = clamped;
+      syncDialogSlider(clamped, dialogAudio.duration);
+      dialogAudio.play().catch(() => {
+        setAudioMsg('Tap Play to start audio', false);
+      });
+    } else {
+      pendingSeekSeconds = target;
+      setAudioMsg('Loading audio…', false);
+      dialogAudio.load();
+      dialogAudio.play().catch(() => {});
+    }
+  }
+
+  if (dialogAudio) {
+    dialogAudio.addEventListener('loadedmetadata', () => {
+      setAudioMsg('', false);
+      if (pendingSeekSeconds !== null) {
+        const clamped = Number.isFinite(dialogAudio.duration) && dialogAudio.duration > 0
+          ? Math.min(pendingSeekSeconds, Math.max(0, dialogAudio.duration - 0.1))
+          : pendingSeekSeconds;
+        pendingSeekSeconds = null;
+        dialogAudio.currentTime = clamped;
+      }
+      syncDialogSlider(dialogAudio.currentTime, dialogAudio.duration);
+    });
+
+    dialogAudio.addEventListener('waiting', () => {
+      setAudioMsg('Buffering…', false);
+    });
+
+    dialogAudio.addEventListener('playing', () => {
+      setAudioMsg('', false);
+      syncPlayButtonState();
+    });
+
+    dialogAudio.addEventListener('play', syncPlayButtonState);
+    dialogAudio.addEventListener('pause', syncPlayButtonState);
+
+    dialogAudio.addEventListener('ended', () => {
+      syncPlayButtonState();
+      syncDialogSlider(0, dialogAudio.duration);
+    });
+
+    dialogAudio.addEventListener('error', () => {
+      syncPlayButtonState();
+      setAudioMsg('Unable to play recording — try Download', true);
+    });
+
+    dialogAudio.addEventListener('timeupdate', () => {
+      syncDialogSlider(dialogAudio.currentTime, dialogAudio.duration);
+      if (!activeSegments.length || !dialogBody) return;
+      const now = dialogAudio.currentTime;
+      dialogBody.querySelectorAll('.rec-seg-row').forEach((row) => {
+        const start = Number(row.dataset.segStart || 0);
+        const end = Number(row.dataset.segEnd || start + 3);
+        row.classList.toggle('is-active', now >= start && now <= Math.max(end, start + 1));
+      });
+    });
+  }
+
+  if (dialogPlayBtn) {
+    dialogPlayBtn.addEventListener('click', () => {
+      if (!dialogAudio || !dialogAudio.getAttribute('src')) return;
+      if (dialogAudio.paused) {
+        setAudioMsg(dialogAudio.readyState < 2 ? 'Loading audio…' : '', false);
+        dialogAudio.play().catch(() => {
+          setAudioMsg('Unable to play audio', true);
+        });
+      } else {
+        dialogAudio.pause();
+      }
+    });
+  }
+
+  if (dialogBackBtn) {
+    dialogBackBtn.addEventListener('click', () => {
+      if (!dialogAudio) return;
+      const next = Math.max(0, (dialogAudio.currentTime || 0) - 10);
+      dialogAudio.currentTime = next;
+      syncDialogSlider(next, dialogAudio.duration);
+    });
+  }
+
+  if (dialogFwdBtn) {
+    dialogFwdBtn.addEventListener('click', () => {
+      if (!dialogAudio) return;
+      const maxDur = Number.isFinite(dialogAudio.duration) ? dialogAudio.duration : (Number(dialogSeek?.max) || 0);
+      const next = Math.min(maxDur, (dialogAudio.currentTime || 0) + 10);
+      dialogAudio.currentTime = next;
+      syncDialogSlider(next, dialogAudio.duration);
+    });
+  }
+
+  if (dialogSeek) {
+    dialogSeek.addEventListener('pointerdown', () => { isUserScrubbing = true; });
+    dialogSeek.addEventListener('pointerup', () => { isUserScrubbing = false; });
+    dialogSeek.addEventListener('input', () => {
+      dialogSeek.style.setProperty('--control-value', dialogSeek.value);
+      const val = parseFloat(dialogSeek.value) || 0;
+      if (dialogTimeCur) dialogTimeCur.textContent = fmtTime(val);
+      if (dialogAudio && dialogAudio.readyState >= 1) {
+        dialogAudio.currentTime = val;
+      }
+    });
+    dialogSeek.addEventListener('change', () => {
+      isUserScrubbing = false;
+      const val = parseFloat(dialogSeek.value) || 0;
+      if (dialogAudio && dialogAudio.readyState >= 1) {
+        dialogAudio.currentTime = val;
+      } else {
+        pendingSeekSeconds = val;
+      }
+    });
+  }
+
+  dialogSpeedBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const rate = parseFloat(btn.dataset.dialogSpeed || '1') || 1;
+      dialogSpeedBtns.forEach((b) => b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'));
+      if (dialogAudio) dialogAudio.playbackRate = rate;
+    });
+  });
+
+  if (dialogMuteBtn) {
+    dialogMuteBtn.addEventListener('click', () => {
+      if (!dialogAudio) return;
+      dialogAudio.muted = !dialogAudio.muted;
+      dialogMuteBtn.setAttribute('aria-pressed', dialogAudio.muted ? 'true' : 'false');
+      dialogMuteBtn.textContent = dialogAudio.muted ? '🔇' : '🔊';
+    });
   }
 
   /* ------------------------------------------------------------------------
@@ -101,7 +322,6 @@
   }
 
   if (dialog) {
-    // Route Esc / native cancel through exit animation helper on Firefox/Safari
     dialog.addEventListener('cancel', (event) => {
       if (!supportsTopLayerExit()) {
         event.preventDefault();
@@ -109,7 +329,6 @@
       }
     });
 
-    // Safari fallback for closedby="any" light dismiss (checks bounding rect, not event.target)
     if (!('closedBy' in HTMLDialogElement.prototype)) {
       const isOutside = (e) => {
         const r = dialog.getBoundingClientRect();
@@ -128,15 +347,51 @@
 
     dialog.addEventListener('close', () => {
       dialog.returnValue = '';
-      if (dialogAudio && !dialogAudio.paused) {
-        dialogAudio.pause();
+      if (dialogAudio) {
+        try {
+          dialogAudio.pause();
+          dialogAudio.currentTime = 0;
+        } catch (_) {}
       }
+      syncPlayButtonState();
       activeDialogCallId = null;
+      activeDialogData = null;
     });
   }
 
   /* ------------------------------------------------------------------------
-     Table Cell AI Brief Renderer (updates .rec-ai-panel live without disturbing row)
+     Toolbar Roving-Tabindex Fallback (modern-web-guidance: toolbar)
+     ------------------------------------------------------------------------ */
+  function wireToolbarKeyboardFallback(toolbar) {
+    if (!toolbar || 'focusGroup' in HTMLElement.prototype) return;
+    const items = Array.from(toolbar.querySelectorAll('button'));
+    if (!items.length) return;
+    items.forEach((b, i) => {
+      b.tabIndex = b.getAttribute('aria-pressed') === 'true' || (i === 0 && !items.some((x) => x.getAttribute('aria-pressed') === 'true')) ? 0 : -1;
+    });
+    toolbar.addEventListener('focusin', (e) => {
+      if (items.includes(e.target)) {
+        items.forEach((b) => { b.tabIndex = b === e.target ? 0 : -1; });
+      }
+    });
+    toolbar.addEventListener('keydown', (e) => {
+      const idx = items.indexOf(document.activeElement);
+      if (idx === -1) return;
+      const rtl = getComputedStyle(toolbar).direction === 'rtl';
+      let nextIdx = null;
+      if (e.key === 'ArrowRight') nextIdx = (idx + (rtl ? -1 : 1) + items.length) % items.length;
+      else if (e.key === 'ArrowLeft') nextIdx = (idx + (rtl ? 1 : -1) + items.length) % items.length;
+      else if (e.key === 'Home') nextIdx = 0;
+      else if (e.key === 'End') nextIdx = items.length - 1;
+      if (nextIdx !== null) {
+        e.preventDefault();
+        items[nextIdx].focus();
+      }
+    });
+  }
+
+  /* ------------------------------------------------------------------------
+     Table Cell AI Brief Renderer (updates .rec-ai-panel live)
      ------------------------------------------------------------------------ */
   function renderCard(panel, data) {
     const status = String(data.transcript_status || 'NONE').toUpperCase();
@@ -259,15 +514,70 @@
   }
 
   /* ------------------------------------------------------------------------
+     Multilingual Transcript Variant Helper (English | Hinglish | Hindi)
+     ------------------------------------------------------------------------ */
+  function getVariantPayload(data, langCode) {
+    const variants = data && typeof data.transcript_variants === 'object' ? data.transcript_variants : {};
+    const v = variants && variants[langCode];
+    if (v && (Array.isArray(v.segments) && v.segments.length > 0 || v.text)) {
+      return {
+        text: v.text || '',
+        segments: Array.isArray(v.segments) ? v.segments : [],
+      };
+    }
+    if (langCode === 'en') {
+      return {
+        text: (data && data.transcript_text) || '',
+        segments: Array.isArray(data && data.transcript_segments) ? data.transcript_segments : [],
+      };
+    }
+    return null;
+  }
+
+  function renderTranscriptLines(linesWrap, variant, searchTerm) {
+    linesWrap.replaceChildren();
+    const segments = (variant && Array.isArray(variant.segments)) ? variant.segments : [];
+    activeSegments = segments;
+    const term = (searchTerm || '').trim().toLowerCase();
+
+    if (segments.length > 0) {
+      segments.forEach((seg, idx) => {
+        const row = el('div', 'rec-seg-row');
+        row.dataset.segIndex = String(idx);
+        row.dataset.segStart = String(seg.start || 0);
+        row.dataset.segEnd = String(seg.end || 0);
+        const rawText = String(seg.text || '');
+        row.dataset.segSearch = rawText.toLowerCase();
+        if (term && !row.dataset.segSearch.includes(term)) {
+          row.classList.add('is-hidden');
+        }
+
+        const timeBtn = el('button', 'rec-seg-time', fmtTime(seg.start));
+        timeBtn.type = 'button';
+        timeBtn.title = 'Jump audio to ' + fmtTime(seg.start);
+        timeBtn.addEventListener('click', () => {
+          seekAndPlayDialogAudio(seg.start || 0);
+        });
+
+        row.append(timeBtn, el('span', 'rec-seg-text', rawText));
+        linesWrap.appendChild(row);
+      });
+    } else if (variant && variant.text) {
+      linesWrap.appendChild(el('pre', 'rec-transcript-pre', variant.text));
+    } else {
+      linesWrap.appendChild(el('p', 'rec-ai-pending-note', 'No speech detected in this recording.'));
+    }
+  }
+
+  /* ------------------------------------------------------------------------
      Spacious Call Detail <dialog> Renderer
      ------------------------------------------------------------------------ */
-  function renderDialog(data) {
+  function renderDialog(data, preserveAudio) {
     if (!dialog || !dialogBody) return;
+    activeDialogData = data;
     const status = String(data.transcript_status || 'NONE').toUpperCase();
     const objections = Array.isArray(data.ai_objections) ? data.ai_objections : [];
     const keyPoints = Array.isArray(data.ai_key_points) ? data.ai_key_points : [];
-    const segments = Array.isArray(data.transcript_segments) ? data.transcript_segments : [];
-    activeSegments = segments;
 
     const contactName = data.lead_name || data.phone_number || ('Call #' + data.call_id);
     dialogTitle.textContent = contactName;
@@ -315,10 +625,8 @@
       dialogReanalyze.disabled = false;
     }
 
-    if (dialogAudio && data.audio_url) {
-      if (dialogAudio.getAttribute('src') !== data.audio_url) {
-        dialogAudio.src = data.audio_url;
-      }
+    if (!preserveAudio) {
+      loadDialogAudio(data.audio_url || '', data.duration_seconds || 0);
     }
     if (dialogDownload && data.audio_url) {
       dialogDownload.href = data.audio_url;
@@ -334,7 +642,7 @@
         el(
           'p',
           'rec-ai-summary',
-          'This call is prioritized in our fast AI worker. Insights and timestamped transcript will appear here automatically in seconds…'
+          'This call is prioritized in our fast AI worker. Insights and multilingual transcript will appear here automatically in seconds…'
         )
       );
       dialogBody.appendChild(waitBox);
@@ -384,60 +692,106 @@
       }
       dialogBody.appendChild(objBox);
 
-      // 4. Interactive Timestamped Transcript with In-Call Search & Audio Jump
+      // 4. Interactive Timestamped Transcript with Language Switcher (English | Hinglish | हिंदी)
       const trBox = el('section', 'rec-dialog-section');
       const trHead = el('div', 'rec-dialog-sec-head');
-      trHead.appendChild(
-        el('h2', 'rec-dialog-sec-title', 'Full Conversation Transcript (' + (data.ai_language || 'Audio') + ')')
+      const trTitle = el(
+        'h2',
+        'rec-dialog-sec-title',
+        'Conversation Transcript (' + (LANG_META[activeTranscriptLang]?.title || 'English') + ')'
       );
-      const copyBtn = el('button', 'rec-ai-btn subtle', '📋 Copy Transcript');
-      copyBtn.type = 'button';
-      copyBtn.addEventListener('click', async () => {
-        if (!navigator.clipboard) return;
-        try {
-          await navigator.clipboard.writeText(data.transcript_text || '');
-          copyBtn.textContent = '✓ Copied';
-          setTimeout(() => { copyBtn.textContent = '📋 Copy Transcript'; }, 1600);
-        } catch (_) {}
-      });
-      trHead.appendChild(copyBtn);
-      trBox.appendChild(trHead);
+      trHead.appendChild(trTitle);
 
-      const tools = el('div', 'rec-dialog-transcript-tools');
+      // Language Switcher Toolbar (modern-web-guidance: toolbar)
+      const langToolbar = el('div', 'rec-lang-toolbar');
+      langToolbar.setAttribute('role', 'toolbar');
+      langToolbar.setAttribute('focusgroup', 'toolbar wrap');
+      langToolbar.setAttribute('aria-label', 'Transcript language');
+      langToolbar.setAttribute('aria-controls', 'rec-dialog-transcript-lines');
+
+      const langStatus = el('span', 'rec-lang-status');
+      langStatus.setAttribute('role', 'status');
+      langStatus.setAttribute('aria-live', 'polite');
+
+      const linesWrap = el('div', 'rec-transcript-lines');
+      linesWrap.id = 'rec-dialog-transcript-lines';
+
       const searchInput = el('input', 'rec-dialog-search');
       searchInput.type = 'search';
       searchInput.placeholder = 'Search word inside this call (e.g. NEET, fees, Patna, budget)…';
       searchInput.setAttribute('aria-label', 'Filter transcript lines');
+
+      ['en', 'hinglish', 'hi'].forEach((code) => {
+        const btn = el('button', 'rec-lang-btn', LANG_META[code].label);
+        btn.type = 'button';
+        btn.dataset.transcriptLang = code;
+        btn.setAttribute('aria-pressed', activeTranscriptLang === code ? 'true' : 'false');
+        btn.addEventListener('click', async () => {
+          if (btn.getAttribute('aria-disabled') === 'true') return;
+          activeTranscriptLang = code;
+          langToolbar.querySelectorAll('.rec-lang-btn').forEach((b) => {
+            b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+          });
+          trTitle.textContent = 'Conversation Transcript (' + LANG_META[code].title + ')';
+
+          let variant = getVariantPayload(activeDialogData, code);
+          if (!variant && activeDialogStatusUrl) {
+            langStatus.textContent = 'Generating ' + LANG_META[code].title + '…';
+            langToolbar.querySelectorAll('.rec-lang-btn').forEach((b) => b.setAttribute('aria-disabled', 'true'));
+            try {
+              const sep = activeDialogStatusUrl.includes('?') ? '&' : '?';
+              const res = await fetch(activeDialogStatusUrl + sep + 'lang=' + encodeURIComponent(code), {
+                headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+              });
+              if (res.ok) {
+                const updated = await res.json();
+                activeDialogData = updated;
+                variant = getVariantPayload(updated, code);
+              }
+            } catch (_) {
+              langStatus.textContent = 'Translation failed; showing English.';
+            } finally {
+              langToolbar.querySelectorAll('.rec-lang-btn').forEach((b) => b.removeAttribute('aria-disabled'));
+            }
+          }
+          if (variant) {
+            langStatus.textContent = '';
+            renderTranscriptLines(linesWrap, variant, searchInput.value);
+          } else {
+            renderTranscriptLines(linesWrap, getVariantPayload(activeDialogData, 'en'), searchInput.value);
+          }
+        });
+        langToolbar.appendChild(btn);
+      });
+      wireToolbarKeyboardFallback(langToolbar);
+
+      const copyBtn = el('button', 'rec-ai-btn subtle', '📋 Copy');
+      copyBtn.type = 'button';
+      copyBtn.addEventListener('click', async () => {
+        if (!navigator.clipboard) return;
+        const activeVar = getVariantPayload(activeDialogData, activeTranscriptLang) || getVariantPayload(activeDialogData, 'en');
+        try {
+          await navigator.clipboard.writeText((activeVar && activeVar.text) || data.transcript_text || '');
+          copyBtn.textContent = '✓ Copied';
+          setTimeout(() => { copyBtn.textContent = '📋 Copy'; }, 1600);
+        } catch (_) {
+          langStatus.textContent = 'Copy blocked by browser.';
+        }
+      });
+
+      const rightControls = el('div', 'rec-dialog-header-actions');
+      rightControls.append(langToolbar, copyBtn);
+      trHead.appendChild(rightControls);
+      trBox.appendChild(trHead);
+      trBox.appendChild(langStatus);
+
+      const tools = el('div', 'rec-dialog-transcript-tools');
       tools.appendChild(searchInput);
       trBox.appendChild(tools);
 
-      const linesWrap = el('div', 'rec-transcript-lines');
-      if (segments.length > 0) {
-        segments.forEach((seg, idx) => {
-          const row = el('div', 'rec-seg-row');
-          row.dataset.segIndex = String(idx);
-          row.dataset.segStart = String(seg.start || 0);
-          row.dataset.segEnd = String(seg.end || 0);
-          row.dataset.segSearch = String(seg.text || '').toLowerCase();
-
-          const timeBtn = el('button', 'rec-seg-time', fmtTime(seg.start));
-          timeBtn.type = 'button';
-          timeBtn.title = 'Jump audio to ' + fmtTime(seg.start);
-          timeBtn.addEventListener('click', () => {
-            if (!dialogAudio) return;
-            dialogAudio.currentTime = Math.max(0, Number(seg.start) || 0);
-            dialogAudio.play().catch(() => {});
-          });
-
-          const textSpan = el('span', 'rec-seg-text', seg.text || '');
-          row.append(timeBtn, textSpan);
-          linesWrap.appendChild(row);
-        });
-      } else if (data.transcript_text) {
-        linesWrap.appendChild(el('pre', 'rec-transcript-pre', data.transcript_text));
-      } else {
-        linesWrap.appendChild(el('p', 'rec-ai-pending-note', 'No speech detected in this recording.'));
-      }
+      const initialVariant = getVariantPayload(data, activeTranscriptLang) || getVariantPayload(data, 'en');
+      renderTranscriptLines(linesWrap, initialVariant, '');
 
       searchInput.addEventListener('input', () => {
         const term = searchInput.value.trim().toLowerCase();
@@ -469,34 +823,21 @@
     }
   }
 
-  // Highlight active spoken line inside dialog while audio plays
-  if (dialogAudio) {
-    dialogAudio.addEventListener('timeupdate', () => {
-      if (!activeSegments.length || !dialogBody) return;
-      const now = dialogAudio.currentTime;
-      dialogBody.querySelectorAll('.rec-seg-row').forEach((row) => {
-        const start = Number(row.dataset.segStart || 0);
-        const end = Number(row.dataset.segEnd || start + 3);
-        row.classList.toggle('is-active', now >= start && now <= Math.max(end, start + 1));
-      });
-    });
-  }
-
   async function openCallDetail(card) {
     if (!dialog || !card || !card.dataset.statusUrl) return;
-    // Pause any background inline studio audio before opening drawer
     document.querySelectorAll('.vaani-audio-player audio').forEach((a) => {
       if (!a.paused) a.pause();
     });
 
     activeDialogCallId = card.dataset.callId || null;
     activeDialogStatusUrl = card.dataset.statusUrl;
-    activeDialogAnalyzeUrl = card.dataset.analyzeUrl;
+    activeTranscriptLang = 'en';
 
     dialogTitle.textContent = 'Loading conversation…';
     dialogSubtitle.textContent = '';
     dialogBadges.replaceChildren();
-    dialogBody.replaceChildren(el('p', 'rec-ai-pending-note', 'Loading AI summary & timestamped transcript…'));
+    dialogBody.replaceChildren(el('p', 'rec-ai-pending-note', 'Loading AI summary & multilingual transcript…'));
+    loadDialogAudio('', 0);
     dialog.showModal();
 
     try {
@@ -506,7 +847,7 @@
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
-      renderDialog(data);
+      renderDialog(data, false);
     } catch (_) {
       dialogBody.replaceChildren(el('p', 'rec-ai-error-note', 'Could not load call details. Please refresh and try again.'));
     }
@@ -546,7 +887,7 @@
           if (data.transcript_status !== card.dataset.aiStatus) {
             renderCard(card, data);
             if (dialog && dialog.open && String(activeDialogCallId) === String(card.dataset.callId)) {
-              renderDialog(data);
+              renderDialog(data, true);
             }
             if (data.transcript_status === 'COMPLETED') {
               announce('✨ AI summary & transcript ready for ' + (data.lead_name || ('Call #' + card.dataset.callId)) + '.');
@@ -576,7 +917,7 @@
     const data = await res.json();
     renderCard(card, data);
     if (dialog && dialog.open && String(activeDialogCallId) === String(card.dataset.callId)) {
-      renderDialog(data);
+      renderDialog(data, true);
     }
     ensurePolling();
     announce('Prioritized Call #' + (card.dataset.callId || '') + ' at front of AI queue.');

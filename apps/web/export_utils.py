@@ -60,6 +60,8 @@ LEAD_EXPORT_COLUMNS = [
     ("Phone", "phone"),
     ("Email", "email"),
     ("Status", "status"),
+    ("AI Score (0-100)", "ai_score"),
+    ("Lead Temperature", "ai_temperature"),
     ("Assigned Caller", "assigned_caller"),
     ("Caller Username", "caller_username"),
     ("Import Batch", "batch"),
@@ -100,6 +102,8 @@ def lead_to_row(lead):
         sanitize_cell(lead.phone),
         sanitize_cell(lead.email),
         sanitize_cell(lead.get_status_display() or lead.status),
+        int(getattr(lead, "ai_score", 0) or 0),
+        sanitize_cell(lead.get_ai_temperature_display() if hasattr(lead, "get_ai_temperature_display") else getattr(lead, "ai_temperature", "")),
         sanitize_cell(caller_name or "Unassigned"),
         sanitize_cell(caller_user),
         sanitize_cell(batch_display),
@@ -190,7 +194,7 @@ def export_leads_excel(queryset):
             cell.font = regular_font
             cell.border = thin_border
             # Align IDs and numeric fields right, others left
-            if col_num in (1, 15):
+            if col_num in (1, 6, 17):
                 cell.alignment = Alignment(horizontal="right", vertical="center")
             else:
                 cell.alignment = Alignment(horizontal="left", vertical="center")

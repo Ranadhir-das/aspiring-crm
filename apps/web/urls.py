@@ -7,6 +7,7 @@ from . import photo_views
 from . import chat_views
 from . import notice_views
 from . import performance_views
+from . import employee_reports_views
 from . import app_intro_views
 from . import analytics_views
 from . import marketing_views
@@ -145,6 +146,7 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('', marketing_views.landing_page, name='landing'),
     path('dashboard/', analytics_views.dashboard_view, name='dashboard'),
+    path('employee-reports/', employee_reports_views.employee_reports, name='employee-reports'),
     path('analytics/overview/', analytics_views.dashboard_view, name='analytics-overview'),
     path('api/v1/analytics/overview/', analytics_views.analytics_overview_api, name='api-analytics-overview'),
     path('services/', service_views.services_list, name='services'),
@@ -163,10 +165,12 @@ urlpatterns = [
     path('website-integrations/<int:pk>/regenerate-key/', website_views.website_integration_regenerate_key, name='website-integration-regenerate-key'),
     path('leads/routing/', routing_views.lead_routing_view, name='lead-routing'),
     path('leads/', views.leads, name='leads'),
+    path('leads/recalculate-all-scores/', views.leads_recalculate_all, name='leads-recalculate-all'),
     path('leads/new/', views.lead_create, name='lead-create'),
     path('leads/import/', views.lead_import, name='lead-import'),
     path('leads/assign/', views.lead_assign, name='lead-assign'),
     path('leads/<int:pk>/', views.lead_detail, name='lead-detail'),
+    path('leads/<int:pk>/recalculate-score/', views.lead_recalculate_score, name='lead-recalculate-score'),
     path('calls/', views.calls, name='calls'),
     path('follow-ups/', views.followups, name='followups'),
     path('follow-ups/<int:pk>/complete/', views.followup_complete, name='followup-complete'),

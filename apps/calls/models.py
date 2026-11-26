@@ -152,6 +152,7 @@ class CallRecording(models.Model):
     )
     transcript_text = models.TextField(blank=True, default='')
     transcript_segments = models.JSONField(default=list, blank=True)
+    transcript_variants = models.JSONField(default=dict, blank=True)
     ai_summary = models.TextField(blank=True, default='')
     ai_key_points = models.JSONField(default=list, blank=True)
     ai_objections = models.JSONField(default=list, blank=True)

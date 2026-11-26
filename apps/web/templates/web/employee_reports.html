@@ -1,0 +1,172 @@
+{% extends 'web/base.html' %}
+{% load web_tags static %}
+{% block title %}Employee Reports{% endblock %}
+{% block breadcrumb %}Employee Reports{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'web/employee-reports.css' %}?v=1">
+
+<div class="emp-reports-page">
+  <!-- Visual Top Header & Filter Controls -->
+  <div class="er-hero-header">
+    <div>
+      <div class="eyebrow">VISUAL 360° WORKFORCE ANALYTICS</div>
+      <h1>Employee Performance Reports<span class="accent">.</span></h1>
+      <p>Inspect every caller, counselor &amp; staff member in one visual command center — calls, AI lead scores, attendance, demos &amp; tasks.</p>
+    </div>
+
+    <div class="er-controls-bar">
+      <!-- Time Window Presets -->
+      <div class="er-preset-group" role="group" aria-label="Report date window">
+        <a href="?range=today{% if selected_role != 'all' %}&amp;role={{ selected_role }}{% endif %}" class="er-preset-pill {% if selected_range == 'today' %}active{% endif %}">Today</a>
+        <a href="?range=7d{% if selected_role != 'all' %}&amp;role={{ selected_role }}{% endif %}" class="er-preset-pill {% if selected_range == '7d' %}active{% endif %}">7D</a>
+        <a href="?range=30d{% if selected_role != 'all' %}&amp;role={{ selected_role }}{% endif %}" class="er-preset-pill {% if selected_range == '30d' %}active{% endif %}">30D</a>
+        <a href="?range=month{% if selected_role != 'all' %}&amp;role={{ selected_role }}{% endif %}" class="er-preset-pill {% if selected_range == 'month' %}active{% endif %}">This Month</a>
+      </div>
+
+      <form method="get" action="{% url 'web:employee-reports' %}" class="er-custom-date-form">
+        {% if selected_role != 'all' %}<input type="hidden" name="role" value="{{ selected_role }}">{% endif %}
+        <input type="date" name="start" value="{{ start_date }}" aria-label="Report start date">
+        <span class="er-date-sep">–</span>
+        <input type="date" name="end" value="{{ end_date }}" aria-label="Report end date">
+        <button type="submit" class="er-apply-btn">Go</button>
+      </form>
+    </div>
+  </div>
+
+  {% if date_error %}
+  <div class="filter-alert-error" role="alert" style="margin-bottom:14px;">⚠️ {{ date_error }}</div>
+  {% endif %}
+
+  <!-- Role Filter Strip + Instant Employee Search -->
+  {% if is_mgmt %}
+  <div class="er-subbar">
+    <div class="er-role-pills" role="navigation" aria-label="Filter employees by role">
+      {% for key, label in role_groups %}
+      <a href="{% querystring role=key %}" class="er-role-pill {% if selected_role == key %}active{% endif %}">
+        <span>{{ label }}</span>
+        <span class="er-pill-dot" aria-hidden="true"></span>
+      </a>
+      {% endfor %}
+    </div>
+    <label class="er-search-input-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="er-emp-search" placeholder="Filter employee card…" autocomplete="off" aria-label="Filter employee cards by name or role">
+    </label>
+  </div>
+  {% endif %}
+
+  <!-- SECTION 1: 4 Team Visual Donut Charts (Zero Plain Number Boxes!) -->
+  <section class="er-donuts-grid" aria-label="Team performance donut charts">
+    <article class="er-chart-card">
+      <header class="er-chart-head">
+        <h2>Lead Temperature Mix</h2>
+        <span class="er-chart-tag">AI 100-Pt</span>
+      </header>
+      <div id="chart-team-temps" class="er-donut-mount" role="img" aria-label="Team lead temperature donut chart"></div>
+    </article>
+
+    <article class="er-chart-card">
+      <header class="er-chart-head">
+        <h2>Call Outcomes &amp; Flow</h2>
+        <span class="er-chart-tag">Out / In</span>
+      </header>
+      <div id="chart-team-calls" class="er-donut-mount" role="img" aria-label="Team call outcomes donut chart"></div>
+    </article>
+
+    <article class="er-chart-card">
+      <header class="er-chart-head">
+        <h2>Attendance &amp; Shifts</h2>
+        <span class="er-chart-tag">Live</span>
+      </header>
+      <div id="chart-team-attendance" class="er-donut-mount" role="img" aria-label="Team attendance health donut chart"></div>
+    </article>
+
+    <article class="er-chart-card">
+      <header class="er-chart-head">
+        <h2>AI Call Sentiment</h2>
+        <span class="er-chart-tag">Transcripts</span>
+      </header>
+      <div id="chart-team-sentiment" class="er-donut-mount" role="img" aria-label="AI call sentiment donut chart"></div>
+    </article>
+  </section>
+
+  <!-- SECTION 2: Interactive Trend Graph + Employee Visual Comparison Bar Chart -->
+  <section class="er-wide-charts-grid" aria-label="Team trends and employee visual comparison">
+    <article class="er-chart-card er-wide-card">
+      <header class="er-chart-head">
+        <div>
+          <h2>Daily Activity Pulse</h2>
+          <p class="er-chart-sub">Calls dialed, live connected conversations &amp; staff active per day</p>
+        </div>
+        <div class="er-legend-inline" aria-hidden="true">
+          <span><i style="background:#6366f1;"></i>Calls</span>
+          <span><i style="background:#10b981;"></i>Connected</span>
+          <span><i style="background:#f59e0b;"></i>Active Staff</span>
+        </div>
+      </header>
+      <div id="chart-daily-trend" class="er-svg-chart-mount" role="img" aria-label="Daily activity trend area chart"></div>
+    </article>
+
+    <article class="er-chart-card er-wide-card">
+      <header class="er-chart-head">
+        <div>
+          <h2>Employee Performance Radar</h2>
+          <p class="er-chart-sub">Click any employee bar to open their full 360° visual report</p>
+        </div>
+        <div class="er-legend-inline" aria-hidden="true">
+          <span><i style="background:#10b981;"></i>80+</span>
+          <span><i style="background:#3b82f6;"></i>50–79</span>
+          <span><i style="background:#f59e0b;"></i>&lt;50</span>
+        </div>
+      </header>
+      <div id="chart-employee-bars" class="er-bars-mount" role="img" aria-label="Employee performance horizontal bar comparison"></div>
+    </article>
+  </section>
+
+  <!-- SECTION 3: Every Employee's 360° Visual Scorecard Wall (All in One Place) -->
+  <section class="er-wall-section" aria-label="Individual employee visual scorecards">
+    <div class="er-wall-header">
+      <div>
+        <h2>Every Employee — Visual 360° Cards</h2>
+        <p>Rings, temperature bars &amp; sparklines for every team member. Click any card for expanded multi-chart analysis.</p>
+      </div>
+      <div class="er-tier-key" aria-hidden="true">
+        <span><i style="background:#d61f3c;"></i>Hot</span>
+        <span><i style="background:#e5971a;"></i>Warm</span>
+        <span><i style="background:#2558a8;"></i>Interested</span>
+        <span><i style="background:#7c3aed;"></i>Cold</span>
+        <span><i style="background:#8c929d;"></i>Inactive</span>
+      </div>
+    </div>
+
+    <div id="er-employee-grid" class="er-employee-grid"></div>
+    <div id="er-empty-state" class="er-empty-state" hidden>
+      No employees match your filter criteria.
+    </div>
+  </section>
+</div>
+
+<!-- Native Modal Dialog: In-Page Employee 360° Expanded Visual Report (Zero Page Hopping!) -->
+<dialog id="emp-360-dialog" class="emp-360-dialog" closedby="any" aria-labelledby="emp-dialog-title">
+  <header class="er-dialog-header">
+    <div class="er-dialog-identity">
+      <span id="emp-dialog-avatar" class="er-avatar-lg" aria-hidden="true"></span>
+      <div>
+        <h1 id="emp-dialog-title">Employee Visual Report</h1>
+        <p id="emp-dialog-subtitle" class="er-dialog-sub"></p>
+      </div>
+    </div>
+    <form method="dialog" style="margin:0;">
+      <button type="submit" value="close" class="er-dialog-close" aria-label="Close employee visual report">✕</button>
+    </form>
+  </header>
+  <div id="emp-dialog-body" class="er-dialog-body"></div>
+</dialog>
+
+<!-- Floating chart tooltip -->
+<div id="er-tooltip" class="er-tooltip" role="tooltip" hidden></div>
+
+{{ report_payload|json_script:"employee-reports-data" }}
+<script src="{% static 'web/employee-reports.js' %}?v=1" defer></script>
+{% endblock %}

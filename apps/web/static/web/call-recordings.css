@@ -593,9 +593,14 @@ dialog.rec-detail-dialog {
 }
 
 .recordings-table-scroll {
+  position: relative;
   max-inline-size: 100%;
+  max-block-size: min(640px, 70dvh);
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.45) transparent;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -606,6 +611,7 @@ dialog.rec-detail-dialog {
 
 .recordings-table {
   width: 100%;
+  min-inline-size: 1060px;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
@@ -616,7 +622,11 @@ dialog.rec-detail-dialog {
   --label-ai: "AI Summary & Details";
 }
 
+/* Sticky fixed column headers across vertical scroll */
 .recordings-table thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 6;
   padding: 12px 14px;
   font-size: 11px;
   font-weight: 800;
@@ -633,10 +643,17 @@ dialog.rec-detail-dialog {
   color: #4f5b72;
 }
 
-.recordings-table thead th.col-contact { width: 21%; }
-.recordings-table thead th.col-info { width: 17%; }
-.recordings-table thead th.col-player { width: 29%; }
-.recordings-table thead th.col-ai { width: 33%; }
+/* Top-left corner stays fixed on BOTH vertical and horizontal scroll */
+.recordings-table thead th:first-child {
+  inset-inline-start: 0;
+  z-index: 8;
+  box-shadow: inset -1px 0 0 var(--border), inset 0 -1px 0 var(--border);
+}
+
+.recordings-table thead th.col-contact { width: 220px; }
+.recordings-table thead th.col-info { width: 185px; }
+.recordings-table thead th.col-player { width: 305px; }
+.recordings-table thead th.col-ai { width: auto; }
 
 .recordings-table tbody th,
 .recordings-table tbody td {
@@ -654,8 +671,11 @@ dialog.rec-detail-dialog {
   word-break: break-word;
 }
 
-/* Override global crm.css & theme.css uppercase/nowrap/bg on tbody th */
+/* Fixed sticky first column (Lead / Contact) with opaque surface & right edge divider */
 .recordings-table tbody th.cell-contact {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 4;
   background: var(--rec-card-bg);
   color: var(--text);
   text-transform: none;
@@ -663,16 +683,16 @@ dialog.rec-detail-dialog {
   letter-spacing: normal;
   font-weight: 400;
   font-size: 13px;
-  box-shadow: inset 4px 0 0 transparent;
+  box-shadow: inset 4px 0 0 transparent, inset -1px 0 0 var(--border);
   overflow: hidden;
 }
 
 .recordings-table tbody tr.row-positive th.cell-contact {
-  box-shadow: inset 4px 0 0 var(--rec-emerald);
+  box-shadow: inset 4px 0 0 var(--rec-emerald), inset -1px 0 0 var(--border);
 }
 
 .recordings-table tbody tr.row-has-objections th.cell-contact {
-  box-shadow: inset 4px 0 0 var(--rec-rose);
+  box-shadow: inset 4px 0 0 var(--rec-rose), inset -1px 0 0 var(--border);
 }
 
 .recordings-table tbody tr:hover th,
@@ -1199,9 +1219,10 @@ dialog.rec-detail-dialog {
 .rec-ai-btn:disabled { opacity: 0.6; cursor: wait; }
 
 /* --------------------------------------------------------------------------
-   7. Container Query: Automatic Stacked Mobile Cards (< 1020px container)
+   7. Container Query: Automatic Stacked Mobile Cards (< 680px phones only;
+      tablets & desktops keep the fixed-column scrollable table!)
    -------------------------------------------------------------------------- */
-@container recordings-table (inline-size < 1020px) {
+@container recordings-table (inline-size < 680px) {
   .recordings-table-scroll {
     max-block-size: none;
     overflow: visible;
@@ -1211,6 +1232,7 @@ dialog.rec-detail-dialog {
   .recordings-table tbody {
     display: block;
     width: 100%;
+    min-inline-size: 0;
     table-layout: auto;
   }
 
@@ -1459,18 +1481,270 @@ dialog.rec-detail-dialog[open]:where(:not([data-closing]))::backdrop {
 .rec-dialog-close:hover { border-color: var(--rec-rose); color: var(--rec-rose); }
 
 .rec-dialog-audio-bar {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--rec-dialog-border);
+  background-color: var(--rec-dialog-header-bg);
+  flex-shrink: 0;
+}
+
+.rec-dialog-audio-bar > audio {
+  display: none;
+}
+
+.rec-dialog-player {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  padding: 11px 22px;
-  border-bottom: 1px solid var(--rec-dialog-border);
-  background-color: var(--rec-dialog-surface);
+  gap: 8px 10px;
 }
 
-.rec-dialog-audio-bar audio {
-  flex: 1 1 280px;
-  height: 36px;
+.rec-dlg-play-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--rec-accent-a), var(--rec-accent-b));
+  box-shadow: 0 3px 12px rgba(99, 102, 241, 0.35);
+  cursor: pointer;
+}
+
+.rec-dlg-play-btn:hover { filter: brightness(1.08); }
+
+.rec-dlg-skip-btn,
+.rec-dlg-icon-btn {
+  min-block-size: 32px;
+  min-inline-size: 36px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--rec-dialog-border);
+  background-color: var(--rec-dialog-surface);
+  color: var(--rec-dialog-text);
+  font-size: 11.5px;
+  font-weight: 750;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rec-dlg-skip-btn:hover,
+.rec-dlg-icon-btn:hover {
+  border-color: var(--rec-accent-a);
+  color: var(--rec-accent-a);
+}
+
+.rec-dlg-icon-btn[aria-pressed="true"] {
+  background-color: rgba(244, 63, 94, 0.16);
+  border-color: rgba(244, 63, 94, 0.45);
+  color: var(--rec-rose);
+}
+
+.rec-dlg-seek-wrap {
+  flex: 1 1 200px;
+  min-inline-size: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Native accessible range slider (modern-web-guidance: slider) */
+input[type="range"].rec-dialog-range {
+  --slider-track-size: 0.44rem;
+  --slider-thumb-size: 1rem;
+  --slider-track-radius: 999px;
+  --slider-thumb-radius: 50%;
+  --slider-track-color: rgba(148, 163, 184, 0.34);
+  --slider-fill-color: var(--rec-accent-a);
+  --slider-thumb-color: var(--rec-accent-b);
+  --slider-direction: to right;
+  --attr-min: 0;
+  --attr-max: 100;
+  --control-value: 0;
+  --slider-progress: calc(
+    progress(var(--control-value), var(--attr-min), var(--attr-max)) * 100%
+  );
+  appearance: none;
+  -webkit-appearance: none;
+  inline-size: 100%;
+  block-size: 1.8rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+@supports not (opacity: progress(1, 0, 100)) {
+  input[type="range"].rec-dialog-range {
+    --slider-progress: calc(
+      (var(--control-value) - var(--attr-min)) /
+      max(0.001, (var(--attr-max) - var(--attr-min))) * 100%
+    );
+  }
+}
+
+input[type="range"].rec-dialog-range:focus-visible {
+  outline: 2px solid var(--slider-fill-color);
+  outline-offset: 3px;
+}
+
+/* WebKit/Blink range rules (kept separate from Firefox per slider guidance) */
+input[type="range"].rec-dialog-range::-webkit-slider-runnable-track {
+  block-size: var(--slider-track-size);
+  border: 0;
+  border-radius: var(--slider-track-radius);
+  background: linear-gradient(
+    var(--slider-direction),
+    var(--slider-fill-color) var(--slider-progress),
+    var(--slider-track-color) var(--slider-progress)
+  );
+}
+
+input[type="range"].rec-dialog-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  inline-size: var(--slider-thumb-size);
+  block-size: var(--slider-thumb-size);
+  margin-block-start: calc((var(--slider-track-size) - var(--slider-thumb-size)) / 2);
+  border: 2px solid #ffffff;
+  border-radius: var(--slider-thumb-radius);
+  background: var(--slider-thumb-color);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Firefox range rules */
+input[type="range"].rec-dialog-range::-moz-range-track {
+  block-size: var(--slider-track-size);
+  border: 0;
+  border-radius: var(--slider-track-radius);
+  background: var(--slider-track-color);
+}
+
+input[type="range"].rec-dialog-range::-moz-range-progress {
+  block-size: var(--slider-track-size);
+  border-radius: var(--slider-track-radius);
+  background: var(--slider-fill-color);
+}
+
+input[type="range"].rec-dialog-range::-moz-range-thumb {
+  inline-size: var(--slider-thumb-size);
+  block-size: var(--slider-thumb-size);
+  border: 2px solid #ffffff;
+  border-radius: var(--slider-thumb-radius);
+  background: var(--slider-thumb-color);
+}
+
+.rec-dlg-times {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rec-dialog-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-dlg-audio-msg {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--rec-amber);
+}
+
+.rec-dlg-audio-msg.is-error {
+  color: var(--rec-rose);
+}
+
+.rec-dlg-speeds {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background-color: var(--rec-dialog-surface);
+  border: 1px solid var(--rec-dialog-border);
+  flex-shrink: 0;
+}
+
+.rec-dlg-speed-btn {
+  min-block-size: 26px;
+  min-inline-size: 32px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rec-dialog-muted);
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.rec-dlg-speed-btn[aria-pressed="true"] {
+  background-color: var(--rec-accent-a);
+  color: #ffffff;
+}
+
+/* Transcript Language Switcher Toolbar (modern-web-guidance: toolbar) */
+.rec-lang-toolbar {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background-color: var(--rec-dialog-row-bg);
+  border: 1px solid var(--rec-dialog-border);
+}
+
+.rec-lang-btn {
+  min-block-size: 28px;
+  min-inline-size: 56px;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--rec-dialog-muted);
+  font-size: 11.5px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .rec-lang-btn:hover {
+    color: var(--rec-dialog-text);
+  }
+}
+
+.rec-lang-btn[aria-pressed="true"] {
+  background: linear-gradient(135deg, var(--rec-accent-a), var(--rec-violet));
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.28);
+}
+
+.rec-lang-btn:focus-visible {
+  outline: 2px solid var(--rec-accent-a);
+  outline-offset: 2px;
+}
+
+.rec-lang-status {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--rec-accent-a);
+}
+
+@media (forced-colors: active) {
+  .rec-lang-btn[aria-pressed="true"],
+  .rec-dlg-speed-btn[aria-pressed="true"] {
+    background: Highlight;
+    color: HighlightText;
+    border: 1px solid ButtonText;
+  }
 }
 
 .rec-dialog-body {

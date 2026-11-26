@@ -1,0 +1,856 @@
+/* ==========================================================================
+   Vaani CRM — Visual-First Employee Performance Reports Stylesheet
+   ========================================================================== */
+
+:root {
+  --in-oklab: ;
+}
+@supports (background: linear-gradient(in oklab, white, black)) {
+  :root {
+    --in-oklab: in oklab;
+  }
+}
+
+.emp-reports-page,
+dialog.emp-360-dialog {
+  --er-surface: #141824;
+  --er-surface-2: #1b2131;
+  --er-surface-3: #232b40;
+  --er-border: rgba(148, 163, 184, 0.16);
+  --er-border-strong: rgba(148, 163, 184, 0.28);
+  --er-text: #f1f5f9;
+  --er-muted: #94a3b8;
+  --er-accent: #6366f1;
+  --er-track: rgba(148, 163, 184, 0.16);
+  --er-shadow: 0 12px 32px rgba(2, 6, 23, 0.34);
+}
+
+:root[data-theme="light"] .emp-reports-page,
+:root[data-theme="light"] dialog.emp-360-dialog {
+  --er-surface: #ffffff;
+  --er-surface-2: #f8fafc;
+  --er-surface-3: #eef2f7;
+  --er-border: #e2e8f0;
+  --er-border-strong: #cbd5e1;
+  --er-text: #0f172a;
+  --er-muted: #475569;
+  --er-accent: #4f46e5;
+  --er-track: #e2e8f0;
+  --er-shadow: 0 12px 32px rgba(15, 23, 42, 0.10);
+}
+
+/* Header & Filter Controls */
+.er-hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.er-hero-header h1 {
+  margin: 2px 0 4px;
+}
+.er-hero-header p {
+  margin: 0;
+  color: var(--er-muted);
+  font-size: 13.5px;
+}
+.er-controls-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.er-preset-group {
+  display: inline-flex;
+  background: var(--er-surface);
+  border: 1px solid var(--er-border-strong);
+  border-radius: 11px;
+  padding: 3px;
+  gap: 3px;
+}
+.er-preset-pill {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--er-muted);
+  text-decoration: none;
+  transition: background .15s ease, color .15s ease;
+}
+.er-preset-pill:hover {
+  color: var(--er-text);
+  background: var(--er-surface-2);
+}
+.er-preset-pill.active {
+  background: linear-gradient(135deg var(--in-oklab), #4f46e5, #7c3aed);
+  color: #ffffff;
+}
+
+.er-custom-date-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--er-surface);
+  border: 1px solid var(--er-border-strong);
+  border-radius: 11px;
+  padding: 4px 8px;
+}
+.er-custom-date-form input[type="date"] {
+  border: none;
+  background: transparent;
+  color: var(--er-text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 2px;
+  outline: none;
+}
+.er-date-sep {
+  color: var(--er-muted);
+}
+.er-apply-btn {
+  padding: 5px 11px;
+  border-radius: 7px;
+  border: none;
+  background: var(--er-accent);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Role Switcher & Search Subbar */
+.er-subbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.er-role-pills {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.er-role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--er-border-strong);
+  background: var(--er-surface);
+  color: var(--er-text);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color .15s ease, background .15s ease;
+}
+.er-role-pill:hover {
+  border-color: var(--er-accent);
+}
+.er-role-pill.active {
+  background: color-mix(in oklab, var(--er-accent) 16%, var(--er-surface));
+  border-color: var(--er-accent);
+  color: var(--er-accent);
+}
+.er-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.er-search-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--er-border-strong);
+  background: var(--er-surface);
+  color: var(--er-muted);
+  min-width: 220px;
+}
+.er-search-input-wrap input {
+  border: none;
+  background: transparent;
+  color: var(--er-text);
+  font-size: 12.5px;
+  outline: none;
+  width: 100%;
+}
+
+/* ==========================================================================
+   Team Visual Donut Cards Grid
+   ========================================================================== */
+.er-donuts-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+@media (max-width: 1180px) {
+  .er-donuts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .er-donuts-grid { grid-template-columns: 1fr; }
+}
+
+.er-chart-card {
+  background: var(--er-surface);
+  border: 1px solid var(--er-border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  container-type: inline-size;
+}
+.er-chart-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.er-chart-head h2 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--er-text);
+}
+.er-chart-sub {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--er-muted);
+}
+.er-chart-tag {
+  font-size: 10.5px;
+  font-weight: 750;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--er-accent) 14%, var(--er-surface));
+  color: var(--er-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* Interactive Donut Component */
+.er-donut-layout {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+@container (width < 260px) {
+  .er-donut-layout {
+    flex-direction: column;
+  }
+}
+.er-donut-svg-wrap {
+  position: relative;
+  width: 116px;
+  height: 116px;
+  flex-shrink: 0;
+}
+.er-donut-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+.er-donut-slice {
+  cursor: pointer;
+  transition: stroke-width .15s ease, opacity .15s ease;
+}
+.er-donut-slice:hover {
+  stroke-width: 18;
+  opacity: 0.92;
+}
+.er-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+.er-donut-center-val {
+  font-size: 17px;
+  font-weight: 850;
+  color: var(--er-text);
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.er-donut-center-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--er-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.er-donut-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.er-donut-legend li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--er-text);
+}
+.er-leg-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.er-leg-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.er-leg-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.er-leg-bar-wrap {
+  width: 46px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--er-track);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.er-leg-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+/* ==========================================================================
+   Wide Charts (Daily Pulse Area Chart & Employee Visual Bar Comparison)
+   ========================================================================== */
+.er-wide-charts-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 22px;
+}
+@media (max-width: 1020px) {
+  .er-wide-charts-grid { grid-template-columns: 1fr; }
+}
+.er-legend-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--er-muted);
+  flex-wrap: wrap;
+}
+.er-legend-inline span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.er-legend-inline i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.er-svg-chart-mount {
+  width: 100%;
+  min-height: 220px;
+}
+.er-svg-chart-mount svg {
+  width: 100%;
+  height: 225px;
+  display: block;
+}
+
+/* Employee Comparison Visual Bars */
+.er-bars-mount {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.er-bar-btn {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: var(--er-surface-2);
+  color: var(--er-text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s ease, transform .12s ease;
+}
+.er-bar-btn:hover {
+  border-color: var(--er-accent);
+  transform: translateX(2px);
+}
+.er-bar-emp-name {
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.er-bar-track {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--er-track);
+  overflow: hidden;
+  display: flex;
+}
+.er-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width .35s ease;
+}
+.er-bar-badge {
+  font-size: 11.5px;
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   All Employees Visual Scorecard Wall (modern-web-guidance: card & interactions)
+   ========================================================================== */
+.er-wall-section {
+  margin-top: 8px;
+}
+.er-wall-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.er-wall-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--er-text);
+}
+.er-wall-header p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--er-muted);
+}
+.er-tier-key {
+  display: inline-flex;
+  gap: 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--er-muted);
+  flex-wrap: wrap;
+}
+.er-tier-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.er-tier-key i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.er-employee-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+.emp-visual-card {
+  background: var(--er-surface);
+  border: 1px solid var(--er-border);
+  border-radius: 18px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  container-type: inline-size;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 340px auto 370px;
+  transition: border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+@supports not (content-visibility: auto) {
+  .emp-visual-card {
+    contain: layout style paint;
+  }
+}
+.emp-visual-card:hover {
+  border-color: var(--er-accent);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.12);
+}
+
+.evc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.evc-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.evc-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 850;
+  font-size: 14px;
+  color: #ffffff;
+  background: linear-gradient(135deg var(--in-oklab), #4f46e5, #0ea5e9);
+  position: relative;
+  flex-shrink: 0;
+}
+.evc-live-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #10b981;
+  border: 2px solid var(--er-surface);
+}
+.evc-name-wrap {
+  min-width: 0;
+}
+.evc-name {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--er-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.evc-role-pill {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--er-surface-2);
+  border: 1px solid var(--er-border);
+  color: var(--er-muted);
+}
+
+/* Overall CSS Conic Ring Gauge (modern-web-guidance: visual-effects) */
+.evc-master-ring {
+  --p: 0%;
+  --c: #6366f1;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: conic-gradient(var(--c) var(--p), var(--er-track) 0%);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.evc-master-ring-in {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--er-surface);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 850;
+  color: var(--c);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 3 Mini Visual Donuts Row */
+.evc-mini-rings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  background: var(--er-surface-2);
+  border: 1px solid var(--er-border);
+}
+.evc-mini-ring-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.evc-ring-sm {
+  --p: 0%;
+  --c: #10b981;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: conic-gradient(var(--c) var(--p), var(--er-track) 0%);
+  display: grid;
+  place-items: center;
+}
+.evc-ring-sm-in {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--er-surface-2);
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--er-text);
+  font-variant-numeric: tabular-nums;
+}
+.evc-mini-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--er-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Visual Stacked Bar (Lead Temps or Activity Split) */
+.evc-bar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.evc-bar-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--er-muted);
+}
+.evc-stacked-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--er-track);
+  gap: 1.5px;
+}
+.evc-stacked-seg {
+  height: 100%;
+  min-width: 0;
+}
+
+/* Sparkline SVG Container */
+.evc-spark-box {
+  background: var(--er-surface-2);
+  border: 1px solid var(--er-border);
+  border-radius: 11px;
+  padding: 7px 10px 4px;
+}
+.evc-spark-box svg {
+  width: 100%;
+  height: 42px;
+  display: block;
+}
+
+/* Card Footer Button */
+.evc-footer {
+  margin-top: auto;
+}
+.evc-open-btn {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--er-border-strong);
+  background: var(--er-surface-2);
+  color: var(--er-text);
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.evc-open-btn:hover {
+  background: var(--er-accent);
+  border-color: var(--er-accent);
+  color: #ffffff;
+}
+
+.er-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  background: var(--er-surface);
+  border: 1px dashed var(--er-border-strong);
+  border-radius: 16px;
+  color: var(--er-muted);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   In-Page Employee 360° Visual Report Native Modal <dialog>
+   ========================================================================== */
+dialog.emp-360-dialog {
+  padding: 0;
+  border: 1px solid var(--er-border-strong);
+  border-radius: 20px;
+  background: var(--er-surface);
+  color: var(--er-text);
+  width: min(980px, calc(100vw - 24px));
+  max-height: calc(100dvh - 28px);
+  overflow: hidden;
+  box-shadow: var(--er-shadow);
+  margin: auto;
+}
+dialog.emp-360-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.emp-360-dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog.emp-360-dialog::backdrop {
+  background: rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(4px);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.er-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 22px;
+  background: var(--er-surface);
+  border-bottom: 1px solid var(--er-border);
+}
+.er-dialog-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.er-avatar-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 850;
+  font-size: 16px;
+  color: #ffffff;
+  background: linear-gradient(135deg var(--in-oklab), #4f46e5, #0ea5e9);
+}
+.er-dialog-header h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--er-text);
+}
+.er-dialog-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--er-muted);
+}
+.er-dialog-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--er-border-strong);
+  background: var(--er-surface-2);
+  color: var(--er-text);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.er-dialog-close:hover {
+  border-color: var(--er-accent);
+  color: var(--er-accent);
+}
+.er-dialog-body {
+  padding: 18px 22px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--er-surface-2);
+}
+.er-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 760px) {
+  .er-modal-grid { grid-template-columns: 1fr; }
+}
+.er-modal-wide {
+  grid-column: 1 / -1;
+}
+.er-task-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.er-task-bar-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.er-task-bar-track {
+  height: 11px;
+  border-radius: 999px;
+  background: var(--er-track);
+  overflow: hidden;
+}
+.er-task-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+/* Tooltip */
+.er-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 650;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  max-width: 240px;
+}

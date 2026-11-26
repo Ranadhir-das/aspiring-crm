@@ -152,14 +152,171 @@ def dashboard(request):
                 greeting='Good morning' if now.hour < 12 else 'Good afternoon' if now.hour < 17 else 'Good evening')
 
 
+def _format_talk_short(seconds):
+    sec = max(0, int(seconds or 0))
+    if sec < 60:
+        return f'{sec}s'
+    mins, rem = divmod(sec, 60)
+    if mins < 60:
+        return f'{mins}m {rem:02d}s' if rem else f'{mins}m'
+    hrs, mins = divmod(mins, 60)
+    return f'{hrs}h {mins}m'
+
+
+def _enrich_leads_page(page_leads):
+    """Attach calls, recordings/AI summary, follow-ups, milestones & activity to current page leads with batched queries."""
+    from collections import defaultdict
+    from apps.activity.models import ActivityLog
+    from apps.leads.models import Admission, Counselling, WhatsAppActivity
+    from apps.leads.counselor import LeadCounselorAssignment
+
+    leads_list = list(page_leads)
+    lead_ids = [lead.pk for lead in leads_list]
+    if not lead_ids:
+        return {}
+
+    now_local = timezone.localtime()
+    today_local = now_local.date()
+
+    # 1. Calls + recordings
+    calls_by_lead = defaultdict(list)
+    for c in (
+        Call.objects.filter(lead_id__in=lead_ids)
+        .select_related('recording')
+        .order_by('-started_at', '-pk')
+    ):
+        calls_by_lead[c.lead_id].append(c)
+
+    # 2. Next pending follow-up per lead
+    next_fu_by_lead = {}
+    for fu in (
+        FollowUp.objects.filter(lead_id__in=lead_ids, status=FollowUp.Status.PENDING)
+        .order_by('scheduled_at', 'pk')
+    ):
+        if fu.lead_id not in next_fu_by_lead:
+            fu_local = timezone.localtime(fu.scheduled_at)
+            if fu.scheduled_at < now_local:
+                urgency, label = 'overdue', 'Overdue'
+            elif fu_local.date() == today_local:
+                urgency, label = 'today', 'Due Today'
+            else:
+                urgency, label = 'upcoming', 'Follow-up'
+            next_fu_by_lead[fu.lead_id] = {
+                'scheduled_at': fu.scheduled_at,
+                'urgency': urgency,
+                'label': label,
+            }
+
+    # 3. Latest activity per lead
+    latest_act_by_lead = {}
+    for act in ActivityLog.objects.filter(lead_id__in=lead_ids).order_by('-created_at', '-pk'):
+        if act.lead_id not in latest_act_by_lead:
+            latest_act_by_lead[act.lead_id] = act
+
+    # 4. Milestone counts (Counselling / Admissions / WhatsApp / Active Counselor)
+    counselling_counts = dict(
+        Counselling.objects.filter(lead_id__in=lead_ids).values('lead_id').annotate(n=Count('id')).values_list('lead_id', 'n')
+    )
+    admission_counts = dict(
+        Admission.objects.filter(lead_id__in=lead_ids).values('lead_id').annotate(n=Count('id')).values_list('lead_id', 'n')
+    )
+    whatsapp_counts = dict(
+        WhatsAppActivity.objects.filter(lead_id__in=lead_ids).values('lead_id').annotate(n=Count('id')).values_list('lead_id', 'n')
+    )
+    counselor_by_lead = {}
+    for assign in (
+        LeadCounselorAssignment.objects.filter(lead_id__in=lead_ids, is_active=True)
+        .select_related('counselor')
+        .order_by('-forwarded_at', '-pk')
+    ):
+        if assign.lead_id not in counselor_by_lead and assign.counselor:
+            counselor_by_lead[assign.lead_id] = assign.counselor.get_full_name() or assign.counselor.username
+
+    scores_payload = {}
+    for lead in leads_list:
+        l_calls = calls_by_lead.get(lead.pk, [])
+        out_c = sum(1 for c in l_calls if c.direction != Call.Direction.INBOUND)
+        in_c = sum(1 for c in l_calls if c.direction == Call.Direction.INBOUND)
+        talk_sec = 0
+        rec_count = 0
+        obj_count = 0
+        latest_summary = ''
+        latest_sentiment = ''
+        for c in l_calls:
+            rec = getattr(c, 'recording', None)
+            dur = max(int(c.duration_seconds or 0), int(getattr(rec, 'duration_seconds', 0) or 0))
+            talk_sec += dur
+            if rec is not None:
+                rec_count += 1
+                if isinstance(rec.ai_objections, list):
+                    obj_count += len(rec.ai_objections)
+                if not latest_summary and rec.ai_summary:
+                    latest_summary = rec.ai_summary
+                if not latest_sentiment and rec.ai_sentiment:
+                    latest_sentiment = rec.ai_sentiment
+
+        act = latest_act_by_lead.get(lead.pk)
+        lead.enrichment = {
+            'calls_count': len(l_calls),
+            'outbound_calls': out_c,
+            'inbound_calls': in_c,
+            'talk_display': _format_talk_short(talk_sec),
+            'recordings_count': rec_count,
+            'objections_count': obj_count,
+            'latest_ai_summary': latest_summary,
+            'latest_ai_sentiment': latest_sentiment,
+            'next_followup': next_fu_by_lead.get(lead.pk),
+            'latest_activity_desc': act.description if act else '',
+            'latest_activity_at': act.created_at if act else None,
+            'counsellings_count': counselling_counts.get(lead.pk, 0),
+            'admissions_count': admission_counts.get(lead.pk, 0),
+            'whatsapp_count': whatsapp_counts.get(lead.pk, 0),
+            'active_counselor_name': counselor_by_lead.get(lead.pk, ''),
+        }
+
+        breakdown = lead.ai_score_breakdown if isinstance(lead.ai_score_breakdown, list) else []
+        top_signals = []
+        for sig in breakdown[:3]:
+            if isinstance(sig, dict):
+                lbl = str(sig.get('label') or sig.get('code') or '')
+                short_lbl = lbl.replace('Asked about ', '').replace('Budget ', 'Budget').replace('Mentions ', '').replace('Raised an ', '').replace('Attended a ', '').split(' ')[0]
+                top_signals.append({'delta': int(sig.get('delta') or 0), 'short_label': short_lbl[:14]})
+        lead.top_signals = top_signals
+
+        scores_payload[str(lead.pk)] = {
+            'id': lead.pk,
+            'name': lead.name,
+            'phone': lead.phone,
+            'score': int(lead.ai_score or 0),
+            'temperature': lead.ai_temperature or Lead.Temperature.INACTIVE,
+            'breakdown': breakdown,
+            'status_display': lead.get_status_display(),
+            'summary': latest_summary,
+            'objections_count': obj_count,
+            'scored_at': lead.ai_scored_at.isoformat() if lead.ai_scored_at else '',
+        }
+    return scores_payload
+
+
 @workspace()
 def leads(request):
+    from django.db.models import Avg, Max
+    from apps.calls.models import CallRecording
+    from apps.leads.scoring import TEMPERATURE_META, TEMPERATURE_TIERS
+
     base_query = visible_leads(request.user)
 
-    # Text Search (name, phone, email)
+    # Text Search (name, phone, email, course, location)
     search = request.GET.get('q', '').strip()
     if search:
-        search_filter = Q(name__icontains=search) | Q(phone__icontains=search) | Q(email__icontains=search)
+        search_filter = (
+            Q(name__icontains=search)
+            | Q(phone__icontains=search)
+            | Q(email__icontains=search)
+            | Q(location__icontains=search)
+            | Q(preferred_course__icontains=search)
+            | Q(preferred_course_custom__icontains=search)
+        )
         digits = re.sub(r'\D', '', search)
         if len(digits) >= 5:
             search_filter |= Q(phone__icontains=digits)
@@ -297,24 +454,65 @@ def leads(request):
                 matching_fu_lead_ids = FollowUp.objects.filter(fu_subfilter).values('lead_id')
                 base_query = base_query.filter(pk__in=matching_fu_lead_ids)
 
+    # Recording / AI filter
+    has_recording = request.GET.get('has_recording', '').strip().lower()
+    if has_recording == 'any' and not date_error:
+        rec_lead_ids = CallRecording.objects.filter(call__lead_id__isnull=False).values('call__lead_id')
+        base_query = base_query.filter(pk__in=rec_lead_ids)
+    elif has_recording == 'analyzed' and not date_error:
+        rec_lead_ids = CallRecording.objects.filter(
+            call__lead_id__isnull=False,
+            transcript_status=CallRecording.TranscriptStatus.COMPLETED,
+        ).values('call__lead_id')
+        base_query = base_query.filter(pk__in=rec_lead_ids)
+    elif has_recording == 'objections' and not date_error:
+        rec_lead_ids = CallRecording.objects.filter(
+            call__lead_id__isnull=False,
+            transcript_status=CallRecording.TranscriptStatus.COMPLETED,
+        ).exclude(ai_objections=[]).values('call__lead_id')
+        base_query = base_query.filter(pk__in=rec_lead_ids)
+
     if date_error:
         base_query = base_query.none()
 
-    # Pre-status-filter counts across the current scope
+    # Pre-status-filter and pre-temperature-filter counts across the current scope
     status_counts = dict(base_query.order_by().values('status').annotate(n=Count('pk', distinct=True)).values_list('status', 'n'))
     total_matching_leads = sum(status_counts.values())
+
+    temp_counts = dict(base_query.order_by().values('ai_temperature').annotate(n=Count('pk', distinct=True)).values_list('ai_temperature', 'n'))
+    avg_lead_score = round(float(base_query.aggregate(avg=Avg('ai_score'))['avg'] or 0))
+    temperature_tiers_with_counts = []
+    for tier in TEMPERATURE_TIERS:
+        cnt = temp_counts.get(tier['key'], 0)
+        pct = round((cnt / total_matching_leads) * 100) if total_matching_leads else 0
+        temperature_tiers_with_counts.append({**tier, 'count': cnt, 'pct': pct})
 
     status_choices_with_counts = [
         (key, label, status_counts.get(key, 0))
         for key, label in Lead.Status.choices
     ]
 
-    # Filter by status if provided
+    # Filter by status and temperature if provided
     status = request.GET.get('status', '').strip()
+    temperature = request.GET.get('temperature', '').strip().upper()
+    sort_by = request.GET.get('sort', '').strip().lower()
     query = base_query
     if status in Lead.Status.values:
         query = query.filter(status=status)
-    query = query.order_by('import_batch_id', 'name', 'pk')
+    if temperature in Lead.Temperature.values:
+        query = query.filter(ai_temperature=temperature)
+
+    if sort_by == 'score_desc':
+        query = query.order_by('-ai_score', '-updated_at', 'pk')
+    elif sort_by == 'score_asc':
+        query = query.order_by('ai_score', '-updated_at', 'pk')
+    elif sort_by == 'recent_activity':
+        query = query.annotate(latest_act_at=Max('activity_logs__created_at')).order_by('-latest_act_at', '-updated_at', 'pk')
+    elif sort_by == 'newest':
+        query = query.order_by('-created_at', '-pk')
+    else:
+        sort_by = ''
+        query = query.order_by('import_batch_id', 'name', 'pk')
 
     # Export Handler (CSV / Excel)
     export_format = request.GET.get('export', '').lower().strip()
@@ -326,48 +524,46 @@ def leads(request):
         return export_leads_excel(query)
 
     selected_status_display = dict(Lead.Status.choices).get(status, '')
+    selected_temperature_display = TEMPERATURE_META.get(temperature, {}).get('label', '') if temperature else ''
     selected_owner_user = User.objects.filter(pk=int(owner)).first() if owner.isdigit() else None
 
     batches = LeadImportBatch.objects.filter(leads__in=visible_leads(request.user)).distinct().order_by('-created_at')
     sources = visible_leads(request.user).exclude(source='').values_list('source', flat=True).distinct().order_by('source')
     callers = (
-
         User.objects.filter(
-
             Q(role=User.Role.CALLER) | Q(can_act_as_caller=True),
-
             is_active=True,
-
         ).order_by('first_name', 'username')
-
         if request.user.role in MANAGEMENT else []
-
     )
 
     active_filters_count = sum(1 for v in [
-        search, batch, status, (owner if owner != 'all' else ''), source, service,
+        search, batch, status, temperature, has_recording, sort_by,
+        (owner if owner != 'all' else ''), source, service,
         start_date_str, end_date_str, last_call_from_str, last_call_to_str,
         followup_status, followup_from_str, followup_to_str
     ] if v)
 
     FOLLOWUP_STATUS_LABELS = {
-
         'due_today': 'Due Today',
-
         'overdue': 'Overdue',
-
         'upcoming': 'Upcoming',
-
         'no_followup': 'No Pending Follow-up',
-
     }
-
     followup_status_display = FOLLOWUP_STATUS_LABELS.get(followup_status, followup_status)
 
-
+    page_obj = paginate(request, query)
+    lead_scores_payload = _enrich_leads_page(page_obj.object_list)
 
     return page(request, 'leads', 'leads',
-                records=paginate(request, query),
+                records=page_obj,
+                lead_scores_payload=lead_scores_payload,
+                temperature_tiers_with_counts=temperature_tiers_with_counts,
+                avg_lead_score=avg_lead_score,
+                selected_temperature=temperature,
+                selected_temperature_display=selected_temperature_display,
+                selected_has_recording=has_recording,
+                selected_sort=sort_by,
                 search=search,
                 selected_batch=batch, batches=batches,
                 selected_status=status, selected_status_display=selected_status_display,
@@ -457,6 +653,11 @@ def lead_detail(request, pk):
                     )
                     messages.success(request, 'Lead qualification saved.')
                     return redirect('web:lead-detail', pk=pk)
+        if action == 'recalculate_score':
+            from apps.leads.scoring import refresh_lead_score
+            res = refresh_lead_score(lead, save=True)
+            messages.success(request, f"AI score updated: {res['score']}/100 ({res['temperature_meta']['label']}).")
+            return redirect('web:lead-detail', pk=pk)
         if action in ('collaboration_note', 'note'):
             note_body = request.POST.get('note', '').strip()
             if note_body:
@@ -531,9 +732,34 @@ def lead_detail(request, pk):
             'notes': counselor_notes,
             'admission_requests': lead.admission_requests.select_related('counselor', 'reviewed_by')[:20],
         }
+    from apps.leads.scoring import CORE_RUBRIC_SIGNALS, TEMPERATURE_TIERS, refresh_lead_score
+    if lead.ai_scored_at is None:
+        refresh_lead_score(lead, save=True)
+    raw_breakdown = lead.ai_score_breakdown if isinstance(lead.ai_score_breakdown, list) else []
+    breakdown_by_code = {item.get('code'): item for item in raw_breakdown if isinstance(item, dict) and item.get('code')}
+    core_codes = {c['code'] for c in CORE_RUBRIC_SIGNALS}
+    lead_core_signals = []
+    for sig in CORE_RUBRIC_SIGNALS:
+        matched = breakdown_by_code.get(sig['code'])
+        lead_core_signals.append({
+            'code': sig['code'],
+            'label': sig['label'],
+            'default_delta': sig['delta'],
+            'triggered': matched is not None,
+            'applied_delta': int(matched.get('delta', 0)) if matched else 0,
+            'detail': matched.get('detail', '') if matched else 'Not detected yet in calls or CRM notes',
+        })
+    lead_extra_signals = [
+        item for item in raw_breakdown
+        if isinstance(item, dict) and item.get('code') not in core_codes
+    ]
+
     return page(request, 'lead_detail', 'leads', lead=lead, form=form, follow_form=follow_form,
                 qualification_form=qualification_form, collaboration_notes=collaboration_notes,
                 lead_360=lead_360, selected_timeline_category=selected_category,
+                temperature_tiers=TEMPERATURE_TIERS,
+                lead_core_signals=lead_core_signals,
+                lead_extra_signals=lead_extra_signals,
                 history=visible_calls(request.user).filter(lead=lead).order_by('-started_at')[:30],
                 followup_history=visible_followups(request.user).filter(lead=lead).order_by('-scheduled_at')[:20],
                 activity_log=activity_qs[:50],
@@ -541,6 +767,38 @@ def lead_detail(request, pk):
                 whatsapp_templates=whatsapp_templates, counselor_panel=counselor_panel,
                 caller_counselor_summary=caller_counselor_summary,
                 counselor_notes=counselor_notes)
+
+
+@require_POST
+@workspace()
+def lead_recalculate_score(request, pk):
+    from django.http import JsonResponse
+    from apps.leads.scoring import refresh_lead_score
+
+    lead = get_object_or_404(visible_leads(request.user), pk=pk)
+    result = refresh_lead_score(lead, save=True)
+    return JsonResponse({
+        'lead_id': lead.pk,
+        'score': result['score'],
+        'temperature': result['temperature'],
+        'temperature_meta': result['temperature_meta'],
+        'breakdown': result['breakdown'],
+        'scored_at': result['scored_at'].isoformat() if result.get('scored_at') else '',
+    })
+
+
+@require_POST
+@workspace(management=True)
+def leads_recalculate_all(request):
+    from apps.leads.scoring import backfill_lead_scores
+
+    counts = backfill_lead_scores(Lead.objects.all())
+    total = sum(counts.values())
+    messages.success(
+        request,
+        f"Refreshed 100-point AI scores for {total} leads (Hot: {counts.get('HOT', 0)}, Warm: {counts.get('WARM', 0)}, Interested: {counts.get('INTERESTED', 0)}, Cold: {counts.get('COLD', 0)}, Inactive: {counts.get('INACTIVE', 0)}).",
+    )
+    return redirect('web:leads')
 
 
 @require_POST

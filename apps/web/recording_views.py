@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
+from apps.calls.ai_transcription import ensure_recording_transcript_language
 from apps.calls.api.recordings import transcript_payload
 from apps.calls.models import Call, CallRecording
 from apps.calls.recordings import permitted_call, playback
@@ -53,6 +54,9 @@ def recording_ai_analyze(request, call_id):
 def recording_ai_status(request, call_id):
     call = permitted_call(request.user, call_id)
     recording = get_object_or_404(CallRecording.objects.select_related('call', 'call__lead', 'call__caller'), call=call)
+    req_lang = (request.GET.get('lang') or '').strip().lower()
+    if req_lang in {'en', 'hinglish', 'hi'} and recording.transcript_status == CallRecording.TranscriptStatus.COMPLETED:
+        ensure_recording_transcript_language(recording, req_lang)
     return JsonResponse(transcript_payload(recording), status=200)
 
 

@@ -3,3 +3,5 @@
 faster-whisper==1.2.1
 # Pin PyAV < 16 as fallback compatibility guard for faster-whisper's decode_audio()
 av>=11,<16
+# Optional offline MIT-licensed CTranslate2 neural EN->HI translator for local Hindi/Hinglish transcripts
+argostranslate>=1.9.6

@@ -25,6 +25,10 @@
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
       <span>Overview</span>
     </a>
+    <a href="{% url 'web:employee-reports' %}" class="quick-pill {% if section == 'employee-reports' %}active{% endif %}" title="Visual Employee Reports">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+      <span>Reports</span>
+    </a>
     <a href="{% url 'web:performance' %}" class="quick-pill {% if section == 'performance' %}active{% endif %}" title="Performance">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
       <span>Performance</span>
@@ -45,20 +49,24 @@
   <nav class="sidebar-nav" id="sidebar-nav-groups" aria-label="Main navigation">
 
     <!-- 1. OVERVIEW -->
-    {% if can_call %}
     <div class="nav-group" data-group-id="overview">
       <button type="button" class="nav-group-header" aria-expanded="true">
         <span class="nav-group-title">Overview</span>
         <svg class="nav-group-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
       </button>
       <div class="nav-group-items">
+        {% if can_call %}
         <a {% if section == 'dashboard' %}aria-current="page"{% endif %} href="{% url 'web:dashboard' %}">
           <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg></span>
           <span class="nav-text">Overview</span>
         </a>
+        {% endif %}
+        <a {% if section == 'employee-reports' %}aria-current="page"{% endif %} href="{% url 'web:employee-reports' %}">
+          <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg></span>
+          <span class="nav-text">Employee Reports</span>
+        </a>
       </div>
     </div>
-    {% endif %}
 
     <!-- 2. LEADS -->
     {% if can_call %}

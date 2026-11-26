@@ -1,4 +1,58 @@
-{% extends 'web/base.html' %}{% load web_tags %}{% block title %}{{ lead.name }}{% endblock %}{% block breadcrumb %}Lead details{% endblock %}{% block content %}<div class="page-heading"><div><a class="text-link" href="{% url 'web:leads' %}">← Lead directory</a><p>Batch: <a class="text-link" href="{% url 'web:leads' %}?batch={{ lead.import_batch_id|default:'none' }}">{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</a></p><h1>{{ lead.name }}<span class="accent">.</span></h1><p>{{ lead.phone }} · {% employee_link lead.assigned_caller %}</p></div><span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span></div><div class="actions spaced" style="display:flex;gap:10px;align-items:center;"><a class="button" href="{% url 'web:lead-collaboration' lead.pk %}">Notes, qualification & consultation ↗</a><button type="button" class="button" id="open-wa-btn" style="background:#25D366;color:#ffffff;border-color:#25D366;font-weight:600;display:inline-flex;align-items:center;gap:6px;" onclick="openWhatsAppModal()"><span>💬</span> WhatsApp</button></div>
+{% extends 'web/base.html' %}{% load web_tags static %}{% block title %}{{ lead.name }}{% endblock %}{% block breadcrumb %}Lead details{% endblock %}{% block content %}<link rel="stylesheet" href="{% static 'web/leads-directory.css' %}?v=3"><div class="page-heading"><div><a class="text-link" href="{% url 'web:leads' %}">← Lead directory</a><p>Batch: <a class="text-link" href="{% url 'web:leads' %}?batch={{ lead.import_batch_id|default:'none' }}">{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</a></p><h1>{{ lead.name }}<span class="accent">.</span></h1><p>{{ lead.phone }} · {% employee_link lead.assigned_caller %}</p></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="temp-pill" style="--tier-color: {{ lead.ai_temperature_meta.color }}; padding:5px 12px; font-size:12.5px;">{{ lead.ai_temperature_meta.label }} · {{ lead.ai_score }}/100</span><span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span></div></div><div class="actions spaced" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><a class="button" href="{% url 'web:lead-collaboration' lead.pk %}">Notes, qualification & consultation ↗</a><button type="button" class="button" id="open-wa-btn" style="background:#25D366;color:#ffffff;border-color:#25D366;font-weight:600;display:inline-flex;align-items:center;gap:6px;" onclick="openWhatsAppModal()"><span>💬</span> WhatsApp</button><form method="post" action="{% url 'web:lead-detail' lead.pk %}" style="margin:0;">{% csrf_token %}<input type="hidden" name="action" value="recalculate_score"><button type="submit" class="button">↻ Refresh AI Score</button></form></div>
+
+<!-- 100-Point AI Lead Score Card -->
+<section class="leads-workspace lead-detail-score-card" aria-label="100-point AI lead score breakdown">
+  <div class="lead-detail-score-grid">
+    <div>
+      <div class="score-hero-banner" style="--tier-color: {{ lead.ai_temperature_meta.color }}; margin-bottom: 12px;">
+        <div class="score-hero-ring" role="img" aria-label="AI lead score {{ lead.ai_score }} out of 100, {{ lead.ai_temperature_meta.label }}" style="--p: {{ lead.ai_score }}%; --tier-color: {{ lead.ai_temperature_meta.color }};">
+          <div class="score-hero-ring-inner">{{ lead.ai_score }}</div>
+        </div>
+        <div class="score-hero-info">
+          <div class="score-hero-tier-row">
+            <span class="score-hero-tier-label">{{ lead.ai_temperature_meta.label }} Lead ({{ lead.ai_score }}/100)</span>
+            <span class="temp-pill" style="--tier-color: {{ lead.ai_temperature_meta.color }};">{{ lead.ai_temperature_meta.range }}</span>
+          </div>
+          <p class="score-hero-summary">Auto-calculated from AI call summaries, key points, objections, demos &amp; CRM milestones.</p>
+        </div>
+      </div>
+      <div class="tier-scale-bar" role="list" aria-label="Lead temperature ranges">
+        {% for tier in temperature_tiers %}
+        <div class="tier-scale-col {% if tier.key == lead.ai_temperature %}is-active{% endif %}" role="listitem" style="--tier-color: {{ tier.color }};">
+          <span class="tier-scale-swatch" aria-hidden="true"></span>
+          <span class="tier-scale-name">{{ tier.label }}</span>
+          <span class="tier-scale-range">{{ tier.range }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div>
+      <h2 style="margin:0 0 8px;font-size:16px;font-weight:800;">How the 100-point score builds</h2>
+      <ul class="rubric-signal-list">
+        {% for row in lead_core_signals %}
+        <li class="rubric-signal-row {% if not row.triggered %}untriggered{% endif %}">
+          <div class="rubric-signal-left">
+            <span class="rubric-signal-label">{% if row.triggered %}<span aria-hidden="true">{% if row.applied_delta >= 0 %}✓{% else %}⚠{% endif %}</span> {% endif %}{{ row.label }}</span>
+            <span class="rubric-signal-detail">{{ row.detail }}</span>
+          </div>
+          <span class="rubric-signal-delta {% if row.triggered %}{% if row.applied_delta >= 0 %}pos{% else %}neg{% endif %}{% else %}muted{% endif %}">
+            {% if row.triggered %}{% if row.applied_delta > 0 %}+{% endif %}{{ row.applied_delta }}{% else %}0 <small style="font-weight:600;opacity:.7;">({% if row.default_delta > 0 %}+{% endif %}{{ row.default_delta }})</small>{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+        {% for sig in lead_extra_signals %}
+        <li class="rubric-signal-row">
+          <div class="rubric-signal-left">
+            <span class="rubric-signal-label">{{ sig.label }}</span>
+            <span class="rubric-signal-detail">{{ sig.detail }}</span>
+          </div>
+          <span class="rubric-signal-delta {% if sig.delta >= 0 %}pos{% else %}neg{% endif %}">{% if sig.delta > 0 %}+{% endif %}{{ sig.delta }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</section>
 
 <div id="wa-modal" class="panel spaced" style="display:none;background:var(--surface);border:1px solid #25D366;border-radius:12px;padding:20px;margin-bottom:24px;">
   {% csrf_token %}

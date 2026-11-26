@@ -12,8 +12,11 @@ from rest_framework.test import APIClient
 from apps.accounts.models import User
 from apps.calls.ai_transcription import (
     analyze_transcript_locally,
+    build_multilingual_transcript_variants,
     detect_call_language,
     devanagari_to_hinglish,
+    ensure_recording_transcript_language,
+    hindi_to_natural_hinglish,
     process_recording_ai,
     resolve_ai_provider,
     sanitize_hinglish_transcript,
@@ -154,6 +157,34 @@ class CallAITranscriptionUnitTests(TestCase):
         )
         self.assertIn('ALREADY_ENROLLED', {o['category'] for o in enrolled['objections']})
         self.assertEqual(enrolled['sentiment'], 'NEGATIVE')
+
+    def test_multilingual_transcript_variants_and_natural_hinglish(self):
+        hi_sample = "क्या आपके घर में कोई छात्र है जो एमबीबीएस करना चाहता है? आपका नीट स्कोर कितना है? पटना, भारत।"
+        hinglish = hindi_to_natural_hinglish(hi_sample)
+        self.assertFalse(any('\u0900' <= ch <= '\u097f' for ch in hinglish), hinglish)
+        self.assertIn('MBBS', hinglish)
+        self.assertIn('NEET', hinglish)
+        self.assertIn('Patna', hinglish)
+        self.assertIn('India', hinglish)
+
+        en_segs = [
+            {'start': 0.0, 'end': 3.5, 'text': 'Hello sir, do you want MBBS admission?'},
+            {'start': 4.0, 'end': 7.0, 'text': 'What is your NEET score and location?'},
+        ]
+        mocked_hi = [
+            'हैलो सर, क्या आप एमबीबीएस एडमिशन चाहते हैं?',
+            'आपका नीट स्कोर और लोकेशन क्या है?',
+        ]
+        with patch('apps.calls.ai_transcription.translate_english_lines_to_hindi', return_value=mocked_hi):
+            variants = build_multilingual_transcript_variants(en_segs, '')
+        self.assertEqual(set(variants.keys()), {'en', 'hinglish', 'hi'})
+        self.assertEqual(len(variants['en']['segments']), 2)
+        self.assertEqual(len(variants['hi']['segments']), 2)
+        self.assertEqual(len(variants['hinglish']['segments']), 2)
+        self.assertEqual(variants['hi']['segments'][1]['start'], 4.0)
+        self.assertIn('एमबीबीएस', variants['hi']['text'])
+        self.assertIn('MBBS', variants['hinglish']['text'])
+        self.assertFalse(any('\u0900' <= ch <= '\u097f' for ch in variants['hinglish']['text']))
 
     @override_settings(AI_TRANSCRIBE_PROVIDER='auto', AI_GEMINI_API_KEY='', AI_GROQ_API_KEY='', AI_OPENAI_API_KEY='')
     def test_provider_auto_defaults_to_local_when_no_keys(self):
@@ -341,3 +372,34 @@ class CallAIPipelineIntegrationTests(TestCase):
         self.assertEqual(rec.ai_language, 'Hinglish')
         self.assertEqual(rec.ai_objections[0]['label'], 'High Fees')
         self.assertTrue(rec.ai_provider.startswith('gemini-'))
+
+    def test_on_demand_language_endpoint_caches_en_hinglish_and_hi(self):
+        rec = CallRecording.objects.create(
+            call=self.call1,
+            duration_seconds=55,
+            file_size=len(self.m4a_bytes),
+            sha256='lang123',
+            transcript_status=CallRecording.TranscriptStatus.COMPLETED,
+            transcript_text='[00:00] Hello sir, what is your NEET score?',
+            transcript_segments=[{'start': 0.0, 'end': 4.0, 'text': 'Hello sir, what is your NEET score?'}],
+            ai_language='Hinglish',
+            file=SimpleUploadedFile('lang.m4a', self.m4a_bytes, content_type='audio/mp4'),
+        )
+        self.client.force_login(self.manager)
+        with patch(
+            'apps.calls.ai_transcription.translate_english_lines_to_hindi',
+            return_value=['हैलो सर, आपका नीट स्कोर क्या है?'],
+        ):
+            resp = self.client.get(f'/recordings/{self.call1.pk}/ai-status/?lang=hinglish')
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertIn('en', payload['transcript_variants'])
+        self.assertIn('hinglish', payload['transcript_variants'])
+        self.assertIn('hi', payload['transcript_variants'])
+        self.assertIn('नीट', payload['transcript_variants']['hi']['text'])
+        self.assertIn('NEET', payload['transcript_variants']['hinglish']['text'])
+        self.assertFalse(
+            any('\u0900' <= ch <= '\u097f' for ch in payload['transcript_variants']['hinglish']['text'])
+        )
+        rec.refresh_from_db()
+        self.assertIn('hi', rec.transcript_variants)

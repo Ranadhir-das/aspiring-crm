@@ -814,6 +814,327 @@ def _collapse_asr_repetitions(text: str) -> str:
     return re.sub(r'\s+', ' ', cleaned).strip()
 
 
+_NATURAL_HINGLISH_REPLACEMENTS: list[tuple[re.Pattern[str], str]] = [
+    # Common Devanagari-transliterated English loanwords -> clean natural English spelling
+    (re.compile(r'\b(emabeebes|emabeebees|emabeebies|emabibies|emabiees|em\.?bi\.?bi\.?es|ema\s*bi\s*bi\s*esa)\b', re.IGNORECASE), 'MBBS'),
+    (re.compile(r'\b(emabe|emabie|emabee|ema\s*bi\s*e)\b', re.IGNORECASE), 'MBA'),
+    (re.compile(r'\b(beetek|beeteka|bi\.?teka|b\.?tech)\b', re.IGNORECASE), 'BTech'),
+    (re.compile(r'\b(neet|neeta|nita|neet\s+yoojee)\b', re.IGNORECASE), 'NEET'),
+    (re.compile(r'\b(kaalej|kaaleja|kolej|koleja|mahaavidyaalaya|mahavidyalaya)\b', re.IGNORECASE), 'college'),
+    (re.compile(r'\b(edamishan|admishan|pravesh|daakhilaa|dakhila)\b', re.IGNORECASE), 'admission'),
+    (re.compile(r'\b(studaent|studenta|studant|chhaatr|chhatr|vidyaarthee|vidyarthi)\b', re.IGNORECASE), 'student'),
+    (re.compile(r'\b(phees|pheesa|phis|shulk|shulka)\b', re.IGNORECASE), 'fees'),
+    (re.compile(r'\b(bajat|bajata)\b', re.IGNORECASE), 'budget'),
+    (re.compile(r'\b(lokeshan|lokeshana|sthaan|sthan)\b', re.IGNORECASE), 'location'),
+    (re.compile(r'\b(bhaarat|bharat|indiyaa|indyaa)\b', re.IGNORECASE), 'India'),
+    (re.compile(r'\b(patanaa|patnaa)\b', re.IGNORECASE), 'Patna'),
+    (re.compile(r'\b(seekar|sikar)\b', re.IGNORECASE), 'Sikar'),
+    (re.compile(r'\b(skora|skor|sakor|ank|anka)\b', re.IGNORECASE), 'score'),
+    (re.compile(r'\b(skorakaard|skora\s+kaard|skor\s+kard)\b', re.IGNORECASE), 'scorecard'),
+    (re.compile(r'\b(haostal|hostala|chhaatraavaas|chatravas)\b', re.IGNORECASE), 'hostel'),
+    (re.compile(r'\b(vaatsaep|vhaatsaep|vaatsap|watsapp)\b', re.IGNORECASE), 'WhatsApp'),
+    (re.compile(r'\b(kainsaling|kaunseling|paraamarsh|paramarsh)\b', re.IGNORECASE), 'counselling'),
+    (re.compile(r'\b(kansaltent|kansaltensee|salaahakaar|salahkar)\b', re.IGNORECASE), 'consultancy'),
+    (re.compile(r'\b(seeniyar|sinyar|varishth|varishtha)\b', re.IGNORECASE), 'senior'),
+    (re.compile(r'\b(hailo|helo|halo)\b', re.IGNORECASE), 'Hello'),
+    (re.compile(r'\b(guda\s+maarning|shubh\s+prabhaat)\b', re.IGNORECASE), 'Good morning'),
+    (re.compile(r'\b(guda\s+aaphataranoon|namaskaar)\b', re.IGNORECASE), 'Good afternoon'),
+    (re.compile(r'\b(guda\s+eevaning|shubh\s+sandhyaa)\b', re.IGNORECASE), 'Good evening'),
+    (re.compile(r'\b(dhanyavaad|shukriyaa)\b', re.IGNORECASE), 'Thank you'),
+    (re.compile(r'\b(maaph\s+keejie|maaf\s+kijiye|saaree|sori)\b', re.IGNORECASE), 'Sorry'),
+    (re.compile(r'\b(medikal|chikitsaa)\b', re.IGNORECASE), 'medical'),
+    (re.compile(r'\b(pareekshaa|pariksha|egzaam|ekzaam)\b', re.IGNORECASE), 'exam'),
+    (re.compile(r'\b(phaimilee|parivaar|parivar)\b', re.IGNORECASE), 'family'),
+    (re.compile(r'\b(maataa\s*-?\s*pitaa|maataapitaa)\b', re.IGNORECASE), 'parents'),
+    (re.compile(r'\b(pitaajee|pitaa)\b', re.IGNORECASE), 'papa'),
+    (re.compile(r'\b(maataajee|maa)\b', re.IGNORECASE), 'mummy'),
+    # Common Hindi grammar readability cleanups (natural Romanized Hinglish spelling)
+    (re.compile(r'\bkyaa\b', re.IGNORECASE), 'kya'),
+    (re.compile(r'\bhaan\b', re.IGNORECASE), 'haan'),
+    (re.compile(r'\bnahee[n]?\b', re.IGNORECASE), 'nahi'),
+    (re.compile(r'\bnahin\b', re.IGNORECASE), 'nahi'),
+    (re.compile(r'\bhain\b', re.IGNORECASE), 'hain'),
+    (re.compile(r'\bmain\b', re.IGNORECASE), 'main'),
+    (re.compile(r'\b(mein|men)\b', re.IGNORECASE), 'mein'),
+    (re.compile(r'\bkoee\b', re.IGNORECASE), 'koi'),
+    (re.compile(r'\bkyonki\b', re.IGNORECASE), 'kyunki'),
+    (re.compile(r'\baapake\b', re.IGNORECASE), 'aapke'),
+    (re.compile(r'\baapakaa\b', re.IGNORECASE), 'aapka'),
+    (re.compile(r'\baapakee\b', re.IGNORECASE), 'aapki'),
+    (re.compile(r'\baapane\b', re.IGNORECASE), 'aapne'),
+    (re.compile(r'\bhamane\b', re.IGNORECASE), 'humne'),
+    (re.compile(r'\bhamaaraa\b', re.IGNORECASE), 'hamara'),
+    (re.compile(r'\bhamaaree\b', re.IGNORECASE), 'hamari'),
+    (re.compile(r'\bmeraa\b', re.IGNORECASE), 'mera'),
+    (re.compile(r'\bmeree\b', re.IGNORECASE), 'meri'),
+    (re.compile(r'\bkaranaa\b', re.IGNORECASE), 'karna'),
+    (re.compile(r'\bchaahataa\b', re.IGNORECASE), 'chahta'),
+    (re.compile(r'\bchaahatee\b', re.IGNORECASE), 'chahti'),
+    (re.compile(r'\bchaahate\b', re.IGNORECASE), 'chahte'),
+    (re.compile(r'\bkitanaa\b', re.IGNORECASE), 'kitna'),
+    (re.compile(r'\bkitanee\b', re.IGNORECASE), 'kitni'),
+    (re.compile(r'\bkahaan\b', re.IGNORECASE), 'kahan'),
+    (re.compile(r'\btheeka\b', re.IGNORECASE), 'theek'),
+    (re.compile(r'\bbaata\b', re.IGNORECASE), 'baat'),
+    (re.compile(r'\bbhejanaa\b', re.IGNORECASE), 'bhejna'),
+    (re.compile(r'\bbhejen\b', re.IGNORECASE), 'bhejein'),
+    (re.compile(r'\bbataaen\b', re.IGNORECASE), 'batayein'),
+    (re.compile(r'\bchahiye|chaahie\b', re.IGNORECASE), 'chahiye'),
+    (re.compile(r'\bsara\b', re.IGNORECASE), 'sir'),
+    (re.compile(r'\bmaidam\b', re.IGNORECASE), 'madam'),
+    (re.compile(r'\bjee\b', re.IGNORECASE), 'ji'),
+]
+
+
+def hindi_to_natural_hinglish(hindi_text: str) -> str:
+    """Convert clean Devanagari Hindi into pure, natural Romanized Hinglish (0 Devanagari chars)."""
+    if not hindi_text:
+        return ''
+    out_lines: list[str] = []
+    for raw_line in hindi_text.splitlines():
+        s = devanagari_to_hinglish(raw_line) if _DEVANAGARI_RE.search(raw_line) else raw_line
+        s = _ARABIC_URDU_RE.sub('', s)
+        s = re.sub(r'([aeiou])\1{2,}', r'\1', s, flags=re.IGNORECASE)
+        for pat, repl in _NATURAL_HINGLISH_REPLACEMENTS:
+            s = pat.sub(repl, s)
+        s = _fix_domain_asr_typos(s)
+        s = re.sub(r'\s+([.,?!])', r'\1', s)
+        s = re.sub(r'\s+', ' ', s).strip()
+        if s:
+            # Capitalize start of sentence (after optional [mm:ss] timestamp or . ? !)
+            s = re.sub(r'^(\[\d{2}:\d{2}\]\s*)?([a-z])', lambda m: (m.group(1) or '') + m.group(2).upper(), s)
+            s = re.sub(r'([.?!]\s+)([a-z])', lambda m: m.group(1) + m.group(2).upper(), s)
+            out_lines.append(s)
+    return '\n'.join(out_lines)
+
+
+def _translate_via_argos_en_to_hi(texts: list[str]) -> list[str] | None:
+    """Tier 1: Offline MIT-licensed Argos Translate (CTranslate2 EN -> HI) if installed."""
+    try:
+        import argostranslate.translate as argos_tr  # type: ignore
+        installed = argos_tr.get_installed_languages()
+        en_lang = next((l for l in installed if l.code == 'en'), None)
+        hi_lang = next((l for l in installed if l.code == 'hi'), None)
+        if not en_lang or not hi_lang:
+            return None
+        translation = en_lang.get_translation(hi_lang)
+        if not translation:
+            return None
+        return [translation.translate(t) if t.strip() else '' for t in texts]
+    except Exception:
+        return None
+
+
+def _translate_via_mymemory_en_to_hi(texts: list[str]) -> list[str] | None:
+    """Tier 2: Documented public MyMemory REST API (free, zero key) batched cleanly per chunk."""
+    if not texts:
+        return []
+    results: list[str] = list(texts)
+    # Batch multiple short segments into <= 420-char chunks using an unambiguous separator
+    sep = ' ||| '
+    batches: list[list[int]] = []
+    cur_batch: list[int] = []
+    cur_len = 0
+    for idx, line in enumerate(texts):
+        clean = (line or '').strip()
+        if not clean:
+            continue
+        add_len = len(clean) + (len(sep) if cur_batch else 0)
+        if cur_batch and cur_len + add_len > 420:
+            batches.append(cur_batch)
+            cur_batch = [idx]
+            cur_len = len(clean)
+        else:
+            cur_batch.append(idx)
+            cur_len += add_len
+    if cur_batch:
+        batches.append(cur_batch)
+
+    any_translated = False
+    for idxs in batches:
+        joined = sep.join(texts[i].strip() for i in idxs)
+        try:
+            resp = requests.get(
+                'https://api.mymemory.translated.net/get',
+                params={'q': joined, 'langpair': 'en|hi'},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+            translated = str((data.get('responseData') or {}).get('translatedText') or '').strip()
+            if not translated or 'MYMEMORY WARNING' in translated.upper():
+                continue
+            parts = [p.strip() for p in re.split(r'\s*\|\|\|\s*', translated)]
+            if len(parts) == len(idxs):
+                for idx, part in zip(idxs, parts):
+                    results[idx] = part
+                any_translated = True
+            elif len(idxs) == 1:
+                results[idxs[0]] = translated
+                any_translated = True
+            else:
+                # Fallback to individual lines for this small batch if separator altered
+                for idx in idxs:
+                    r2 = requests.get(
+                        'https://api.mymemory.translated.net/get',
+                        params={'q': texts[idx].strip()[:450], 'langpair': 'en|hi'},
+                        timeout=8,
+                    )
+                    if r2.status_code == 200:
+                        t2 = str((r2.json().get('responseData') or {}).get('translatedText') or '').strip()
+                        if t2 and 'MYMEMORY WARNING' not in t2.upper():
+                            results[idx] = t2
+                            any_translated = True
+        except Exception as exc:
+            logger.debug('MyMemory EN->HI batch failed: %s', exc)
+            continue
+    return results if any_translated else None
+
+
+_OFFLINE_EN_HI_PHRASES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r'\bgood morning\b', re.IGNORECASE), 'गुड मॉर्निंग'),
+    (re.compile(r'\bgood afternoon\b', re.IGNORECASE), 'गुड आफ्टरनून'),
+    (re.compile(r'\bgood evening\b', re.IGNORECASE), 'गुड इवनिंग'),
+    (re.compile(r'\bhello\b', re.IGNORECASE), 'हैलो'),
+    (re.compile(r'\bthank you\b', re.IGNORECASE), 'धन्यवाद'),
+    (re.compile(r'\bsorry\b', re.IGNORECASE), 'सॉरी'),
+    (re.compile(r'\byes\b', re.IGNORECASE), 'हाँ'),
+    (re.compile(r'\bno\b', re.IGNORECASE), 'नहीं'),
+    (re.compile(r'\bokay\b|\bok\b', re.IGNORECASE), 'ठीक है'),
+    (re.compile(r'\bsir\b', re.IGNORECASE), 'सर'),
+    (re.compile(r'\bmadam\b|\bma\'am\b', re.IGNORECASE), 'मैडम'),
+    (re.compile(r'\bstudent\b', re.IGNORECASE), 'स्टूडेंट'),
+    (re.compile(r'\badmission\b', re.IGNORECASE), 'एडमिशन'),
+    (re.compile(r'\bcollege\b', re.IGNORECASE), 'कॉलेज'),
+    (re.compile(r'\bfees?\b', re.IGNORECASE), 'फीस'),
+    (re.compile(r'\bbudget\b', re.IGNORECASE), 'बजट'),
+    (re.compile(r'\blocation\b', re.IGNORECASE), 'लोकेशन'),
+    (re.compile(r'\bscore\s*card\b', re.IGNORECASE), 'स्कोरकार्ड'),
+    (re.compile(r'\bscore\b', re.IGNORECASE), 'स्कोर'),
+    (re.compile(r'\bhostel\b', re.IGNORECASE), 'हॉस्टल'),
+    (re.compile(r'\bwhatsapp\b', re.IGNORECASE), 'व्हाट्सएप'),
+    (re.compile(r'\bin india\b', re.IGNORECASE), 'भारत में'),
+    (re.compile(r'\bindia\b', re.IGNORECASE), 'भारत'),
+    (re.compile(r'\bpatna\b', re.IGNORECASE), 'पटना'),
+    (re.compile(r'\bsikar\b', re.IGNORECASE), 'सीकर'),
+    (re.compile(r'\bmbbs\b', re.IGNORECASE), 'एमबीबीएस'),
+    (re.compile(r'\bneet\b', re.IGNORECASE), 'नीट'),
+    (re.compile(r'\bmba\b', re.IGNORECASE), 'एमबीए'),
+]
+
+
+def _translate_offline_fallback_en_to_hi(texts: list[str]) -> list[str]:
+    out: list[str] = []
+    for line in texts:
+        s = line
+        for pat, repl in _OFFLINE_EN_HI_PHRASES:
+            s = pat.sub(repl, s)
+        out.append(s)
+    return out
+
+
+def translate_english_lines_to_hindi(lines: list[str], *, allow_network: bool = True) -> list[str]:
+    """Translate English transcript lines to clean Devanagari Hindi via Argos -> MyMemory -> offline."""
+    if not lines:
+        return []
+    argos = _translate_via_argos_en_to_hi(lines)
+    if argos is not None:
+        return argos
+    if allow_network:
+        remote = _translate_via_mymemory_en_to_hi(lines)
+        if remote is not None:
+            return remote
+    return _translate_offline_fallback_en_to_hi(lines)
+
+
+def build_multilingual_transcript_variants(
+    en_segments: list[dict[str, Any]],
+    en_text: str,
+    *,
+    allow_network: bool = True,
+) -> dict[str, dict[str, Any]]:
+    """Build synchronized English, pure Romanized Hinglish, and Hindi (Devanagari) transcript variants."""
+    base_segments: list[dict[str, Any]] = []
+    if en_segments:
+        for seg in en_segments:
+            txt = _fix_domain_asr_typos(str(seg.get('text') or '').strip())
+            if txt:
+                base_segments.append({
+                    'start': round(float(seg.get('start') or 0), 2),
+                    'end': round(float(seg.get('end') or 0), 2),
+                    'text': txt,
+                })
+    elif en_text:
+        for raw_line in en_text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            m = re.match(r'^\[(\d{2}):(\d{2})\]\s*(.+)$', line)
+            if m:
+                sec = int(m.group(1)) * 60 + int(m.group(2))
+                base_segments.append({'start': float(sec), 'end': float(sec + 3), 'text': _fix_domain_asr_typos(m.group(3))})
+            else:
+                base_segments.append({'start': 0.0, 'end': 3.0, 'text': _fix_domain_asr_typos(line)})
+
+    if not base_segments:
+        clean_en = (en_text or '').strip()
+        return {
+            'en': {'text': clean_en, 'segments': []},
+            'hinglish': {'text': sanitize_hinglish_transcript(clean_en), 'segments': []},
+            'hi': {'text': clean_en, 'segments': []},
+        }
+
+    en_lines = [s['text'] for s in base_segments]
+    hi_lines = translate_english_lines_to_hindi(en_lines, allow_network=allow_network)
+
+    hi_segments: list[dict[str, Any]] = []
+    hinglish_segments: list[dict[str, Any]] = []
+    for seg, hi_txt in zip(base_segments, hi_lines):
+        clean_hi = (hi_txt or seg['text']).strip()
+        clean_hinglish = hindi_to_natural_hinglish(clean_hi) or sanitize_hinglish_transcript(seg['text'])
+        hi_segments.append({'start': seg['start'], 'end': seg['end'], 'text': clean_hi})
+        hinglish_segments.append({'start': seg['start'], 'end': seg['end'], 'text': clean_hinglish})
+
+    return {
+        'en': {
+            'text': _format_timestamped_transcript(base_segments),
+            'segments': base_segments,
+        },
+        'hinglish': {
+            'text': _format_timestamped_transcript(hinglish_segments),
+            'segments': hinglish_segments,
+        },
+        'hi': {
+            'text': _format_timestamped_transcript(hi_segments),
+            'segments': hi_segments,
+        },
+    }
+
+
+def ensure_recording_transcript_language(recording, lang_code: str, *, allow_network: bool = True) -> dict[str, Any]:
+    """Ensure recording.transcript_variants has en/hinglish/hi cached; lazily populate & persist if missing."""
+    code = (lang_code or 'en').strip().lower()
+    if code not in {'en', 'hinglish', 'hi'}:
+        code = 'en'
+    variants = dict(recording.transcript_variants or {}) if isinstance(recording.transcript_variants, dict) else {}
+    existing = variants.get(code)
+    if isinstance(existing, dict) and (existing.get('segments') or existing.get('text')):
+        return variants
+
+    en_block = variants.get('en') if isinstance(variants.get('en'), dict) else {}
+    en_segments = en_block.get('segments') or recording.transcript_segments or []
+    en_text = en_block.get('text') or recording.transcript_text or ''
+    if not en_segments and not en_text:
+        return variants
+
+    built = build_multilingual_transcript_variants(en_segments, en_text, allow_network=allow_network)
+    variants.update(built)
+    recording.transcript_variants = variants
+    recording.save(update_fields=['transcript_variants'])
+    return variants
+
+
 def _transcribe_local_whisper(audio_path: str, call_context: dict[str, Any]) -> dict[str, Any]:
     wav_path = _prepare_wav_16k(audio_path)
     cleanup_wav = wav_path != audio_path
@@ -876,6 +1197,7 @@ def _transcribe_local_whisper(audio_path: str, call_context: dict[str, Any]) -> 
             joined_plain = ' '.join(s['text'] for s in segments)
 
         formatted_transcript = _format_timestamped_transcript(segments)
+        variants = build_multilingual_transcript_variants(segments, formatted_transcript or joined_plain)
         analysis = analyze_transcript_locally(
             joined_plain,
             segments=segments,
@@ -887,6 +1209,7 @@ def _transcribe_local_whisper(audio_path: str, call_context: dict[str, Any]) -> 
         return {
             'transcript_text': formatted_transcript or joined_plain,
             'transcript_segments': segments,
+            'transcript_variants': variants,
             'ai_summary': analysis['summary'],
             'ai_key_points': analysis['key_points'],
             'ai_objections': analysis['objections'],
@@ -993,9 +1316,23 @@ def _normalize_llm_payload(
             })
 
     next_action = str(parsed.get('next_action') or '').strip()[:250]
+    variants: dict[str, Any] = {
+        'en': {'text': transcript, 'segments': segments or []},
+    }
+    if parsed.get('transcript_hinglish'):
+        variants['hinglish'] = {
+            'text': sanitize_hinglish_transcript(str(parsed.get('transcript_hinglish'))),
+            'segments': [],
+        }
+    if parsed.get('transcript_hi'):
+        variants['hi'] = {
+            'text': str(parsed.get('transcript_hi')).strip(),
+            'segments': [],
+        }
     return {
         'transcript_text': transcript,
         'transcript_segments': segments or [],
+        'transcript_variants': variants,
         'ai_summary': summary[:1500],
         'ai_key_points': key_points,
         'ai_objections': objections,
@@ -1206,6 +1543,12 @@ def process_recording_ai(recording) -> dict[str, Any]:
         recording.transcript_status = CallRecording.TranscriptStatus.COMPLETED
         recording.transcript_text = result['transcript_text']
         recording.transcript_segments = result['transcript_segments']
+        recording.transcript_variants = result.get('transcript_variants') or {
+            'en': {
+                'text': result['transcript_text'],
+                'segments': result['transcript_segments'],
+            }
+        }
         recording.ai_summary = result['ai_summary']
         recording.ai_key_points = result['ai_key_points']
         recording.ai_objections = result['ai_objections']
@@ -1220,6 +1563,7 @@ def process_recording_ai(recording) -> dict[str, Any]:
             'transcript_status',
             'transcript_text',
             'transcript_segments',
+            'transcript_variants',
             'ai_summary',
             'ai_key_points',
             'ai_objections',
@@ -1240,6 +1584,13 @@ def process_recording_ai(recording) -> dict[str, Any]:
             recording.ai_sentiment,
             len(recording.ai_objections or []),
         )
+        # Automatically refresh the lead's 100-point AI score & 5-tier temperature
+        if call.lead_id:
+            try:
+                from apps.leads.scoring import refresh_lead_score
+                refresh_lead_score(call.lead, save=True)
+            except Exception as score_exc:
+                logger.warning('Lead score refresh skipped for lead_id=%s: %s', call.lead_id, score_exc)
         return result
     except Exception as exc:
         err_msg = f'{type(exc).__name__}: {exc}'[:1000]

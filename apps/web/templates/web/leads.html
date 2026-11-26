@@ -4,321 +4,560 @@
 {% block breadcrumb %}Lead directory{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/leads-directory.css' %}?v=2">
-<div class="page-heading leads-header">
-  <div>
-    <div class="eyebrow">LEAD PIPELINE & DIRECTORY</div>
-    <h1>Lead directory<span class="accent">.</span></h1>
-    <p>Find the right person. Make the next conversation count.</p>
-  </div>
-  {% if can_manage %}
-  <div class="actions header-actions">
-    <a class="button subtle-btn" href="{% url 'web:lead-quick-entry' %}" title="Quick manual entry for name and phone">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-      <span>Quick entry</span>
-    </a>
-    <a class="button subtle-btn" href="{% url 'web:lead-distribute' %}" title="Assign batches by quantity">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-      <span>Distribute</span>
-    </a>
-    <a class="button subtle-btn" href="{% url 'web:lead-import' %}" title="Import new leads from file or paste">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      <span>Import leads</span>
-    </a>
-    <a class="button primary action-new-lead" href="{% url 'web:lead-create' %}" title="Create a single lead">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      <span>New lead</span>
-    </a>
-  </div>
-  {% endif %}
-</div>
+<link rel="stylesheet" href="{% static 'web/leads-directory.css' %}?v=3">
 
-<!-- Interactive Quick Status Filter Pills with Exact Counts -->
-<div class="status-pills-scroll">
-  <div class="status-pills-bar">
-    <a href="{% querystring status='' page=None %}" class="status-filter-pill {% if not selected_status %}active{% endif %}" title="View all matching leads">
-      <span class="pill-label">All</span>
-      <span class="pill-count">{{ total_matching_leads }}</span>
-    </a>
-    {% for key, label, count in status_choices_with_counts %}
-    <a href="{% querystring status=key page=None %}" class="status-filter-pill {% if selected_status == key %}active{% endif %} {% if count > 0 %}has-items{% endif %}" title="Filter by {{ label }}">
-      <span class="pill-label">{{ label }}</span>
-      <span class="pill-count">{{ count }}</span>
-    </a>
-    {% endfor %}
-  </div>
-</div>
-
-<div class="filter-toolbar-card">
-  <form method="get" action="{% url 'web:leads' %}">
-    <div class="filter-toolbar-main">
-      <label class="filter-search-box">
-        <svg class="filter-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-        <input type="text" name="q" aria-label="Search leads" placeholder="Search name, phone or email…" value="{{ search }}" autocomplete="off">
-        {% if search %}
-        <a href="{% querystring q=None page=None %}" class="filter-search-clear" title="Clear search" aria-label="Clear search">✕</a>
-        {% endif %}
-      </label>
-
-      <select name="status" class="filter-select" aria-label="Lead status">
-        <option value="">All statuses ({{ total_matching_leads }})</option>
-        {% for key, label, count in status_choices_with_counts %}
-        <option value="{{ key }}" {% if key == selected_status %}selected{% endif %}>{{ label }} ({{ count }})</option>
-        {% endfor %}
-      </select>
-
-      <select name="batch" class="filter-select" aria-label="Lead batch">
-        <option value="">All batches</option>
-        <option value="none" {% if selected_batch == 'none' %}selected{% endif %}>Manual / unbatched leads</option>
-        {% for batch in batches %}
-        <option value="{{ batch.pk }}" {% if selected_batch == batch.pk|stringformat:'s' %}selected{% endif %}>{{ batch.filename }} (#{{ batch.pk }})</option>
-        {% endfor %}
-      </select>
-
+<div class="leads-workspace">
+  <div class="page-heading leads-header">
+    <div>
+      <div class="eyebrow">AI LEAD SCORING &amp; PIPELINE DIRECTORY</div>
+      <h1>Lead directory<span class="accent">.</span></h1>
+      <p>100-point AI readiness scoring from call summaries, key points, objections, demos &amp; CRM activity.</p>
+    </div>
+    <div class="actions header-actions">
       {% if can_manage %}
-      <select name="owner" class="filter-select" aria-label="Assigned caller">
-        <option value="">All callers</option>
-        <option value="unassigned" {% if selected_owner == 'unassigned' %}selected{% endif %}>Unassigned</option>
-        <option value="assigned" {% if selected_owner == 'assigned' %}selected{% endif %}>All assigned leads</option>
-        {% for caller in callers %}
-        <option value="{{ caller.pk }}" {% if selected_owner == caller.pk|stringformat:'s' %}selected{% endif %}>{{ caller|user_name }}</option>
-        {% endfor %}
-      </select>
-      {% endif %}
-
-      <select name="source" class="filter-select" aria-label="Lead source">
-        <option value="">All sources</option>
-        {% for src in sources %}
-        <option value="{{ src }}" {% if src == selected_source %}selected{% endif %}>{{ src }}</option>
-        {% endfor %}
-      </select>
-
-      <div class="filter-actions">
-        <button class="btn-filter-apply" type="submit">Filter leads</button>
-        {% if active_filters_count %}
-        <a class="btn-filter-reset" href="{% url 'web:leads' %}">Reset</a>
-        {% endif %}
-        <div class="export-group">
-          <a href="{% querystring export='csv' page=None %}" class="btn-export btn-export-csv" title="Download matching leads as CSV">
-            <span class="btn-export-icon">📄</span> CSV
-          </a>
-          <a href="{% querystring export='xlsx' page=None %}" class="btn-export btn-export-excel" title="Download matching leads as Excel (.xlsx)">
-            <span class="btn-export-icon">📊</span> Excel
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Collapsible Advanced Filters -->
-    <details class="advanced-filters-section" {% if start_date or end_date or last_call_from or last_call_to or followup_status or followup_from or followup_to or selected_service %}open{% endif %}>
-      <summary class="advanced-filters-toggle">
-        <span>
-          ⚡ Advanced Filters
-          {% if start_date or end_date or last_call_from or last_call_to or followup_status or followup_from or followup_to or selected_service %}
-          <span class="advanced-filters-badge">Active</span>
-          {% endif %}
-        </span>
-        <span style="font-size:11px;color:var(--muted)">▼</span>
-      </summary>
-      <div class="advanced-filters-grid">
-        <div class="filter-group">
-          <label>Created Date Range</label>
-          <div class="date-range-row">
-            <input type="date" name="start_date" class="filter-input" value="{{ start_date }}" aria-label="Created from date" placeholder="From">
-            <span style="color:var(--muted)">–</span>
-            <input type="date" name="end_date" class="filter-input" value="{{ end_date }}" aria-label="Created to date" placeholder="To">
-          </div>
-        </div>
-
-        <div class="filter-group">
-          <label>Last Call Date</label>
-          <div class="date-range-row">
-            <input type="date" name="last_call_from" class="filter-input" value="{{ last_call_from }}" aria-label="Last call from date" placeholder="From">
-            <span style="color:var(--muted)">–</span>
-            <input type="date" name="last_call_to" class="filter-input" value="{{ last_call_to }}" aria-label="Last call to date" placeholder="To">
-          </div>
-        </div>
-
-        <div class="filter-group">
-          <label>Follow-up Status</label>
-          <select name="followup_status" class="filter-select" aria-label="Follow-up status">
-            <option value="">All follow-up statuses</option>
-            <option value="due_today" {% if followup_status == 'due_today' %}selected{% endif %}>Due Today</option>
-            <option value="overdue" {% if followup_status == 'overdue' %}selected{% endif %}>Overdue</option>
-            <option value="upcoming" {% if followup_status == 'upcoming' %}selected{% endif %}>Upcoming</option>
-            <option value="no_followup" {% if followup_status == 'no_followup' %}selected{% endif %}>No Pending Follow-up</option>
-          </select>
-        </div>
-
-        <div class="filter-group">
-          <label>Follow-up Scheduled Date</label>
-          <div class="date-range-row">
-            <input type="date" name="followup_from" class="filter-input" value="{{ followup_from }}" aria-label="Follow-up from date" placeholder="From">
-            <span style="color:var(--muted)">–</span>
-            <input type="date" name="followup_to" class="filter-input" value="{{ followup_to }}" aria-label="Follow-up to date" placeholder="To">
-          </div>
-        </div>
-
-        <div class="filter-group">
-          <label>Service / Course</label>
-          <input type="text" name="service" class="filter-input" value="{{ selected_service }}" placeholder="Filter by course/service…">
-        </div>
-      </div>
-    </details>
-
-    {% if date_error %}
-    <div class="filter-alert-error">
-      <span>⚠️</span>
-      <span>{{ date_error }}</span>
-    </div>
-    {% endif %}
-  </form>
-</div>
-
-<section class="panel leads-panel">
-  <!-- Prominent Results Summary Bar showing the exact number of leads -->
-  <div class="lead-results-summary">
-    <div class="summary-left" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span class="exact-count-badge">
-        <strong>{{ records.paginator.count }}</strong> {% if records.paginator.count == 1 %}lead found{% else %}leads found{% endif %}
-      </span>
-      {% if selected_status_display %}
-        <span class="filter-indicator">Status: <strong>{{ selected_status_display }}</strong></span>
-      {% endif %}
-      {% if selected_owner_user %}
-        <span class="filter-indicator">Caller: <strong>{% employee_link selected_owner_user %}</strong></span>
-      {% elif selected_owner == 'unassigned' %}
-        <span class="filter-indicator">Caller: <strong>Unassigned</strong></span>
-      {% elif selected_owner == 'assigned' %}
-        <span class="filter-indicator">Caller: <strong>All assigned</strong></span>
-      {% endif %}
-      {% if selected_batch == 'none' %}
-        <span class="filter-indicator">Batch: <strong>Manual / Unbatched</strong></span>
-      {% elif selected_batch %}
-        <span class="filter-indicator">Batch: <strong>#{{ selected_batch }}</strong></span>
-      {% endif %}
-      {% if selected_source %}
-        <span class="filter-indicator">Source: <strong>{{ selected_source }}</strong></span>
-      {% endif %}
-      {% if start_date or end_date %}
-        <span class="filter-indicator">Created: <strong>{{ start_date|default:'*' }} to {{ end_date|default:'*' }}</strong></span>
-      {% endif %}
-      {% if last_call_from or last_call_to %}
-        <span class="filter-indicator">Last call: <strong>{{ last_call_from|default:'*' }} to {{ last_call_to|default:'*' }}</strong></span>
-      {% endif %}
-      {% if followup_status_display %}
-        <span class="filter-indicator">Follow-up: <strong>{{ followup_status_display }}</strong></span>
-      {% endif %}
-      {% if followup_from or followup_to %}
-        <span class="filter-indicator">Follow-up date: <strong>{{ followup_from|default:'*' }} to {{ followup_to|default:'*' }}</strong></span>
-      {% endif %}
-      {% if selected_service %}
-        <span class="filter-indicator">Course / Service: <strong>{{ selected_service }}</strong></span>
+      <form method="post" action="{% url 'web:leads-recalculate-all' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" class="button subtle-btn" title="Refresh 100-point AI scores across all leads">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          <span>Refresh AI Scores</span>
+        </button>
+      </form>
+      <a class="button subtle-btn" href="{% url 'web:lead-quick-entry' %}" title="Quick manual entry for name and phone">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span>Quick entry</span>
+      </a>
+      <a class="button subtle-btn" href="{% url 'web:lead-distribute' %}" title="Assign batches by quantity">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        <span>Distribute</span>
+      </a>
+      <a class="button subtle-btn" href="{% url 'web:lead-import' %}" title="Import new leads from file or paste">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span>Import leads</span>
+      </a>
+      <a class="button primary action-new-lead" href="{% url 'web:lead-create' %}" title="Create a single lead">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span>New lead</span>
+      </a>
       {% endif %}
     </div>
-    {% if active_filters_count %}
-      <a class="clear-filter-btn" href="{% url 'web:leads' %}">Clear all filters ✕</a>
-    {% endif %}
   </div>
 
-  <form action="{% url 'web:lead-assign' %}" method="post">
-    {% csrf_token %}
-    {% if can_manage %}
-    <div class="assignment-bar">
-      <div class="assignment-left">
-        <span class="selection-pill"><strong id="selected-count">0</strong> selected</span>
-        <div class="assign-select-wrap">
-          <select name="caller_id" aria-label="Assign selected leads to caller" required>
-        <option value="">Assign to caller…</option>
-        {% for caller in callers %}
-        <option value="{{ caller.pk }}">{{ caller|user_name }}</option>
-        {% endfor %}
-      </select>
-        </div>
-        <label class="checkbox reassignment-checkbox">
-          <input name="reassign" type="checkbox">
-          <span>Allow reassignment</span>
-        </label>
+  <!-- 5-Tier AI Lead Temperature Distribution Strip (Hot / Warm / Interested / Cold / Inactive) -->
+  <section class="temp-overview-card" aria-label="AI Lead Score Distribution">
+    <div class="temp-overview-top">
+      <div class="temp-overview-title">
+        <h2>AI Lead Temperature Breakdown</h2>
+        <span class="temp-avg-pill">Avg Score: {{ avg_lead_score }}/100</span>
+        {% if selected_temperature %}
+        <a href="{% querystring temperature='' page=None %}" class="rubric-help-btn">✕ Clear {{ selected_temperature_display }} filter</a>
+        {% endif %}
       </div>
-      <button class="button primary assign-submit-btn" type="submit">Assign selected →</button>
+      <div class="temp-overview-actions">
+        <button type="button" class="rubric-help-btn" data-open-rubric-guide="1">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>How the 100-point score builds</span>
+        </button>
+      </div>
     </div>
-    {% endif %}
 
-    <div class="table-scroll leads-table-scroll">
-      <table class="leads-table">
-        <thead>
-          <tr>
-            {% if can_manage %}<th style="width: 44px; text-align: center;"><input type="checkbox" id="select-all" aria-label="Select all leads on this page"></th>{% endif %}
-            <th style="min-width: 250px;">Lead</th>
-            <th style="min-width: 120px;">Source</th>
-            <th style="min-width: 130px;">Status</th>
-            <th style="min-width: 160px;">Assigned caller</th>
-            <th style="min-width: 120px;">Added</th>
-            <th style="width: 50px; text-align: center;"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for lead in records %}
-          {% ifchanged lead.import_batch_id %}
-          <tr class="batch-heading">
-            <th colspan="7">
-              <div class="batch-heading-inner">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <span>{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</span>
-                <span class="batch-num-tag">Batch {% if lead.import_batch_id %}#{{ lead.import_batch_id }}{% else %}—{% endif %}</span>
-              </div>
-            </th>
-          </tr>
-          {% endifchanged %}
-          <tr>
-            {% if can_manage %}<td style="text-align: center;"><input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.name }}"></td>{% endif %}
-            <td>
-              <a class="person lead-person-cell" href="{% url 'web:lead-detail' lead.pk %}">
-                <span class="avatar subtle">{{ lead.name|first|upper }}</span>
-                <span class="lead-info-wrap">
-                  <strong class="lead-name-text">{{ lead.name }}</strong>
-                  <span class="lead-phone-text">{{ lead.phone }}</span>
-                  {% if lead.import_batch %}
-                    <small class="lead-batch-sub">{{ lead.import_batch.filename }}</small>
-                  {% endif %}
-                </span>
-              </a>
-            </td>
-            <td>{{ lead.source|default:'—' }}</td>
-            <td>
-              <a href="{% querystring status=lead.status page=None %}" title="Filter by {{ lead.get_status_display }}" style="text-decoration:none">
-                <span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span>
-              </a>
-            </td>
-            <td>
-              {% if lead.assigned_caller %}
-                <a class="caller-link" href="{% querystring owner=lead.assigned_caller_id page=None %}" title="Filter by {{ lead.assigned_caller|user_name }}">
-                  <span class="caller-avatar-dot"></span>
-                  {{ lead.assigned_caller|user_name }}
-                </a>
-              {% else %}
-                <span class="unassigned-muted">— Unassigned —</span>
-              {% endif %}
-            </td>
-            <td>{{ lead.created_at|date:'d M Y' }}</td>
-            <td style="text-align: center;"><a class="open-lead-btn" aria-label="Open {{ lead.name }}" href="{% url 'web:lead-detail' lead.pk %}" title="View lead details">↗</a></td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="7" class="empty">
-              <span class="empty-icon">👥</span>
-              <strong>No matching leads found</strong>
-              <p>Try adjusting your search criteria, dates, or <a href="{% url 'web:leads' %}">clear all active filters</a>.</p>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="temp-proportion-track" role="img" aria-label="Lead distribution across Hot, Warm, Interested, Cold, and Inactive tiers">
+      {% for tier in temperature_tiers_with_counts %}
+      {% if tier.count > 0 %}
+      <div class="temp-proportion-seg" data-tier="{{ tier.key }}" style="flex-grow: {{ tier.count }};" title="{{ tier.label }} ({{ tier.range }}): {{ tier.count }} leads ({{ tier.pct }}%)"></div>
+      {% endif %}
+      {% endfor %}
     </div>
-  </form>
-  {% include 'web/pagination.html' %}
-</section>
+
+    <div class="temp-tier-grid">
+      {% for tier in temperature_tiers_with_counts %}
+      <a href="{% querystring temperature=tier.key page=None %}"
+         class="temp-tier-card {% if selected_temperature == tier.key %}active{% endif %}"
+         style="--tier-color: {{ tier.color }};"
+         title="Filter {{ tier.label }} leads (Score {{ tier.range }})">
+        <div class="temp-tier-head">
+          <span class="temp-tier-name">{{ tier.label }}</span>
+          <span class="temp-tier-range">{{ tier.range }}</span>
+        </div>
+        <div class="temp-tier-metrics">
+          <span class="temp-tier-count">{{ tier.count }}</span>
+          <span class="temp-tier-pct">{{ tier.pct }}%</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Interactive Quick CRM Status Filter Pills with Exact Counts -->
+  <div class="status-pills-scroll">
+    <div class="status-pills-bar">
+      <a href="{% querystring status='' page=None %}" class="status-filter-pill {% if not selected_status %}active{% endif %}" title="View all matching leads">
+        <span class="pill-label">All</span>
+        <span class="pill-count">{{ total_matching_leads }}</span>
+      </a>
+      {% for key, label, count in status_choices_with_counts %}
+      <a href="{% querystring status=key page=None %}" class="status-filter-pill {% if selected_status == key %}active{% endif %} {% if count > 0 %}has-items{% endif %}" title="Filter by {{ label }}">
+        <span class="pill-label">{{ label }}</span>
+        <span class="pill-count">{{ count }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Search, Temperature, Recordings, Sort & Advanced Filters Toolbar -->
+  <div class="filter-toolbar-card">
+    <form method="get" action="{% url 'web:leads' %}">
+      <div class="filter-toolbar-main">
+        <label class="filter-search-box">
+          <svg class="filter-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" name="q" aria-label="Search leads" placeholder="Search name, phone, email, course or city…" value="{{ search }}" autocomplete="off">
+          {% if search %}
+          <a href="{% querystring q=None page=None %}" class="filter-search-clear" title="Clear search" aria-label="Clear search">✕</a>
+          {% endif %}
+        </label>
+
+        <select name="temperature" class="filter-select" aria-label="Lead temperature">
+          <option value="">All temperatures</option>
+          {% for tier in temperature_tiers_with_counts %}
+          <option value="{{ tier.key }}" {% if tier.key == selected_temperature %}selected{% endif %}>{{ tier.label }} {{ tier.range }} ({{ tier.count }})</option>
+          {% endfor %}
+        </select>
+
+        <select name="status" class="filter-select" aria-label="Lead status">
+          <option value="">All statuses ({{ total_matching_leads }})</option>
+          {% for key, label, count in status_choices_with_counts %}
+          <option value="{{ key }}" {% if key == selected_status %}selected{% endif %}>{{ label }} ({{ count }})</option>
+          {% endfor %}
+        </select>
+
+        <select name="has_recording" class="filter-select" aria-label="Call recordings and AI filter">
+          <option value="">All recordings / AI</option>
+          <option value="any" {% if selected_has_recording == 'any' %}selected{% endif %}>Has call recording</option>
+          <option value="analyzed" {% if selected_has_recording == 'analyzed' %}selected{% endif %}>AI summary ready</option>
+          <option value="objections" {% if selected_has_recording == 'objections' %}selected{% endif %}>Flagged objections</option>
+        </select>
+
+        <select name="sort" class="filter-select" aria-label="Sort leads">
+          <option value="" {% if not selected_sort %}selected{% endif %}>Sort: Default (Batch)</option>
+          <option value="score_desc" {% if selected_sort == 'score_desc' %}selected{% endif %}>Sort: AI Score High → Low</option>
+          <option value="score_asc" {% if selected_sort == 'score_asc' %}selected{% endif %}>Sort: AI Score Low → High</option>
+          <option value="recent_activity" {% if selected_sort == 'recent_activity' %}selected{% endif %}>Sort: Recent Activity</option>
+          <option value="newest" {% if selected_sort == 'newest' %}selected{% endif %}>Sort: Newly Added</option>
+        </select>
+
+        {% if can_manage %}
+        <select name="owner" class="filter-select" aria-label="Assigned caller">
+          <option value="">All callers</option>
+          <option value="unassigned" {% if selected_owner == 'unassigned' %}selected{% endif %}>Unassigned</option>
+          <option value="assigned" {% if selected_owner == 'assigned' %}selected{% endif %}>All assigned leads</option>
+          {% for caller in callers %}
+          <option value="{{ caller.pk }}" {% if selected_owner == caller.pk|stringformat:'s' %}selected{% endif %}>{{ caller|user_name }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+
+        <div class="filter-actions">
+          <button class="btn-filter-apply" type="submit">Apply</button>
+          {% if active_filters_count %}
+          <a class="btn-filter-reset" href="{% url 'web:leads' %}">Reset</a>
+          {% endif %}
+          <div class="export-group">
+            <a href="{% querystring export='csv' page=None %}" class="btn-export btn-export-csv" title="Download matching leads as CSV (includes AI Score &amp; Temperature)">
+              <span class="btn-export-icon">📄</span> CSV
+            </a>
+            <a href="{% querystring export='xlsx' page=None %}" class="btn-export btn-export-excel" title="Download matching leads as Excel (.xlsx)">
+              <span class="btn-export-icon">📊</span> Excel
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapsible Advanced Filters -->
+      <details class="advanced-filters-section" {% if selected_batch or selected_source or start_date or end_date or last_call_from or last_call_to or followup_status or followup_from or followup_to or selected_service %}open{% endif %}>
+        <summary class="advanced-filters-toggle">
+          <span>
+            ⚡ Advanced Filters (Batch, Source, Dates, Follow-ups, Course)
+            {% if selected_batch or selected_source or start_date or end_date or last_call_from or last_call_to or followup_status or followup_from or followup_to or selected_service %}
+            <span class="advanced-filters-badge">Active</span>
+            {% endif %}
+          </span>
+          <span style="font-size:11px;color:var(--muted)">▼</span>
+        </summary>
+        <div class="advanced-filters-grid">
+          <div class="filter-group">
+            <label>Import Batch</label>
+            <select name="batch" class="filter-select" aria-label="Lead batch">
+              <option value="">All batches</option>
+              <option value="none" {% if selected_batch == 'none' %}selected{% endif %}>Manual / unbatched leads</option>
+              {% for batch in batches %}
+              <option value="{{ batch.pk }}" {% if selected_batch == batch.pk|stringformat:'s' %}selected{% endif %}>{{ batch.filename }} (#{{ batch.pk }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Lead Source</label>
+            <select name="source" class="filter-select" aria-label="Lead source">
+              <option value="">All sources</option>
+              {% for src in sources %}
+              <option value="{{ src }}" {% if src == selected_source %}selected{% endif %}>{{ src }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Created Date Range</label>
+            <div class="date-range-row">
+              <input type="date" name="start_date" class="filter-input" value="{{ start_date }}" aria-label="Created from date">
+              <span style="color:var(--muted)">–</span>
+              <input type="date" name="end_date" class="filter-input" value="{{ end_date }}" aria-label="Created to date">
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label>Last Call Date</label>
+            <div class="date-range-row">
+              <input type="date" name="last_call_from" class="filter-input" value="{{ last_call_from }}" aria-label="Last call from date">
+              <span style="color:var(--muted)">–</span>
+              <input type="date" name="last_call_to" class="filter-input" value="{{ last_call_to }}" aria-label="Last call to date">
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label>Follow-up Status</label>
+            <select name="followup_status" class="filter-select" aria-label="Follow-up status">
+              <option value="">All follow-up statuses</option>
+              <option value="due_today" {% if followup_status == 'due_today' %}selected{% endif %}>Due Today</option>
+              <option value="overdue" {% if followup_status == 'overdue' %}selected{% endif %}>Overdue</option>
+              <option value="upcoming" {% if followup_status == 'upcoming' %}selected{% endif %}>Upcoming</option>
+              <option value="no_followup" {% if followup_status == 'no_followup' %}selected{% endif %}>No Pending Follow-up</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label>Follow-up Scheduled Date</label>
+            <div class="date-range-row">
+              <input type="date" name="followup_from" class="filter-input" value="{{ followup_from }}" aria-label="Follow-up from date">
+              <span style="color:var(--muted)">–</span>
+              <input type="date" name="followup_to" class="filter-input" value="{{ followup_to }}" aria-label="Follow-up to date">
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label>Service / Course</label>
+            <input type="text" name="service" class="filter-input" value="{{ selected_service }}" placeholder="Filter by course/service…">
+          </div>
+        </div>
+      </details>
+
+      {% if date_error %}
+      <div class="filter-alert-error">
+        <span>⚠️</span>
+        <span>{{ date_error }}</span>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  <section class="panel leads-panel">
+    <!-- Active Results Summary -->
+    <div class="lead-results-summary">
+      <div class="summary-left" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="exact-count-badge">
+          <strong>{{ records.paginator.count }}</strong> {% if records.paginator.count == 1 %}lead found{% else %}leads found{% endif %}
+        </span>
+        {% if selected_temperature_display %}
+          <span class="filter-indicator">Temperature: <strong>{{ selected_temperature_display }}</strong></span>
+        {% endif %}
+        {% if selected_status_display %}
+          <span class="filter-indicator">Status: <strong>{{ selected_status_display }}</strong></span>
+        {% endif %}
+        {% if selected_has_recording %}
+          <span class="filter-indicator">Recordings: <strong>{{ selected_has_recording|title }}</strong></span>
+        {% endif %}
+        {% if selected_owner_user %}
+          <span class="filter-indicator">Caller: <strong>{% employee_link selected_owner_user %}</strong></span>
+        {% elif selected_owner == 'unassigned' %}
+          <span class="filter-indicator">Caller: <strong>Unassigned</strong></span>
+        {% elif selected_owner == 'assigned' %}
+          <span class="filter-indicator">Caller: <strong>All assigned</strong></span>
+        {% endif %}
+        {% if selected_batch == 'none' %}
+          <span class="filter-indicator">Batch: <strong>Manual / Unbatched</strong></span>
+        {% elif selected_batch %}
+          <span class="filter-indicator">Batch: <strong>#{{ selected_batch }}</strong></span>
+        {% endif %}
+        {% if selected_source %}
+          <span class="filter-indicator">Source: <strong>{{ selected_source }}</strong></span>
+        {% endif %}
+        {% if start_date or end_date %}
+          <span class="filter-indicator">Created: <strong>{{ start_date|default:'*' }} to {{ end_date|default:'*' }}</strong></span>
+        {% endif %}
+        {% if last_call_from or last_call_to %}
+          <span class="filter-indicator">Last call: <strong>{{ last_call_from|default:'*' }} to {{ last_call_to|default:'*' }}</strong></span>
+        {% endif %}
+        {% if followup_status_display %}
+          <span class="filter-indicator">Follow-up: <strong>{{ followup_status_display }}</strong></span>
+        {% endif %}
+        {% if followup_from or followup_to %}
+          <span class="filter-indicator">Follow-up date: <strong>{{ followup_from|default:'*' }} to {{ followup_to|default:'*' }}</strong></span>
+        {% endif %}
+        {% if selected_service %}
+          <span class="filter-indicator">Course / Service: <strong>{{ selected_service }}</strong></span>
+        {% endif %}
+      </div>
+      {% if active_filters_count %}
+        <a class="clear-filter-btn" href="{% url 'web:leads' %}">Clear all filters ✕</a>
+      {% endif %}
+    </div>
+
+    <form action="{% url 'web:lead-assign' %}" method="post">
+      {% csrf_token %}
+      {% if can_manage %}
+      <div class="assignment-bar">
+        <div class="assignment-left">
+          <span class="selection-pill"><strong id="selected-count">0</strong> selected</span>
+          <div class="assign-select-wrap">
+            <select name="caller_id" aria-label="Assign selected leads to caller" required>
+              <option value="">Assign to caller…</option>
+              {% for caller in callers %}
+              <option value="{{ caller.pk }}">{{ caller|user_name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <label class="checkbox reassignment-checkbox">
+            <input name="reassign" type="checkbox">
+            <span>Allow reassignment</span>
+          </label>
+        </div>
+        <button class="button primary assign-submit-btn" type="submit">Assign selected →</button>
+      </div>
+      {% endif %}
+
+      <div tabindex="0" role="region" aria-labelledby="leads-table-caption" class="leads-table-scroll">
+        <table class="leads-table {% if can_manage %}has-check-col{% endif %}">
+          <caption id="leads-table-caption" class="sr-only">Lead directory with 100-point AI scores, temperature tiers, CRM stages, recordings, and activity</caption>
+          <thead>
+            <tr>
+              {% if can_manage %}<th class="col-sticky-check" style="width: 42px; text-align: center;"><input type="checkbox" id="select-all" aria-label="Select all leads on this page"></th>{% endif %}
+              <th class="col-sticky-lead" style="min-width: 245px;">Lead &amp; Profile</th>
+              <th style="min-width: 185px;">AI Score &amp; Status</th>
+              <th style="min-width: 165px;">CRM Stage &amp; Team</th>
+              <th style="min-width: 245px;">Recordings &amp; AI Insights</th>
+              <th style="min-width: 210px;">Calls &amp; Activity</th>
+              <th style="width: 68px; text-align: center;">Open</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lead in records %}
+            {% if not selected_sort %}
+              {% ifchanged lead.import_batch_id %}
+              <tr class="batch-heading">
+                <th colspan="{% if can_manage %}7{% else %}6{% endif %}">
+                  <div class="batch-heading-inner">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>{{ lead.import_batch.filename|default:"Manual / unbatched leads" }}</span>
+                    <span class="batch-num-tag">Batch {% if lead.import_batch_id %}#{{ lead.import_batch_id }}{% else %}—{% endif %}</span>
+                  </div>
+                </th>
+              </tr>
+              {% endifchanged %}
+            {% endif %}
+            <tr data-lead-id="{{ lead.pk }}">
+              {% if can_manage %}
+              <td class="cell-check-sticky">
+                <input type="checkbox" name="lead_ids" value="{{ lead.pk }}" aria-label="Select {{ lead.name }}">
+              </td>
+              {% endif %}
+
+              <!-- Sticky Row Header: Lead & Contact Profile -->
+              <th scope="row" class="cell-lead-sticky">
+                <a class="lead-person-cell" href="{% url 'web:lead-detail' lead.pk %}">
+                  <span class="lead-temp-avatar" style="--tier-color: {{ lead.ai_temperature_meta.color }};">{{ lead.name|first|upper }}</span>
+                  <span class="lead-info-wrap">
+                    <strong class="lead-name-text">{{ lead.name }}</strong>
+                    <span class="lead-phone-text">{{ lead.phone }}</span>
+                    <span class="lead-meta-chips">
+                      {% if lead.preferred_course_label %}
+                        <span class="lead-mini-chip" title="Preferred course">🎓 {{ lead.preferred_course_label }}</span>
+                      {% endif %}
+                      {% if lead.location %}
+                        <span class="lead-mini-chip" title="Location">📍 {{ lead.location }}</span>
+                      {% endif %}
+                      {% if lead.source %}
+                        <span class="lead-mini-chip" title="Lead source">{{ lead.source }}</span>
+                      {% endif %}
+                      {% if lead.neet_status %}
+                        <span class="lead-mini-chip" title="NEET status">NEET: {{ lead.neet_status }}</span>
+                      {% endif %}
+                    </span>
+                  </span>
+                </a>
+              </th>
+
+              <!-- AI Score & 5-Tier Temperature -->
+              <td data-label="score">
+                <button type="button"
+                        class="score-trigger-btn"
+                        data-open-lead-score="{{ lead.pk }}"
+                        style="--tier-color: {{ lead.ai_temperature_meta.color }};"
+                        title="Inspect 100-point AI score breakdown for {{ lead.name }}">
+                  <div class="score-top-row">
+                    <span class="score-num-wrap">
+                      <span class="score-num">{{ lead.ai_score }}</span>
+                      <span class="score-denom">/100</span>
+                    </span>
+                    <span class="temp-pill" style="--tier-color: {{ lead.ai_temperature_meta.color }};">{{ lead.ai_temperature_meta.label }}</span>
+                  </div>
+                  <div class="score-bar-track" aria-hidden="true">
+                    <div class="score-bar-fill" style="width: {{ lead.ai_score }}%; background: {{ lead.ai_temperature_meta.color }};"></div>
+                  </div>
+                  <div class="score-signal-tags">
+                    {% for sig in lead.top_signals %}
+                      <span class="sig-tag {% if sig.delta >= 0 %}pos{% else %}neg{% endif %}">{% if sig.delta > 0 %}+{% endif %}{{ sig.delta }} {{ sig.short_label }}</span>
+                    {% empty %}
+                      <span class="sig-tag hint">Inspect score rubric →</span>
+                    {% endfor %}
+                  </div>
+                </button>
+              </td>
+
+              <!-- CRM Stage, Caller, Counsellor & Milestones -->
+              <td data-label="stage">
+                <div class="stage-cell-stack">
+                  <div>
+                    <a href="{% querystring status=lead.status page=None %}" title="Filter by {{ lead.get_status_display }}" style="text-decoration:none">
+                      <span class="badge {{ lead.status|lower }}">{{ lead.get_status_display }}</span>
+                    </a>
+                  </div>
+                  <div>
+                    {% if lead.assigned_caller %}
+                      <a class="caller-link" href="{% querystring owner=lead.assigned_caller_id page=None %}" title="Filter by {{ lead.assigned_caller|user_name }}">
+                        <span class="caller-avatar-dot"></span>
+                        {{ lead.assigned_caller|user_name }}
+                      </a>
+                    {% else %}
+                      <span class="unassigned-muted">— Unassigned —</span>
+                    {% endif %}
+                  </div>
+                  {% if lead.enrichment.active_counselor_name or lead.enrichment.counsellings_count or lead.enrichment.admissions_count or lead.enrichment.whatsapp_count %}
+                  <div class="milestone-chips">
+                    {% if lead.enrichment.active_counselor_name %}
+                      <span class="milestone-chip" title="Assigned Counselor">👤 {{ lead.enrichment.active_counselor_name }}</span>
+                    {% endif %}
+                    {% if lead.enrichment.counsellings_count %}
+                      <span class="milestone-chip demo" title="Demo / Counselling sessions">🎯 {{ lead.enrichment.counsellings_count }} Demo{% if lead.enrichment.counsellings_count != 1 %}s{% endif %}</span>
+                    {% endif %}
+                    {% if lead.enrichment.admissions_count %}
+                      <span class="milestone-chip admitted">🏆 Admitted</span>
+                    {% endif %}
+                    {% if lead.enrichment.whatsapp_count %}
+                      <span class="milestone-chip" title="WhatsApp messages">💬 {{ lead.enrichment.whatsapp_count }}</span>
+                    {% endif %}
+                  </div>
+                  {% endif %}
+                </div>
+              </td>
+
+              <!-- Recordings & AI Summary Insights -->
+              <td data-label="ai">
+                <div class="ai-cell-stack">
+                  {% if lead.enrichment.recordings_count > 0 %}
+                    <div class="ai-cell-badges">
+                      <a class="rec-count-pill" href="{% url 'web:call-recordings' %}?q={{ lead.phone|urlencode }}" title="Open call recordings for {{ lead.name }}">
+                        🎙 {{ lead.enrichment.recordings_count }} Rec{% if lead.enrichment.recordings_count != 1 %}s{% endif %}
+                      </a>
+                      {% if lead.enrichment.latest_ai_sentiment %}
+                        <span class="sentiment-pill {{ lead.enrichment.latest_ai_sentiment|lower }}">
+                          {{ lead.enrichment.latest_ai_sentiment|title }}
+                        </span>
+                      {% endif %}
+                      {% if lead.enrichment.objections_count > 0 %}
+                        <span class="objection-alert-pill">⚠ {{ lead.enrichment.objections_count }} Obj</span>
+                      {% endif %}
+                    </div>
+                    {% if lead.enrichment.latest_ai_summary %}
+                      <p class="ai-summary-snippet" title="{{ lead.enrichment.latest_ai_summary }}">{{ lead.enrichment.latest_ai_summary }}</p>
+                    {% else %}
+                      <span class="unassigned-muted">Recording uploaded · AI pending</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="unassigned-muted">No call recordings yet</span>
+                    {% if lead.notes %}
+                      <p class="ai-summary-snippet" title="{{ lead.notes }}">{{ lead.notes }}</p>
+                    {% endif %}
+                  {% endif %}
+                </div>
+              </td>
+
+              <!-- Calls, Follow-up & Latest Activity -->
+              <td data-label="activity">
+                <div class="activity-cell-stack">
+                  <div class="calls-stat-row">
+                    <span>📞 {{ lead.enrichment.calls_count }} call{% if lead.enrichment.calls_count != 1 %}s{% endif %}</span>
+                    {% if lead.enrichment.calls_count > 0 %}
+                      <span class="calls-dir-sub">↗{{ lead.enrichment.outbound_calls }} · ↙{{ lead.enrichment.inbound_calls }} · {{ lead.enrichment.talk_display }}</span>
+                    {% endif %}
+                  </div>
+                  {% if lead.enrichment.next_followup %}
+                    <span class="followup-chip {{ lead.enrichment.next_followup.urgency }}">
+                      🗓 {{ lead.enrichment.next_followup.label }} · {{ lead.enrichment.next_followup.scheduled_at|date:'d M, H:i' }}
+                    </span>
+                  {% endif %}
+                  {% if lead.enrichment.latest_activity_desc %}
+                    <span class="latest-activity-line" title="{{ lead.enrichment.latest_activity_desc }}">
+                      {{ lead.enrichment.latest_activity_desc }} · {{ lead.enrichment.latest_activity_at|date:'d M' }}
+                    </span>
+                  {% else %}
+                    <span class="latest-activity-line">Added {{ lead.created_at|date:'d M Y' }}</span>
+                  {% endif %}
+                </div>
+              </td>
+
+              <!-- Quick Row Actions -->
+              <td data-label="actions">
+                <div class="row-actions-col">
+                  <a class="open-lead-btn" aria-label="Open {{ lead.name }}" href="{% url 'web:lead-detail' lead.pk %}" title="Open Lead 360° profile">↗</a>
+                  <button type="button" class="recalc-lead-btn" data-recalc-lead="{{ lead.pk }}" aria-label="Recalculate AI score for {{ lead.name }}" title="Recalculate AI score">↻</button>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="{% if can_manage %}7{% else %}6{% endif %}" class="empty">
+                <span class="empty-icon">👥</span>
+                <strong>No matching leads found</strong>
+                <p>Try adjusting your search criteria, temperature filter, or <a href="{% url 'web:leads' %}">clear all active filters</a>.</p>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </form>
+    {% include 'web/pagination.html' %}
+  </section>
+</div>
+
+<!-- Native Modal Dialog: "How the 100-point score builds" (modern-web-guidance: dialog) -->
+<dialog id="lead-score-dialog" class="lead-score-dialog" closedby="any" aria-labelledby="score-dialog-title">
+  <div class="score-modal-header">
+    <div>
+      <h1 id="score-dialog-title">How the 100-point score builds</h1>
+      <p id="score-dialog-subtitle" class="score-modal-subtitle">AI call summaries, key points, objections &amp; CRM milestones</p>
+    </div>
+    <div class="score-modal-head-right">
+      <button type="button" id="score-dialog-recalc" class="rubric-help-btn" style="display:none;" title="Recalculate score from latest calls and notes">↻ Recalculate</button>
+      <form method="dialog" style="margin:0;">
+        <button type="submit" value="close" class="score-modal-close" aria-label="Close score breakdown">✕</button>
+      </form>
+    </div>
+  </div>
+  <div id="score-dialog-body" class="score-modal-body"></div>
+</dialog>
+
+{{ lead_scores_payload|json_script:"lead-scores-data" }}
+<script src="{% static 'web/leads-directory.js' %}?v=1" defer></script>
 {% endblock %}

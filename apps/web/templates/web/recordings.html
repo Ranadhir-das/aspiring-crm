@@ -5,8 +5,8 @@
 {% block breadcrumb %}Call Recordings{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=7">
-<script src="{% static 'web/recordings-ai.js' %}?v=3" defer></script>
+<link rel="stylesheet" href="{% static 'web/call-recordings.css' %}?v=8">
+<script src="{% static 'web/recordings-ai.js' %}?v=4" defer></script>
 
 <div class="recordings-page" data-csrf-token="{{ csrf_token }}">
   <!-- 1. Hero Header -->
@@ -491,8 +491,43 @@
     </header>
 
     <div class="rec-dialog-audio-bar">
-      <audio id="rec-dialog-audio" controls preload="metadata"></audio>
-      <a id="rec-dialog-download" class="rec-ai-btn subtle" href="#" download>⬇ Download</a>
+      <audio id="rec-dialog-audio" preload="metadata"></audio>
+      <div class="rec-dialog-player" role="group" aria-label="Call recording playback controls">
+        <button type="button" id="rec-dialog-play" class="rec-dlg-play-btn" aria-label="Play recording" title="Play / Pause">
+          <span id="rec-dialog-play-icon" aria-hidden="true">▶</span>
+        </button>
+        <button type="button" id="rec-dialog-back" class="rec-dlg-skip-btn" aria-label="Rewind 10 seconds" title="Back 10s">-10s</button>
+        <button type="button" id="rec-dialog-fwd" class="rec-dlg-skip-btn" aria-label="Forward 10 seconds" title="Forward 10s">+10s</button>
+
+        <div class="rec-dlg-seek-wrap">
+          <label class="sr-only" for="rec-dialog-seek">Recording playback position</label>
+          <input
+            type="range"
+            id="rec-dialog-seek"
+            class="rec-dialog-range"
+            min="0"
+            max="100"
+            step="0.1"
+            value="0"
+            aria-valuetext="00:00 of 00:00"
+          >
+          <div class="rec-dlg-times">
+            <span id="rec-dialog-time-cur">00:00</span>
+            <span id="rec-dialog-audio-msg" class="rec-dlg-audio-msg" aria-live="polite"></span>
+            <span id="rec-dialog-time-dur">00:00</span>
+          </div>
+        </div>
+
+        <div class="rec-dlg-speeds" role="group" aria-label="Playback speed">
+          <button type="button" class="rec-dlg-speed-btn" data-dialog-speed="1" aria-pressed="true">1x</button>
+          <button type="button" class="rec-dlg-speed-btn" data-dialog-speed="1.25" aria-pressed="false">1.25x</button>
+          <button type="button" class="rec-dlg-speed-btn" data-dialog-speed="1.5" aria-pressed="false">1.5x</button>
+          <button type="button" class="rec-dlg-speed-btn" data-dialog-speed="2" aria-pressed="false">2x</button>
+        </div>
+
+        <button type="button" id="rec-dialog-mute" class="rec-dlg-icon-btn" aria-label="Mute audio" aria-pressed="false" title="Mute / Unmute">🔊</button>
+        <a id="rec-dialog-download" class="rec-ai-btn subtle rec-dlg-dl" href="#" download title="Download recording">⬇ Download</a>
+      </div>
     </div>
 
     <div id="rec-dialog-body" class="rec-dialog-body"></div>

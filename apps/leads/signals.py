@@ -122,3 +122,55 @@ def lead_workload_post_delete(sender, instance, **kwargs):
                 logger.exception("Error evaluating caller workload on lead post_delete for caller_id=%s: %s", caller_pk, exc)
 
         transaction.on_commit(_schedule_delete_eval)
+
+
+# ---------------------------------------------------------------------------
+# Automatic 100-Point AI Lead Score Refresh Signals
+# ---------------------------------------------------------------------------
+
+def _schedule_lead_score_refresh(lead_id):
+    if not lead_id:
+        return
+
+    def _run(pk=lead_id):
+        try:
+            from .scoring import refresh_lead_score
+            lead = Lead.objects.filter(pk=pk).first()
+            if lead:
+                refresh_lead_score(lead, save=True)
+        except Exception as exc:
+            logger.warning("Lead score auto-refresh skipped for lead_id=%s: %s", pk, exc)
+
+    transaction.on_commit(_run)
+
+
+@receiver(post_save, sender=Lead)
+def lead_score_on_lead_save(sender, instance, created, **kwargs):
+    update_fields = kwargs.get('update_fields')
+    if update_fields is not None:
+        score_only = {'ai_score', 'ai_temperature', 'ai_score_breakdown', 'ai_scored_at'}
+        if set(update_fields).issubset(score_only):
+            return
+    _schedule_lead_score_refresh(instance.pk)
+
+
+def _connect_related_score_signals():
+    from apps.calls.models import Call
+    from apps.followups.models import FollowUp
+    from .models import Admission, Counselling, WhatsAppActivity
+
+    def _on_related_save(sender, instance, **kwargs):
+        lead_id = getattr(instance, 'lead_id', None)
+        if lead_id:
+            _schedule_lead_score_refresh(lead_id)
+
+    for model_cls in (Call, FollowUp, Counselling, Admission, WhatsAppActivity):
+        post_save.connect(
+            _on_related_save,
+            sender=model_cls,
+            dispatch_uid=f'lead_score_refresh_{model_cls._meta.label_lower}',
+            weak=False,
+        )
+
+
+_connect_related_score_signals()
